@@ -32,12 +32,16 @@ export const DoodleCanvas = memo(function DoodleCanvas({
         tool,
         penColor,
         penWidth,
-        strokes,
+        strokesMap,
         addStroke,
         loadStrokes,
-        isDirty,
+        isDirtyMap,
         markClean,
+        setActivePage,
     } = useDoodleStore();
+
+    const strokes = strokesMap[pageId] || [];
+    const isDirty = isDirtyMap[pageId] || false;
 
     // ────────────────────────────────────────────────────────────
     // LOAD DOODLES FROM DATABASE ON PAGE CHANGE
@@ -50,13 +54,13 @@ export const DoodleCanvas = memo(function DoodleCanvas({
                 const doodle = await api.getDoodle(bookId, pageId);
                 if (doodle && doodle.strokes_json) {
                     const parsed = JSON.parse(doodle.strokes_json) as DoodleStroke[];
-                    loadStrokes(parsed);
+                    loadStrokes(pageId, parsed);
                 } else {
-                    loadStrokes([]);
+                    loadStrokes(pageId, []);
                 }
              } catch (err) {
                  logger.warn('[DoodleCanvas] Failed to load doodles:', err);
-                 loadStrokes([]);
+                 loadStrokes(pageId, []);
              }
         };
 
@@ -75,7 +79,7 @@ export const DoodleCanvas = memo(function DoodleCanvas({
 
         saveTimeoutRef.current = window.setTimeout(async () => {
             try {
-                const currentStrokes = useDoodleStore.getState().strokes;
+                const currentStrokes = useDoodleStore.getState().strokesMap[pageId] || [];
                 const json = JSON.stringify(currentStrokes);
 
                  // Check 5MB limit
@@ -89,7 +93,7 @@ export const DoodleCanvas = memo(function DoodleCanvas({
                 } else {
                     await api.saveDoodle(bookId, pageId, json);
                 }
-                markClean();
+                markClean(pageId);
              } catch (err) {
                  logger.warn('[DoodleCanvas] Failed to save doodles:', err);
              }
@@ -107,10 +111,10 @@ export const DoodleCanvas = memo(function DoodleCanvas({
     // ────────────────────────────────────────────────────────────
     const getPointerPosition = useCallback(
         (e: React.PointerEvent<SVGSVGElement>) => {
-            const container = containerRef.current;
-            if (!container) return { x: 0, y: 0, pressure: 0.5 };
+            const el = containerRef.current || localSvgRef.current?.parentElement;
+            if (!el) return { x: 0, y: 0, pressure: e.pressure || 0.5 };
 
-            const rect = container.getBoundingClientRect();
+            const rect = el.getBoundingClientRect();
             containerRectRef.current = { w: rect.width, h: rect.height };
             
             const x = ((e.clientX - rect.left) / rect.width) * 100;
@@ -128,13 +132,15 @@ export const DoodleCanvas = memo(function DoodleCanvas({
             e.preventDefault();
             e.stopPropagation();
 
+            setActivePage(pageId);
+
             isDrawingRef.current = true;
             const { x, y, pressure } = getPointerPosition(e);
             currentStrokeRef.current = [[x, y, pressure]];
 
             (e.target as Element).setPointerCapture?.(e.pointerId);
         },
-        [isDoodleMode, getPointerPosition]
+        [isDoodleMode, getPointerPosition, pageId, setActivePage]
     );
 
     const handlePointerMove = useCallback(
@@ -175,13 +181,13 @@ export const DoodleCanvas = memo(function DoodleCanvas({
                     points: [...currentStrokeRef.current],
                     timestamp: Date.now(),
                 };
-                addStroke(stroke);
+                addStroke(pageId, stroke);
             }
 
             currentStrokeRef.current = [];
             setForceRender(prev => prev + 1);
         },
-        [isDoodleMode, tool, penColor, penWidth, addStroke]
+        [isDoodleMode, tool, penColor, penWidth, addStroke, pageId]
     );
 
     // ────────────────────────────────────────────────────────────
@@ -221,6 +227,7 @@ export const DoodleCanvas = memo(function DoodleCanvas({
 
     return (
         <svg
+            ref={localSvgRef}
             className="doodle-canvas"
             viewBox="0 0 100 100"
             preserveAspectRatio="none"

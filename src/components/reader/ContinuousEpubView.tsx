@@ -3,6 +3,7 @@ import { api, type BookMetadata } from '@/lib/tauri';
 import { ChapterHtml, processEpubHtml } from './PremiumEpubReader';
 import { applyHighlightsToDOM } from '@/lib/highlightAnnotations';
 import { useDoodleStore } from '@/store/doodleStore';
+import DoodleCanvas from './DoodleCanvas';
 
 interface ContinuousEpubViewProps {
   bookId: number;
@@ -364,9 +365,17 @@ export function ContinuousEpubView({
                 }
               }}
               className="premium-chapter-page"
-              style={{ paddingBottom: '2rem' }}
+              style={{ paddingBottom: '2rem', position: 'relative' }}
             >
               <ChapterHtml content={ch.content} />
+              
+              {isDoodleMode && (
+                <DoodleCanvas
+                  bookId={bookId}
+                  pageId={`epub-${bookId}-${ch.index}`}
+                  containerRef={{ current: chapterRefs.current.get(ch.index) || null } as React.RefObject<HTMLDivElement>}
+                />
+              )}
             </div>
 
             {/* Seamless separator between chapters */}

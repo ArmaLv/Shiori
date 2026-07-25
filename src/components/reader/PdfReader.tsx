@@ -182,7 +182,7 @@ export function PdfReader({ bookPath, bookId, readerContent, onClose }: PdfReade
 
   const isDoodleMode = useDoodleStore(state => state.isDoodleMode);
   const toggleDoodleMode = useDoodleStore(state => state.toggleDoodleMode);
-  const resetDoodlePage = useDoodleStore(state => state.resetPage);
+  const setActivePage = useDoodleStore(state => state.setActivePage);
 
   useReadingSession(bookId);
 
@@ -505,7 +505,7 @@ export function PdfReader({ bookPath, bookId, readerContent, onClose }: PdfReade
 
   useEffect(() => {
     if (numPages <= 0) return;
-    resetDoodlePage();
+    setActivePage();
 
     // Update global progress
     setScrollProgress(Math.min(100, (pageNumber / numPages) * 100));
@@ -521,7 +521,7 @@ export function PdfReader({ bookPath, bookId, readerContent, onClose }: PdfReade
     return () => {
       if (saveProgressTimerRef.current) clearTimeout(saveProgressTimerRef.current);
     };
-  }, [getInPageScrollRatio, numPages, pageNumber, persistProgress, resetDoodlePage, scale, setScrollProgress, viewMode, zoomMode]);
+  }, [getInPageScrollRatio, numPages, pageNumber, persistProgress, setActivePage, scale, setScrollProgress, viewMode, zoomMode, bookId]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {

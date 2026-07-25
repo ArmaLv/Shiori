@@ -243,7 +243,7 @@ pub async fn set_source_config(
 
 #[tauri::command]
 pub async fn proxy_manga_image(source_id: String, image_url: String) -> Result<Vec<u8>> {
-    let user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+    let user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36";
 
     // Determine referer based on source
     let referer = match source_id.as_str() {
@@ -267,7 +267,12 @@ pub async fn proxy_manga_image(source_id: String, image_url: String) -> Result<V
     });
 
     let mut req = HTTP_CLIENT.get(&image_url)
-        .header("User-Agent", user_agent);
+        .header("User-Agent", user_agent)
+        .header("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+        .header("Accept-Language", "en-US,en;q=0.9")
+        .header("Sec-Fetch-Dest", "image")
+        .header("Sec-Fetch-Mode", "no-cors")
+        .header("Sec-Fetch-Site", "cross-site");
 
     if let Some(ref_url) = referer {
         req = req.header("Referer", ref_url);

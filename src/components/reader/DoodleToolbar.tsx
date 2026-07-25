@@ -22,9 +22,10 @@ export const DoodleToolbar = memo(function DoodleToolbar() {
         tool,
         penColor,
         penWidth,
-        strokes,
-        undoStack,
-        redoStack,
+        strokesMap,
+        undoStackMap,
+        redoStackMap,
+        activePageId,
         setTool,
         setPenColor,
         setPenWidth,
@@ -35,6 +36,10 @@ export const DoodleToolbar = memo(function DoodleToolbar() {
     } = useDoodleStore();
 
     if (!isDoodleMode) return null;
+
+    const strokes = activePageId ? (strokesMap[activePageId] || []) : [];
+    const undoStack = activePageId ? (undoStackMap[activePageId] || []) : [];
+    const redoStack = activePageId ? (redoStackMap[activePageId] || []) : [];
 
     return (
         <div className="doodle-toolbar" role="toolbar" aria-label="Drawing tools">
@@ -112,7 +117,7 @@ export const DoodleToolbar = memo(function DoodleToolbar() {
             <div className="doodle-toolbar__group">
                 <button
                     className="doodle-toolbar__btn"
-                    onClick={undo}
+                    onClick={() => activePageId && undo(activePageId)}
                     disabled={undoStack.length === 0}
                     title="Undo"
                     aria-label="Undo"
@@ -124,7 +129,7 @@ export const DoodleToolbar = memo(function DoodleToolbar() {
                 </button>
                 <button
                     className="doodle-toolbar__btn"
-                    onClick={redo}
+                    onClick={() => activePageId && redo(activePageId)}
                     disabled={redoStack.length === 0}
                     title="Redo"
                     aria-label="Redo"
@@ -136,7 +141,7 @@ export const DoodleToolbar = memo(function DoodleToolbar() {
                 </button>
                 <button
                     className="doodle-toolbar__btn doodle-toolbar__btn--danger"
-                    onClick={clearAll}
+                    onClick={() => activePageId && clearAll(activePageId)}
                     disabled={strokes.length === 0}
                     title="Clear all"
                     aria-label="Clear all drawings"

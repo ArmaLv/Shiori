@@ -4,8 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-#[cfg(target_os = "android")]
-use tauri_plugin_android_saf::AndroidSafExt;
+
 
 use crate::cloudflare::client::CfClient;
 use crate::error::{Result, ShioriError};
@@ -45,227 +44,186 @@ impl MangaFireSource {
         Err(ShioriError::Other("MangaFire source client not initialized (timeout)".into()))
     }
 
-    async fn fetch_rpc(&self, url: &str) -> Result<String> {
+    async fn evaluate_js_on_site(&self, js_script: &str) -> Result<String> {
         self.wait_for_init().await?;
+        let guard = self.app_handle.read().await;
+        if let Some(app) = guard.as_ref() {
+            let app = app.clone();
+            let window_label = format!("mf-rpc-{}", uuid::Uuid::new_v4().simple());
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            let tx = std::sync::Arc::new(std::sync::Mutex::new(Some(tx)));
+            let html_buffer = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
 
-        #[cfg(not(target_os = "android"))]
-        {
-            let guard = self.app_handle.read().await;
-            if let Some(app) = guard.as_ref() {
-                let app = app.clone();
-                let full_url = if url.starts_with("http") {
-                    url.to_string()
-                } else {
-                    format!("{}{}", BASE_URL, url)
-                };
-
-                let window_label = format!("mf-rpc-{}", uuid::Uuid::new_v4().simple());
-                let (tx, rx) = tokio::sync::oneshot::channel();
-                let tx = std::sync::Arc::new(std::sync::Mutex::new(Some(tx)));
-
-                let js = format!(
-                    r#"(async () => {{
-                        try {{
-                            let attempts = 0;
-                            while (typeof window.extendClient === 'undefined' && attempts < 25) {{
-                                await new Promise(r => setTimeout(r, 400));
-                                attempts++;
-                            }}
-                            if (typeof window.extendClient === 'undefined') throw new Error("extendClient not found");
-
-                            if (!window.myAxios) {{
-                                let requestInterceptor = null;
-                                window.myAxios = {{
-                                    defaults: {{ baseURL: '/', headers: {{}} }},
-                                    interceptors: {{
-                                        request: {{
-                                            use: (fn) => {{ requestInterceptor = fn; }}
-                                        }}
-                                    }},
-                                    get: async (url, config = {{}}) => {{
-                                        let reqConfig = {{
-                                            url,
-                                            method: 'get',
-                                            headers: {{
-                                                'Accept': 'application/json, text/javascript, */*; q=0.01',
-                                                'X-Requested-With': 'XMLHttpRequest',
-                                                ...(config.headers || {{}})
-                                            }},
-                                            params: config.params || {{}}
-                                        }};
-                                        if (requestInterceptor) {{
-                                            reqConfig = await requestInterceptor(reqConfig) || reqConfig;
-                                        }}
-                                        let fullUrl = reqConfig.url;
-                                        if (reqConfig.params && Object.keys(reqConfig.params).length > 0) {{
-                                            const query = new URLSearchParams(reqConfig.params).toString();
-                                            fullUrl += (fullUrl.includes('?') ? '&' : '?') + query;
-                                        }}
-                                        const resp = await fetch(fullUrl, {{
-                                            method: 'GET',
-                                            headers: reqConfig.headers,
-                                            credentials: 'include'
-                                        }});
-                                        const data = await resp.json();
-                                        return {{ data }};
-                                    }}
-                                }};
-                                window.extendClient(window.myAxios);
-                            }}
-
-                            const [path, queryString] = '{}'.split('?');
-                            const queryParams = {{}};
-                            if (queryString) {{
-                                const searchParams = new URLSearchParams(queryString);
-                                for (const [key, value] of searchParams.entries()) {{
-                                    queryParams[key] = value;
-                                }}
-                            }}
-
-                            let res = await window.myAxios.get(path, {{ params: queryParams }});
-                            window.location.href = 'https://mangafire.to/rpc-result#' + encodeURIComponent(JSON.stringify(res.data));
-                        }} catch (e) {{
-                            window.location.href = 'https://mangafire.to/rpc-result#' + encodeURIComponent(JSON.stringify({{ error: e.message }}));
+            let js = format!(
+                r#"(async () => {{
+                    try {{
+                        if (window.top !== window.self) return;
+                        if (document.readyState === 'loading') {{
+                            await new Promise(resolve => document.addEventListener('DOMContentLoaded', resolve));
                         }}
-                    }})();"#,
-                    full_url
-                );
+                        while (true) {{
+                            const title = document.title.toLowerCase();
+                            if (title.includes('just a moment') || title.includes('cloudflare') || title.includes('attention required')) {{
+                                await new Promise(resolve => setTimeout(resolve, 1000));
+                                continue;
+                            }}
+                            break;
+                        }}
+                        
+                        let attempts = 0;
+                        while (typeof window.extendClient === 'undefined' && attempts < 25) {{
+                            await new Promise(r => setTimeout(r, 400));
+                            attempts++;
+                        }}
+                        if (typeof window.extendClient === 'undefined') throw new Error("extendClient not found");
 
-                let tx_clone = std::sync::Arc::clone(&tx);
-                let app_clone = app.clone();
-                let window_label_clone = window_label.clone();
+                        if (!window.myAxios) {{
+                            let requestInterceptor = null;
+                            window.myAxios = {{
+                                defaults: {{ baseURL: '/', headers: {{}} }},
+                                interceptors: {{
+                                    request: {{
+                                        use: (fn) => {{ requestInterceptor = fn; }}
+                                    }}
+                                }},
+                                get: async (url, config = {{}}) => {{
+                                    let reqConfig = {{
+                                        url,
+                                        method: 'get',
+                                        headers: {{
+                                            'Accept': 'application/json, text/javascript, */*; q=0.01',
+                                            'X-Requested-With': 'XMLHttpRequest',
+                                            ...(config.headers || {{}})
+                                        }},
+                                        params: config.params || {{}}
+                                    }};
+                                    if (requestInterceptor) {{
+                                        reqConfig = await requestInterceptor(reqConfig) || reqConfig;
+                                    }}
+                                    let fullUrl = reqConfig.url;
+                                    if (reqConfig.params && Object.keys(reqConfig.params).length > 0) {{
+                                        const query = new URLSearchParams(reqConfig.params).toString();
+                                        fullUrl += (fullUrl.includes('?') ? '&' : '?') + query;
+                                    }}
+                                    const resp = await fetch(fullUrl, {{
+                                        method: 'GET',
+                                        headers: reqConfig.headers,
+                                        credentials: 'include'
+                                    }});
+                                    const data = await resp.json();
+                                    return {{ data }};
+                                }}
+                            }};
+                            window.extendClient(window.myAxios);
+                        }}
 
-                use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+                        const raw_result = await (async () => {{ {} }})();
+                        const result = (typeof raw_result === 'string') ? raw_result : JSON.stringify(raw_result);
+                        const chunkSize = 512;
+                        window.__CHUNK_ACK = true;
+                        for (let i = 0; i < result.length; i += chunkSize) {{
+                            const chunk = result.slice(i, i + chunkSize);
+                            window.__CHUNK_ACK = false;
+                            document.title = 'SHIORI_CHUNK|' + encodeURIComponent(chunk);
+                            while (!window.__CHUNK_ACK) {{
+                                await new Promise(r => setTimeout(r, 10));
+                            }}
+                        }}
+                        document.title = 'SHIORI_DONE|';
+                    }} catch (e) {{
+                        document.title = 'SHIORI_ERROR|' + e.message;
+                    }}
+                }})();"#,
+                js_script
+            );
 
-                let window = WebviewWindowBuilder::new(&app, &window_label, WebviewUrl::External("https://mangafire.to/filter".parse().unwrap()))
-                    .visible(false)
-                    .initialization_script(&js)
-                    .on_navigation(move |nav_url| {
-                        let url_str = nav_url.as_str();
-                        if url_str.starts_with("https://mangafire.to/rpc-result") {
-                            if let Some(hash) = nav_url.fragment() {
-                                if let Ok(decoded) = urlencoding::decode(hash) {
-                                    if let Ok(mut lock) = tx_clone.lock() {
-                                        if let Some(sender) = lock.take() {
-                                            let _ = sender.send(decoded.into_owned());
-                                        }
-                                    }
-                                }
-                            }
-                            let w_label = window_label_clone.clone();
-                            let a = app_clone.clone();
-                            tauri::async_runtime::spawn(async move {
-                                if let Some(w) = a.get_webview_window(&w_label) {
-                                    let _ = w.close();
-                                }
-                            });
-                            return false;
+            let tx_clone = std::sync::Arc::clone(&tx);
+            let app_clone = app.clone();
+            let window_label_clone = window_label.clone();
+            let html_buffer_clone = std::sync::Arc::clone(&html_buffer);
+
+            use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+
+            let _window = WebviewWindowBuilder::new(&app, &window_label, WebviewUrl::External("https://mangafire.to/filter".parse().unwrap()))
+                .visible(false)
+                .initialization_script(&js)
+                .on_document_title_changed(move |window, title| {
+                    if title.starts_with("SHIORI_CHUNK|") {
+                        if let Ok(mut buf) = html_buffer_clone.lock() {
+                            let raw = title.trim_start_matches("SHIORI_CHUNK|");
+                            let decoded = urlencoding::decode(raw).unwrap_or(std::borrow::Cow::Borrowed(raw));
+                            buf.push_str(&decoded);
                         }
-                        true
-                    })
-                    .build()
-                    .map_err(|e| ShioriError::Other(format!("Failed to build rpc webview: {}", e)))?;
-
-                let result = match tokio::time::timeout(std::time::Duration::from_secs(30), rx).await {
-                    Ok(Ok(res)) => res,
-                    _ => {
-                        let _ = window.close();
-                        return Err(ShioriError::Other("MangaFire RPC timed out".to_string()));
+                        let _ = window.eval("window.__CHUNK_ACK = true;");
+                    } else if title.starts_with("SHIORI_DONE|") {
+                        if let Ok(mut lock) = tx_clone.lock() {
+                            if let Some(sender) = lock.take() {
+                                let buf = html_buffer_clone.lock().unwrap().clone();
+                                let _ = sender.send(Ok(buf));
+                            }
+                        }
+                        let w_label = window_label_clone.clone();
+                        let a = app_clone.clone();
+                        tauri::async_runtime::spawn(async move {
+                            if let Some(w) = a.get_webview_window(&w_label) {
+                                let _ = w.close();
+                            }
+                        });
+                    } else if title.starts_with("SHIORI_ERROR|") {
+                        if let Ok(mut lock) = tx_clone.lock() {
+                            if let Some(sender) = lock.take() {
+                                let err = title.trim_start_matches("SHIORI_ERROR|").to_string();
+                                let _ = sender.send(Err(err));
+                            }
+                        }
+                        let w_label = window_label_clone.clone();
+                        let a = app_clone.clone();
+                        tauri::async_runtime::spawn(async move {
+                            if let Some(w) = a.get_webview_window(&w_label) {
+                                let _ = w.close();
+                            }
+                        });
                     }
-                };
+                })
+                .build()
+                .map_err(|e| ShioriError::Other(format!("Failed to build rpc webview: {}", e)))?;
 
-                return Ok(result);
-            }
+            let result = match tokio::time::timeout(std::time::Duration::from_secs(60), rx).await {
+                Ok(Ok(Ok(res))) => res,
+                Ok(Ok(Err(err))) => {
+                    return Err(ShioriError::Other(format!("MangaFire RPC JS error: {}", err)));
+                }
+                _ => {
+                    let w_label = window_label.clone();
+                    let a = app.clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Some(w) = a.get_webview_window(&w_label) {
+                            let _ = w.close();
+                        }
+                    });
+                    return Err(ShioriError::Other("MangaFire RPC timed out".to_string()));
+                }
+            };
+
+            return Ok(result);
         }
-
-        #[cfg(target_os = "android")]
-        {
-            let guard = self.app_handle.read().await;
-            if let Some(app) = guard.as_ref() {
-                // Call evaluate_javascript through the android_saf plugin with zero-dependency fetch adapter
-                let js = format!(
-                    r#"(async () => {{
-                        try {{
-                            let attempts = 0;
-                            while (typeof window.extendClient === 'undefined' && attempts < 25) {{
-                                await new Promise(r => setTimeout(r, 400));
-                                attempts++;
-                            }}
-                            if (typeof window.extendClient === 'undefined') throw new Error("extendClient not found");
-
-                            if (!window.myAxios) {{
-                                let requestInterceptor = null;
-                                window.myAxios = {{
-                                    defaults: {{ baseURL: '/', headers: {{}} }},
-                                    interceptors: {{
-                                        request: {{
-                                            use: (fn) => {{ requestInterceptor = fn; }}
-                                        }}
-                                    }},
-                                    get: async (url, config = {{}}) => {{
-                                        let reqConfig = {{
-                                            url,
-                                            method: 'get',
-                                            headers: {{
-                                                'Accept': 'application/json, text/javascript, */*; q=0.01',
-                                                'X-Requested-With': 'XMLHttpRequest',
-                                                ...(config.headers || {{}})
-                                            }},
-                                            params: config.params || {{}}
-                                        }};
-                                        if (requestInterceptor) {{
-                                            reqConfig = await requestInterceptor(reqConfig) || reqConfig;
-                                        }}
-                                        let fullUrl = reqConfig.url;
-                                        if (reqConfig.params && Object.keys(reqConfig.params).length > 0) {{
-                                            const query = new URLSearchParams(reqConfig.params).toString();
-                                            fullUrl += (fullUrl.includes('?') ? '&' : '?') + query;
-                                        }}
-                                        const resp = await fetch(fullUrl, {{
-                                            method: 'GET',
-                                            headers: reqConfig.headers,
-                                            credentials: 'include'
-                                        }});
-                                        const data = await resp.json();
-                                        return {{ data }};
-                                    }}
-                                }};
-                                window.extendClient(window.myAxios);
-                            }}
-
-                            const [path, queryString] = '{}'.split('?');
-                            const queryParams = {{}};
-                            if (queryString) {{
-                                const searchParams = new URLSearchParams(queryString);
-                                for (const [key, value] of searchParams.entries()) {{
-                                    queryParams[key] = value;
-                                }}
-                            }}
-
-                            let res = await window.myAxios.get(path, {{ params: queryParams }});
-                            return JSON.stringify(res.data);
-                        }} catch (e) {{
-                            return JSON.stringify({{ error: e.message }});
-                        }}
-                    }})()"#,
-                    url
-                );
-                let user_agent = {
-                    let guard = self.cf_client.read().await;
-                    if let Some(cf) = guard.as_ref() {
-                        cf.user_agent().await
-                    } else {
-                        None
-                    }
-                };
-
-                let res = app.android_saf().evaluate_javascript(format!("{}/filter", BASE_URL), js, user_agent)
-                    .map_err(|e| ShioriError::Other(e.to_string()))?;
-                return Ok(res);
-            }
-        }
-
         Err(ShioriError::Other("Browser RPC not initialized for MangaFire".into()))
+    }
+
+    async fn fetch_rpc(&self, url: &str) -> Result<String> {
+        let js = format!(r#"
+            const [path, queryString] = '{}'.split('?');
+            const queryParams = {{}};
+            if (queryString) {{
+                const searchParams = new URLSearchParams(queryString);
+                for (const [key, value] of searchParams.entries()) {{
+                    queryParams[key] = value;
+                }}
+            }}
+            let res = await window.myAxios.get(path, {{ params: queryParams }});
+            return res.data;
+        "#, url);
+        self.evaluate_js_on_site(&js).await
     }
 }
 
@@ -430,35 +388,40 @@ impl Source for MangaFireSource {
         let hid = parts[0];
         let _slug = parts[1];
 
-        let mut all_items = Vec::new();
+        let js = format!(r#"
+            let all_items = [];
+            const firstPath = `/api/titles/{}/chapters`;
+            let res = await window.myAxios.get(firstPath, {{ 
+                params: {{ language: 'en', sort: 'number', order: 'desc', page: 1, limit: 200 }} 
+            }});
+            
+            if (res.data && res.data.items) {{
+                all_items.push(...res.data.items);
+                let lastPage = res.data.meta ? res.data.meta.last_page : 1;
+                
+                for (let page = 2; page <= lastPage; page++) {{
+                    try {{
+                        let nextRes = await window.myAxios.get(firstPath, {{ 
+                            params: {{ language: 'en', sort: 'number', order: 'desc', page, limit: 200 }} 
+                        }});
+                        if (nextRes.data && nextRes.data.items) {{
+                            all_items.push(...nextRes.data.items);
+                        }}
+                    }} catch (e) {{
+                        console.error("Failed page " + page, e);
+                    }}
+                }}
+            }}
+            return {{ items: all_items }};
+        "#, hid);
 
-        let first_url = format!(
-            "/api/titles/{}/chapters?language=en&sort=number&order=desc&page=1&limit=200",
-            hid
-        );
-
-        let json_str = self.fetch_rpc(&first_url).await?;
-        let first_res: MfChaptersResponse = serde_json::from_str(&json_str)
-            .map_err(|e| ShioriError::Other(format!("Failed to parse MangaFire chapters JSON: {}", e)))?;
-
-        let last_page = first_res.meta.as_ref().map(|m| m.last_page).unwrap_or(1);
-        all_items.extend(first_res.items);
-
-        for page in 2..=last_page {
-            let url = format!(
-                "/api/titles/{}/chapters?language=en&sort=number&order=desc&page={}&limit=200",
-                hid, page
-            );
-            if let Ok(json_str) = self.fetch_rpc(&url).await {
-                if let Ok(res) = serde_json::from_str::<MfChaptersResponse>(&json_str) {
-                    all_items.extend(res.items);
-                }
-            }
-        }
+        let json_str = self.evaluate_js_on_site(&js).await?;
+        let res: MfChaptersResponse = serde_json::from_str(&json_str)
+            .map_err(|e| ShioriError::Other(format!("Failed to parse MangaFire chapters bulk JSON: {}", e)))?;
 
         let mut chapters = Vec::new();
         // Since order is desc, we can just iterate. We should filter to english chapters
-        for item in all_items {
+        for item in res.items {
             if item.language != "en" {
                 continue;
             }

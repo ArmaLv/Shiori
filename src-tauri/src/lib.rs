@@ -156,7 +156,7 @@ pub fn run() {
                 let is_valid = is_safe_url(&image_url).await;
 
                 if is_valid {
-                    let user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+                    let user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36";
                     let referer = match source_id.as_str() {
                         "toongod" => Some("https://www.toongod.org/"),
                         "toonily" => Some("https://toonily.com/"),
@@ -179,7 +179,12 @@ pub fn run() {
                         
                     let mut req = CLIENT
                         .get(&image_url)
-                        .header("User-Agent", user_agent);
+                        .header("User-Agent", user_agent)
+                        .header("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+                        .header("Accept-Language", "en-US,en;q=0.9")
+                        .header("Sec-Fetch-Dest", "image")
+                        .header("Sec-Fetch-Mode", "no-cors")
+                        .header("Sec-Fetch-Site", "cross-site");
                 if let Some(ref_url) = referer {
                     req = req.header("Referer", ref_url);
                 }

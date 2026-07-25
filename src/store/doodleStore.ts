@@ -31,15 +31,19 @@ interface DoodleState {
     penColor: string;
     penWidth: number;
 
-    // Strokes for current page
-    strokes: DoodleStroke[];
+    // Active page tracking
+    activePageId: string | null;
+    setActivePage: (pageId: string) => void;
 
-    // Undo/Redo stacks
-    undoStack: DoodleAction[];
-    redoStack: DoodleAction[];
+    // Strokes map for multiple pages (pageId -> strokes)
+    strokesMap: Record<string, DoodleStroke[]>;
 
-    // Dirty flag for debounced save
-    isDirty: boolean;
+    // Undo/Redo stacks per page
+    undoStackMap: Record<string, DoodleAction[]>;
+    redoStackMap: Record<string, DoodleAction[]>;
+
+    // Dirty flags per page
+    isDirtyMap: Record<string, boolean>;
 
     // Actions
     toggleDoodleMode: () => void;
@@ -49,15 +53,15 @@ interface DoodleState {
     setPenWidth: (width: number) => void;
 
     // Stroke operations
-    addStroke: (stroke: DoodleStroke) => void;
-    undo: () => void;
-    redo: () => void;
-    clearAll: () => void;
+    addStroke: (pageId: string, stroke: DoodleStroke) => void;
+    undo: (pageId: string) => void;
+    redo: (pageId: string) => void;
+    clearAll: (pageId: string) => void;
 
     // Page lifecycle
-    loadStrokes: (strokes: DoodleStroke[]) => void;
-    resetPage: () => void;
-    markClean: () => void;
+    loadStrokes: (pageId: string, strokes: DoodleStroke[]) => void;
+    resetPage: (pageId: string) => void;
+    markClean: (pageId: string) => void;
 }
 
 const MAX_UNDO_STACK = 50;
@@ -68,14 +72,16 @@ export const useDoodleStore = create<DoodleState>((set) => ({
     tool: 'pen',
     penColor: '#1A1A2E',
     penWidth: 3,
-    strokes: [],
-    undoStack: [],
-    redoStack: [],
-    isDirty: false,
+    activePageId: null,
+    strokesMap: {},
+    undoStackMap: {},
+    redoStackMap: {},
+    isDirtyMap: {},
+
+    setActivePage: (pageId) => set({ activePageId: pageId }),
 
     toggleDoodleMode: () => set((state) => ({
         isDoodleMode: !state.isDoodleMode,
-        // Reset tool when entering doodle mode
         ...(state.isDoodleMode ? {} : { tool: 'pen' as const }),
     })),
 
@@ -87,35 +93,35 @@ export const useDoodleStore = create<DoodleState>((set) => ({
 
     setPenWidth: (width) => set({ penWidth: Math.max(1, Math.min(20, width)) }),
 
-    addStroke: (stroke) => set((state) => {
-        let newStrokes = [...state.strokes, stroke];
+    addStroke: (pageId, stroke) => set((state) => {
+        let newStrokes = [...(state.strokesMap[pageId] || []), stroke];
 
-        // Enforce max strokes per page
         if (newStrokes.length > MAX_STROKES_PER_PAGE) {
             newStrokes = newStrokes.slice(newStrokes.length - MAX_STROKES_PER_PAGE);
         }
 
         const action: DoodleAction = { type: 'addStroke', stroke };
-        let newUndoStack = [...state.undoStack, action];
+        let newUndoStack = [...(state.undoStackMap[pageId] || []), action];
         if (newUndoStack.length > MAX_UNDO_STACK) {
             newUndoStack = newUndoStack.slice(1);
         }
 
         return {
-            strokes: newStrokes,
-            undoStack: newUndoStack,
-            redoStack: [], // Clear redo on new action
-            isDirty: true,
+            strokesMap: { ...state.strokesMap, [pageId]: newStrokes },
+            undoStackMap: { ...state.undoStackMap, [pageId]: newUndoStack },
+            redoStackMap: { ...state.redoStackMap, [pageId]: [] }, // Clear redo
+            isDirtyMap: { ...state.isDirtyMap, [pageId]: true },
         };
     }),
 
-    undo: () => set((state) => {
-        if (state.undoStack.length === 0) return state;
+    undo: (pageId) => set((state) => {
+        const undoStack = state.undoStackMap[pageId] || [];
+        if (undoStack.length === 0) return state;
 
-        const action = state.undoStack[state.undoStack.length - 1];
-        const newUndoStack = state.undoStack.slice(0, -1);
+        const action = undoStack[undoStack.length - 1];
+        const newUndoStack = undoStack.slice(0, -1);
 
-        let newStrokes = [...state.strokes];
+        let newStrokes = [...(state.strokesMap[pageId] || [])];
         let redoAction: DoodleAction;
 
         switch (action.type) {
@@ -133,21 +139,23 @@ export const useDoodleStore = create<DoodleState>((set) => ({
                 break;
         }
 
+        const redoStack = state.redoStackMap[pageId] || [];
         return {
-            strokes: newStrokes,
-            undoStack: newUndoStack,
-            redoStack: [...state.redoStack, redoAction!],
-            isDirty: true,
+            strokesMap: { ...state.strokesMap, [pageId]: newStrokes },
+            undoStackMap: { ...state.undoStackMap, [pageId]: newUndoStack },
+            redoStackMap: { ...state.redoStackMap, [pageId]: [...redoStack, redoAction!] },
+            isDirtyMap: { ...state.isDirtyMap, [pageId]: true },
         };
     }),
 
-    redo: () => set((state) => {
-        if (state.redoStack.length === 0) return state;
+    redo: (pageId) => set((state) => {
+        const redoStack = state.redoStackMap[pageId] || [];
+        if (redoStack.length === 0) return state;
 
-        const action = state.redoStack[state.redoStack.length - 1];
-        const newRedoStack = state.redoStack.slice(0, -1);
+        const action = redoStack[redoStack.length - 1];
+        const newRedoStack = redoStack.slice(0, -1);
 
-        let newStrokes = [...state.strokes];
+        let newStrokes = [...(state.strokesMap[pageId] || [])];
 
         switch (action.type) {
             case 'addStroke':
@@ -161,44 +169,49 @@ export const useDoodleStore = create<DoodleState>((set) => ({
                 break;
         }
 
+        const undoStack = state.undoStackMap[pageId] || [];
         return {
-            strokes: newStrokes,
-            undoStack: [...state.undoStack, action],
-            redoStack: newRedoStack,
-            isDirty: true,
+            strokesMap: { ...state.strokesMap, [pageId]: newStrokes },
+            undoStackMap: { ...state.undoStackMap, [pageId]: [...undoStack, action] },
+            redoStackMap: { ...state.redoStackMap, [pageId]: newRedoStack },
+            isDirtyMap: { ...state.isDirtyMap, [pageId]: true },
         };
     }),
 
-    clearAll: () => set((state) => {
-        if (state.strokes.length === 0) return state;
+    clearAll: (pageId) => set((state) => {
+        const strokes = state.strokesMap[pageId] || [];
+        if (strokes.length === 0) return state;
 
-        const action: DoodleAction = { type: 'clearAll', strokes: [...state.strokes] };
-        let newUndoStack = [...state.undoStack, action];
+        const action: DoodleAction = { type: 'clearAll', strokes: [...strokes] };
+        const undoStack = state.undoStackMap[pageId] || [];
+        let newUndoStack = [...undoStack, action];
         if (newUndoStack.length > MAX_UNDO_STACK) {
             newUndoStack = newUndoStack.slice(1);
         }
 
         return {
-            strokes: [],
-            undoStack: newUndoStack,
-            redoStack: [],
-            isDirty: true,
+            strokesMap: { ...state.strokesMap, [pageId]: [] },
+            undoStackMap: { ...state.undoStackMap, [pageId]: newUndoStack },
+            redoStackMap: { ...state.redoStackMap, [pageId]: [] },
+            isDirtyMap: { ...state.isDirtyMap, [pageId]: true },
         };
     }),
 
-    loadStrokes: (strokes) => set({
-        strokes,
-        undoStack: [],
-        redoStack: [],
-        isDirty: false,
-    }),
+    loadStrokes: (pageId, strokes) => set((state) => ({
+        strokesMap: { ...state.strokesMap, [pageId]: strokes },
+        undoStackMap: { ...state.undoStackMap, [pageId]: [] },
+        redoStackMap: { ...state.redoStackMap, [pageId]: [] },
+        isDirtyMap: { ...state.isDirtyMap, [pageId]: false },
+    })),
 
-    resetPage: () => set({
-        strokes: [],
-        undoStack: [],
-        redoStack: [],
-        isDirty: false,
-    }),
+    resetPage: (pageId) => set((state) => ({
+        strokesMap: { ...state.strokesMap, [pageId]: [] },
+        undoStackMap: { ...state.undoStackMap, [pageId]: [] },
+        redoStackMap: { ...state.redoStackMap, [pageId]: [] },
+        isDirtyMap: { ...state.isDirtyMap, [pageId]: false },
+    })),
 
-    markClean: () => set({ isDirty: false }),
+    markClean: (pageId) => set((state) => ({
+        isDirtyMap: { ...state.isDirtyMap, [pageId]: false },
+    })),
 }));

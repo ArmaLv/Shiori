@@ -37,7 +37,7 @@ export function MobiReader({ bookPath, bookId, onClose }: MobiReaderProps) {
 
     const isDoodleMode = useDoodleStore(state => state.isDoodleMode);
     const toggleDoodleMode = useDoodleStore(state => state.toggleDoodleMode);
-    const resetDoodlePage = useDoodleStore(state => state.resetPage);
+    const setActivePage = useDoodleStore(state => state.setActivePage);
 
     useReadingSession(bookId);
 
@@ -161,13 +161,13 @@ export function MobiReader({ bookPath, bookId, onClose }: MobiReaderProps) {
             api.saveReadingProgress(bookId, location, Math.min(100, progressPercent), undefined, undefined, cfi)
                 .catch(() => { /* silently ignore */ });
 
-            resetDoodlePage();
+            setActivePage(`mobi-${bookId}`);
         } catch (err) {
             logger.error('[MobiReader] Error loading chapter:', err);
             setError(err instanceof Error ? err.message : 'Failed to load chapter');
             setIsLoading(false);
         }
-    }, [bookId, metadata, resetDoodlePage]);
+    }, [bookId, metadata, setActivePage]);
 
     // ── Book Loading ──
     const loadBook = useCallback(async () => {

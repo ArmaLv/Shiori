@@ -224,7 +224,7 @@ export function PremiumEpubReader({ bookPath, bookId, readerContent, onClose }: 
   }, [readingSettings]);
   const isDoodleMode = useDoodleStore(state => state.isDoodleMode);
   const toggleDoodleMode = useDoodleStore(state => state.toggleDoodleMode);
-  const resetDoodlePage = useDoodleStore(state => state.resetPage);
+  const setActivePage = useDoodleStore(state => state.setActivePage);
 
   useReadingSession(bookId);
 
@@ -718,8 +718,8 @@ export function PremiumEpubReader({ bookPath, bookId, readerContent, onClose }: 
   useEffect(() => {
     if (previousDoodleChapterRef.current === currentIndex) return;
     previousDoodleChapterRef.current = currentIndex;
-    resetDoodlePage();
-  }, [currentIndex, resetDoodlePage]);
+    setActivePage(`epub-${bookId}-${currentIndex}`);
+  }, [currentIndex, setActivePage, bookId]);
 
   // Preload adjacent chapters for page flip — deferred to idle time
   useEffect(() => {
@@ -789,6 +789,8 @@ export function PremiumEpubReader({ bookPath, bookId, readerContent, onClose }: 
       try {
         const annotations = await api.getAnnotations(bookId);
         if (cancelled) return;
+
+        if (continuousFlow) return; // ContinuousEpubView handles its own highlights
 
         // Filter to annotations for the current chapter
         const chapterLocation = `chapter_${currentIndex}`;
