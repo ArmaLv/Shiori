@@ -247,7 +247,7 @@ impl MangaFireSource {
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.pending_requests.insert(request_id.clone(), tx);
 
-        #[derive(Serialize)]
+        #[derive(Serialize, Clone)]
         struct XhrRequestPayload {
             id: String,
             url: String,
