@@ -184,18 +184,19 @@ jobs:
           - platform: ubuntu-22.04
             rust_targets: ''
             args: ''
+            include_updater_json: true
 
           # Windows — builds NSIS installer
           - platform: windows-latest
             rust_targets: ''
             args: ''
+            include_updater_json: false
 
           # macOS — Apple Silicon (M1+)
           - platform: macos-latest
             rust_targets: aarch64-apple-darwin
             args: '--target aarch64-apple-darwin'
-
-
+            include_updater_json: false
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -314,7 +315,7 @@ jobs:
         with:
           tagName: v${{ needs.check-version.outputs.version }}
           releaseName: 'Shiori v${{ needs.check-version.outputs.version }}'
-          includeUpdaterJson: true
+          includeUpdaterJson: ${{ matrix.include_updater_json }}
           tauriScript: npm run tauri
           releaseBody: |
             ## Shiori v${{ needs.check-version.outputs.version }}
