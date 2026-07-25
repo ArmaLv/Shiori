@@ -12,6 +12,15 @@
     "dialog:default",
     "store:default",
     "shell:default",
+    {
+      "identifier": "shell:allow-open",
+      "allow": [
+        { "url": "https://**" },
+        { "url": "http://**" },
+        { "url": "magnet:*" },
+        { "url": "mailto:*" }
+      ]
+    },
     "fs:default",
     "fs:read-all",
     "core:window:default",

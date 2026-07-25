@@ -15,7 +15,15 @@
     "android-package-install:allow-check-permissions",
     "android-package-install:allow-request-permissions",
     "android-package-install:allow-install",
-    "shell:allow-open",
+    {
+      "identifier": "shell:allow-open",
+      "allow": [
+        { "url": "https://**" },
+        { "url": "http://**" },
+        { "url": "magnet:*" },
+        { "url": "mailto:*" }
+      ]
+    },
     "android-auth:allow-start-oauth-login",
     "android-auth:allow-get-pending-oauth-data",
     "android-auth:allow-set-secure-token",

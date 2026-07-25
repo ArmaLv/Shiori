@@ -8,15 +8,10 @@
     {
       "identifier": "shell:allow-open",
       "allow": [
-        {
-          "url": "https://**"
-        },
-        {
-          "url": "http://**"
-        },
-        {
-          "url": "mailto:*"
-        }
+        { "url": "https://**" },
+        { "url": "http://**" },
+        { "url": "magnet:*" },
+        { "url": "mailto:*" }
       ]
     }
   ]
