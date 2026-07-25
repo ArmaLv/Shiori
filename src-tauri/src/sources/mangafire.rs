@@ -1,11 +1,11 @@
 use async_trait::async_trait;
-use dashmap::DashMap;
 use serde::Deserialize;
-#[cfg(target_os = "android")]
-use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+
+#[cfg(target_os = "android")]
+use tauri_plugin_android_saf::AndroidSafExt;
 
 
 
@@ -18,8 +18,6 @@ const BASE_URL: &str = "https://mangafire.to";
 pub struct MangaFireSource {
     cf_client: RwLock<Option<Arc<CfClient>>>,
     app_handle: RwLock<Option<tauri::AppHandle>>,
-    /// Pending XHR requests waiting for frontend bridge response (Android only)
-    pending_requests: Arc<DashMap<String, tokio::sync::oneshot::Sender<std::result::Result<String, String>>>>,
 }
 
 impl MangaFireSource {
@@ -27,7 +25,6 @@ impl MangaFireSource {
         Self {
             cf_client: RwLock::new(None),
             app_handle: RwLock::new(None),
-            pending_requests: Arc::new(DashMap::new()),
         }
     }
 
@@ -36,17 +33,7 @@ impl MangaFireSource {
         *self.app_handle.write().await = Some(app_handle);
     }
 
-    /// Called by the Tauri command `mangafire_xhr_response` to resolve a pending request.
-    pub fn resolve_xhr(&self, id: &str, body: Option<String>, error: Option<String>) {
-        if let Some((_, tx)) = self.pending_requests.remove(id) {
-            let result = match (body, error) {
-                (Some(b), _) => Ok(b),
-                (_, Some(e)) => Err(e),
-                _ => Err("Empty response from bridge".to_string()),
-            };
-            let _ = tx.send(result);
-        }
-    }
+
 
     async fn wait_for_init(&self) -> Result<()> {
         for _ in 0..50 {
@@ -228,62 +215,100 @@ impl MangaFireSource {
         Err(ShioriError::Other("Browser RPC not initialized for MangaFire".into()))
     }
 
-    /// Fetch a MangaFire API path via the frontend WebView bridge (Android).
-    /// The main WebView already has CF cookies so the XHR will succeed.
-    #[cfg(target_os = "android")]
-    async fn fetch_rpc_via_bridge(&self, url: &str) -> Result<String> {
-        self.wait_for_init().await?;
-        let guard = self.app_handle.read().await;
-        let app = guard.as_ref().ok_or_else(|| ShioriError::Other("MangaFire app handle not ready".into()))?.clone();
-        drop(guard);
-
-        let full_url = if url.starts_with('/') {
-            format!("{}{}", BASE_URL, url)
-        } else {
-            url.to_string()
-        };
-
-        let request_id = uuid::Uuid::new_v4().to_string();
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        self.pending_requests.insert(request_id.clone(), tx);
-
-        #[derive(Serialize, Clone)]
-        struct XhrRequestPayload {
-            id: String,
-            url: String,
-        }
-
-        use tauri::Emitter;
-        if let Err(e) = app.emit("mf-xhr-request", XhrRequestPayload {
-            id: request_id.clone(),
-            url: full_url,
-        }) {
-            self.pending_requests.remove(&request_id);
-            return Err(ShioriError::Other(format!("Failed to emit mf-xhr-request: {e}")));
-        }
-
-        match tokio::time::timeout(std::time::Duration::from_secs(30), rx).await {
-            Ok(Ok(Ok(body))) => Ok(body),
-            Ok(Ok(Err(e))) => Err(ShioriError::Other(format!("MangaFire XHR bridge error: {e}"))),
-            Ok(Err(_)) => {
-                self.pending_requests.remove(&request_id);
-                Err(ShioriError::Other("MangaFire XHR bridge channel dropped".into()))
-            }
-            Err(_) => {
-                self.pending_requests.remove(&request_id);
-                Err(ShioriError::Other("MangaFire XHR bridge timed out (30s)".into()))
-            }
-        }
-    }
-
     async fn fetch_rpc(&self, url: &str) -> Result<String> {
-        // On Android, WebviewWindowBuilder navigates the main (only) WebView,
-        // which would take the entire app to mangafire.to. Use the frontend bridge instead:
-        // Rust emits an event to the WebView, the WebView does fetch() with its own CF cookies,
-        // then calls back via mangafire_xhr_response Tauri command.
+        self.wait_for_init().await?;
+
         #[cfg(target_os = "android")]
         {
-            return self.fetch_rpc_via_bridge(url).await;
+            let guard = self.app_handle.read().await;
+            if let Some(app) = guard.as_ref() {
+                let js = format!(
+                    r#"(async () => {{
+                        try {{
+                            let attempts = 0;
+                            while (typeof window.extendClient === 'undefined' && attempts < 25) {{
+                                await new Promise(r => setTimeout(r, 400));
+                                attempts++;
+                            }}
+                            if (typeof window.extendClient === 'undefined') throw new Error("extendClient not found");
+
+                            if (!window.myAxios) {{
+                                let requestInterceptor = null;
+                                window.myAxios = {{
+                                    defaults: {{ baseURL: '/', headers: {{}} }},
+                                    interceptors: {{
+                                        request: {{
+                                            use: (fn) => {{ requestInterceptor = fn; }}
+                                        }}
+                                    }},
+                                    get: async (url, config = {{}}) => {{
+                                        let reqConfig = {{
+                                            url,
+                                            method: 'get',
+                                            headers: {{
+                                                'Accept': 'application/json, text/javascript, */*; q=0.01',
+                                                'X-Requested-With': 'XMLHttpRequest',
+                                                ...(config.headers || {{}})
+                                            }},
+                                            params: config.params || {{}}
+                                        }};
+                                        if (requestInterceptor) {{
+                                            reqConfig = await requestInterceptor(reqConfig) || reqConfig;
+                                        }}
+                                        let fullUrl = reqConfig.url;
+                                        if (reqConfig.params && Object.keys(reqConfig.params).length > 0) {{
+                                            const query = new URLSearchParams(reqConfig.params).toString();
+                                            fullUrl += (fullUrl.includes('?') ? '&' : '?') + query;
+                                        }}
+                                        const resp = await fetch(fullUrl, {{
+                                            method: 'GET',
+                                            headers: reqConfig.headers,
+                                            credentials: 'include'
+                                        }});
+                                        const data = await resp.json();
+                                        return {{ data }};
+                                    }}
+                                }};
+                                window.extendClient(window.myAxios);
+                            }}
+
+                            const [path, queryString] = '{}'.split('?');
+                            const queryParams = {{}};
+                            if (queryString) {{
+                                const searchParams = new URLSearchParams(queryString);
+                                for (const [key, value] of searchParams.entries()) {{
+                                    queryParams[key] = value;
+                                }}
+                            }}
+
+                            let res = await window.myAxios.get(path, {{ params: queryParams }});
+                            return JSON.stringify(res.data);
+                        }} catch (e) {{
+                            return JSON.stringify({{ error: e.message }});
+                        }}
+                    }})()"#,
+                    url
+                );
+                let user_agent = {
+                    let guard = self.cf_client.read().await;
+                    if let Some(cf) = guard.as_ref() {
+                        cf.user_agent().await
+                    } else {
+                        None
+                    }
+                };
+
+                let res = app.android_saf().evaluate_javascript(format!("{}/filter", BASE_URL), js, user_agent)
+                    .map_err(|e| ShioriError::Other(e.to_string()))?;
+                
+                // Check if the response is an error JSON from our catch block
+                if let Ok(v) = serde_json::from_str::<serde_json::Value>(&res) {
+                    if let Some(err_msg) = v.get("error").and_then(|e| e.as_str()) {
+                        return Err(ShioriError::Other(format!("MangaFire JS error: {}", err_msg)));
+                    }
+                }
+                return Ok(res);
+            }
         }
 
         #[cfg(not(target_os = "android"))]
@@ -300,8 +325,11 @@ impl MangaFireSource {
                 let res = await window.myAxios.get(path, {{ params: queryParams }});
                 return res.data;
             "#, url);
-            self.evaluate_js_on_site(&js).await
+            return self.evaluate_js_on_site(&js).await;
         }
+
+        #[allow(unreachable_code)]
+        Err(ShioriError::Other("Browser RPC not initialized for MangaFire".into()))
     }
 }
 

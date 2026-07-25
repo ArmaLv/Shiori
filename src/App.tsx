@@ -13,7 +13,7 @@ import { useReaderStore } from "./store/readerStore"
 import { useUIStore } from "./store/uiStore"
 import { useConversionStore } from "./store/conversionStore"
 import { listen } from '@tauri-apps/api/event'
-import { invoke } from '@tauri-apps/api/core'
+
 import { useOnboardingStore } from "./store/onboardingStore"
 import { usePreferencesStore } from "./store/preferencesStore"
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts"
@@ -147,25 +147,6 @@ function App() {
     return () => { unlisten?.() }
   }, [])
 
-  useEffect(() => {
-    let unlisten: (() => void) | undefined
-    listen('mf-xhr-request', async (event: any) => {
-      const { id, url } = event.payload
-      try {
-        const res = await fetch(url, {
-          headers: {
-            'X-Requested-With': 'XMLHttpRequest',
-            'Accept': 'application/json, text/javascript, */*; q=0.01'
-          }
-        })
-        const body = await res.text()
-        await invoke('mangafire_xhr_response', { id, body, error: null })
-      } catch (e: any) {
-        await invoke('mangafire_xhr_response', { id, body: null, error: e.message || String(e) })
-      }
-    }).then(fn => { unlisten = fn })
-    return () => { unlisten?.() }
-  }, [])
 
   // ── Auto-Sync (Android to Desktop) ──
   useEffect(() => {
