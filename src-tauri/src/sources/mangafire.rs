@@ -213,6 +213,7 @@ impl MangaFireSource {
     /// Fetch a MangaFire API path directly via reqwest (CfClient).
     /// Used on Android where WebviewWindowBuilder is not supported
     /// (it would navigate the single main WebView away from the app).
+    #[cfg_attr(not(target_os = "android"), allow(dead_code))]
     async fn fetch_rpc_direct(&self, url: &str) -> Result<String> {
         self.wait_for_init().await?;
         let cf = self.cf_client.read().await.clone()
