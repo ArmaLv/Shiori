@@ -277,6 +277,94 @@ impl CfClient {
 
         Ok(req)
     }
+
+    /// Build a request with XHR/AJAX headers instead of browser navigation headers.
+    /// MangaFire's API requires X-Requested-With: XMLHttpRequest and CORS sec-fetch headers.
+    async fn build_xhr_request(&self, url: &str, accept: &str) -> Result<reqwest::RequestBuilder> {
+        let mut req = self
+            .http
+            .get(url)
+            .header(header::ACCEPT, accept)
+            .header(header::ACCEPT_LANGUAGE, "en-US,en;q=0.9")
+            .header("X-Requested-With", "XMLHttpRequest")
+            .header("sec-fetch-dest", "empty")
+            .header("sec-fetch-mode", "cors")
+            .header("sec-fetch-site", "same-origin");
+
+        if let Some(session) = self.store.get(&self.host) {
+            req = req
+                .header(header::USER_AGENT, &session.user_agent)
+                .header(header::COOKIE, session.cookie_header())
+                .header(header::REFERER, &self.base_url);
+        } else {
+            req = req.header(
+                header::USER_AGENT,
+                "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 \
+                 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36",
+            );
+        }
+
+        Ok(req)
+    }
+
+    /// Fetch a URL as an XHR/AJAX request and return the response body as UTF-8 string.
+    /// Use this for JSON API endpoints that require X-Requested-With headers.
+    pub async fn get_xhr(&self, url: &str, accept: &str) -> Result<String> {
+        let _permit = self.concurrency.acquire().await;
+
+        let mut attempt = 0u32;
+        let mut session_refreshed = false;
+
+        loop {
+            if attempt > 0 {
+                let delay_ms = BASE_BACKOFF_MS * (attempt as u64).pow(2);
+                sleep(Duration::from_millis(delay_ms)).await;
+            }
+
+            let req = self.build_xhr_request(url, accept).await?;
+            let resp = match req.send().await {
+                Ok(r) => r,
+                Err(e) => {
+                    if attempt >= MAX_RETRIES {
+                        return Err(ShioriError::Other(format!("XHR request failed: {e}")));
+                    }
+                    attempt += 1;
+                    continue;
+                }
+            };
+
+            let status = resp.status();
+            let bytes = resp.bytes().await.unwrap_or_default();
+
+            // If CF blocked, refresh session and retry
+            if looks_like_html(&bytes) {
+                let body_str = String::from_utf8_lossy(&bytes);
+                if detector::is_blocked(status, &body_str) {
+                    if session_refreshed || attempt >= MAX_RETRIES {
+                        return Err(ShioriError::Other(format!(
+                            "Cloudflare blocking XHR to {url}"
+                        )));
+                    }
+                    log::warn!("[CfClient] CF block on XHR {url} — refreshing session");
+                    self.refresh_session(url).await?;
+                    session_refreshed = true;
+                    attempt += 1;
+                    continue;
+                }
+            }
+
+            if status.is_success() {
+                return String::from_utf8(bytes.to_vec())
+                    .map_err(|e| ShioriError::Other(format!("XHR response not UTF-8: {e}")));
+            }
+
+            if attempt >= MAX_RETRIES {
+                return Err(ShioriError::Other(format!("HTTP {status} from XHR {url}"))); 
+            }
+            attempt += 1;
+        }
+    }
+
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
