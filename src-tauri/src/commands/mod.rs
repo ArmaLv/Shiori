@@ -313,6 +313,8 @@ macro_rules! generate_shiori_handlers {
             commands::sync::get_sync_pairing_token,
             commands::sync::rotate_sync_pairing_token,
             commands::sync::sync_with_desktop,
+            // MangaFire Android XHR bridge
+            commands::sources::mangafire_xhr_response,
         ]
     };
 }

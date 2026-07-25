@@ -527,3 +527,23 @@ pub async fn download_manga_chapter_as_cbz(
     }).await.map_err(|e| ShioriError::Other(format!("Task error: {}", e)))??;
     Ok(cbz_path.to_string_lossy().to_string())
 }
+
+/// Called by the Android frontend bridge to deliver XHR fetch results back to the
+/// MangaFire source. The frontend listens for `mf-xhr-request` events, fetches
+/// the URL using its WebView's cookies (which include CF clearance), and calls
+/// this command with the result.
+#[tauri::command]
+pub async fn mangafire_xhr_response(
+    state: tauri::State<'_, crate::AppState>,
+    id: String,
+    body: Option<String>,
+    error: Option<String>,
+) -> Result<()> {
+    let registry = state.plugin_registry.read().await;
+    if let Some(source_arc) = registry.get("mangafire") {
+        if let Some(mf) = source_arc.as_any().downcast_ref::<crate::sources::mangafire::MangaFireSource>() {
+            mf.resolve_xhr(&id, body, error);
+        }
+    }
+    Ok(())
+}

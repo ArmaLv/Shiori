@@ -1,5 +1,8 @@
 use async_trait::async_trait;
+use dashmap::DashMap;
 use serde::Deserialize;
+#[cfg(target_os = "android")]
+use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -15,6 +18,8 @@ const BASE_URL: &str = "https://mangafire.to";
 pub struct MangaFireSource {
     cf_client: RwLock<Option<Arc<CfClient>>>,
     app_handle: RwLock<Option<tauri::AppHandle>>,
+    /// Pending XHR requests waiting for frontend bridge response (Android only)
+    pending_requests: Arc<DashMap<String, tokio::sync::oneshot::Sender<std::result::Result<String, String>>>>,
 }
 
 impl MangaFireSource {
@@ -22,12 +27,25 @@ impl MangaFireSource {
         Self {
             cf_client: RwLock::new(None),
             app_handle: RwLock::new(None),
+            pending_requests: Arc::new(DashMap::new()),
         }
     }
 
     pub async fn set_cf_client(&self, cf: Arc<CfClient>, app_handle: tauri::AppHandle) {
         *self.cf_client.write().await = Some(cf);
         *self.app_handle.write().await = Some(app_handle);
+    }
+
+    /// Called by the Tauri command `mangafire_xhr_response` to resolve a pending request.
+    pub fn resolve_xhr(&self, id: &str, body: Option<String>, error: Option<String>) {
+        if let Some((_, tx)) = self.pending_requests.remove(id) {
+            let result = match (body, error) {
+                (Some(b), _) => Ok(b),
+                (_, Some(e)) => Err(e),
+                _ => Err("Empty response from bridge".to_string()),
+            };
+            let _ = tx.send(result);
+        }
     }
 
     async fn wait_for_init(&self) -> Result<()> {
@@ -210,36 +228,62 @@ impl MangaFireSource {
         Err(ShioriError::Other("Browser RPC not initialized for MangaFire".into()))
     }
 
-    /// Fetch a MangaFire API path directly via reqwest (CfClient) with XHR headers.
-    /// Used on Android where WebviewWindowBuilder is not supported
-    /// (it would navigate the single main WebView away from the app).
-    #[cfg_attr(not(target_os = "android"), allow(dead_code))]
-    async fn fetch_rpc_direct(&self, url: &str) -> Result<String> {
+    /// Fetch a MangaFire API path via the frontend WebView bridge (Android).
+    /// The main WebView already has CF cookies so the XHR will succeed.
+    #[cfg(target_os = "android")]
+    async fn fetch_rpc_via_bridge(&self, url: &str) -> Result<String> {
         self.wait_for_init().await?;
-        let cf = self.cf_client.read().await.clone()
-            .ok_or_else(|| ShioriError::Other("MangaFire CF client not ready".into()))?;
+        let guard = self.app_handle.read().await;
+        let app = guard.as_ref().ok_or_else(|| ShioriError::Other("MangaFire app handle not ready".into()))?.clone();
+        drop(guard);
 
-        // Build the full URL — paths are relative like /api/titles?keyword=...
         let full_url = if url.starts_with('/') {
             format!("{}{}", BASE_URL, url)
         } else {
             url.to_string()
         };
 
-        // Use get_xhr — sends X-Requested-With + CORS sec-fetch headers
-        // that MangaFire's API requires (regular get_bytes sends navigate headers)
-        cf.get_xhr(
-            &full_url,
-            "application/json, text/javascript, */*; q=0.01",
-        ).await
+        let request_id = uuid::Uuid::new_v4().to_string();
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        self.pending_requests.insert(request_id.clone(), tx);
+
+        #[derive(Serialize)]
+        struct XhrRequestPayload {
+            id: String,
+            url: String,
+        }
+
+        use tauri::Emitter;
+        if let Err(e) = app.emit("mf-xhr-request", XhrRequestPayload {
+            id: request_id.clone(),
+            url: full_url,
+        }) {
+            self.pending_requests.remove(&request_id);
+            return Err(ShioriError::Other(format!("Failed to emit mf-xhr-request: {e}")));
+        }
+
+        match tokio::time::timeout(std::time::Duration::from_secs(30), rx).await {
+            Ok(Ok(Ok(body))) => Ok(body),
+            Ok(Ok(Err(e))) => Err(ShioriError::Other(format!("MangaFire XHR bridge error: {e}"))),
+            Ok(Err(_)) => {
+                self.pending_requests.remove(&request_id);
+                Err(ShioriError::Other("MangaFire XHR bridge channel dropped".into()))
+            }
+            Err(_) => {
+                self.pending_requests.remove(&request_id);
+                Err(ShioriError::Other("MangaFire XHR bridge timed out (30s)".into()))
+            }
+        }
     }
 
     async fn fetch_rpc(&self, url: &str) -> Result<String> {
         // On Android, WebviewWindowBuilder navigates the main (only) WebView,
-        // which would take the entire app to mangafire.to. Use reqwest instead.
+        // which would take the entire app to mangafire.to. Use the frontend bridge instead:
+        // Rust emits an event to the WebView, the WebView does fetch() with its own CF cookies,
+        // then calls back via mangafire_xhr_response Tauri command.
         #[cfg(target_os = "android")]
         {
-            return self.fetch_rpc_direct(url).await;
+            return self.fetch_rpc_via_bridge(url).await;
         }
 
         #[cfg(not(target_os = "android"))]
@@ -424,40 +468,39 @@ impl Source for MangaFireSource {
         let hid = parts[0];
         let _slug = parts[1];
 
-        let js = format!(r#"
-            let all_items = [];
-            const firstPath = `/api/titles/{}/chapters`;
-            let res = await window.myAxios.get(firstPath, {{ 
-                params: {{ language: 'en', sort: 'number', order: 'desc', page: 1, limit: 200 }} 
-            }});
-            
-            if (res.data && res.data.items) {{
-                all_items.push(...res.data.items);
-                let lastPage = res.data.meta ? res.data.meta.last_page : 1;
-                
-                for (let page = 2; page <= lastPage; page++) {{
-                    try {{
-                        let nextRes = await window.myAxios.get(firstPath, {{ 
-                            params: {{ language: 'en', sort: 'number', order: 'desc', page, limit: 200 }} 
-                        }});
-                        if (nextRes.data && nextRes.data.items) {{
-                            all_items.push(...nextRes.data.items);
-                        }}
-                    }} catch (e) {{
-                        console.error("Failed page " + page, e);
-                    }}
-                }}
-            }}
-            return {{ items: all_items }};
-        "#, hid);
+        let mut all_items = Vec::new();
+        let mut current_page = 1;
+        let mut last_page = 1;
 
-        let json_str = self.evaluate_js_on_site(&js).await?;
-        let res: MfChaptersResponse = serde_json::from_str(&json_str)
-            .map_err(|e| ShioriError::Other(format!("Failed to parse MangaFire chapters bulk JSON: {}", e)))?;
+        loop {
+            let url = format!("/api/titles/{}/chapters?language=en&sort=number&order=desc&page={}&limit=200", hid, current_page);
+            let json_str = match self.fetch_rpc(&url).await {
+                Ok(s) => s,
+                Err(e) => {
+                    if current_page == 1 {
+                        return Err(e);
+                    }
+                    break;
+                }
+            };
+            
+            let res: MfChaptersResponse = serde_json::from_str(&json_str)
+                .map_err(|e| ShioriError::Other(format!("Failed to parse MangaFire chapters JSON: {}", e)))?;
+                
+            all_items.extend(res.items);
+            
+            if let Some(meta) = res.meta {
+                last_page = meta.last_page;
+            }
+            
+            if current_page >= last_page {
+                break;
+            }
+            current_page += 1;
+        }
 
         let mut chapters = Vec::new();
-        // Since order is desc, we can just iterate. We should filter to english chapters
-        for item in res.items {
+        for item in all_items {
             if item.language != "en" {
                 continue;
             }

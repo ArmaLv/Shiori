@@ -186,3 +186,30 @@ export function formatTime(seconds: number): string {
   }
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
+
+import { convertFileSrc } from '@tauri-apps/api/core';
+
+/**
+ * Normalizes an external HTTP/HTTPS cover URL by routing it through the
+ * shiori-proxy custom protocol. This avoids hotlinking/CORS issues and
+ * properly handles Android/Windows/macOS differences in production.
+ */
+export function proxyExternalCover(url: string): string {
+  const sourceMap: Record<string, string> = {
+    'libgen': 'libgen', 'toontop': 'toontop', 'toonily': 'toonily',
+    'manhwaread': 'manhwaread', 'toongod': 'toongod', 'weebrook': 'weebrook',
+    'manhwahub': 'manhwahub', 'mangafire': 'mangafire', 'mangadex': 'mangadex',
+  };
+  const sourceId = Object.keys(sourceMap).find(k => url.includes(k)) ?? 'generic';
+  
+  // convertFileSrc automatically handles the correct protocol prefix for the current platform
+  // (e.g., http://shiori-proxy.localhost/ on Windows/Android, shiori-proxy://localhost/ on macOS)
+  let baseUrl = convertFileSrc('', 'shiori-proxy');
+  
+  // Remove trailing slash if present
+  if (baseUrl.endsWith('/')) {
+    baseUrl = baseUrl.slice(0, -1);
+  }
+  
+  return `${baseUrl}?source=${sourceId}&url=${encodeURIComponent(url)}`;
+}

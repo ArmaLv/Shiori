@@ -15,29 +15,12 @@
  */
 
 import { invoke, convertFileSrc } from '@tauri-apps/api/core'
-
-/**
- * On Windows, file paths use backslashes (C:\Users\...).
- * convertFileSrc() requires forward slashes to build a valid asset:// URL.
- */
-const isAndroid = typeof window !== 'undefined' && /android/i.test(navigator.userAgent);
-
-function proxyExternalUrl(url: string): string {
-  const sourceMap: Record<string, string> = {
-    'libgen': 'libgen', 'toontop': 'toontop', 'toonily': 'toonily',
-    'manhwaread': 'manhwaread', 'toongod': 'toongod', 'weebrook': 'weebrook',
-    'manhwahub': 'manhwahub', 'mangafire': 'mangafire', 'mangadex': 'mangadex',
-  };
-  const sourceId = Object.keys(sourceMap).find(k => url.includes(k)) ?? 'generic';
-  return isAndroid
-    ? `http://shiori-proxy.localhost?source=${sourceId}&url=${encodeURIComponent(url)}`
-    : `shiori-proxy://localhost?source=${sourceId}&url=${encodeURIComponent(url)}`;
-}
+import { proxyExternalCover } from '@/lib/utils'
 
 function toAssetUrl(filePath: string): string {
   // HTTP(S) URLs (e.g. online manga cover CDN links) — route through proxy
   if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
-    return proxyExternalUrl(filePath);
+    return proxyExternalCover(filePath);
   }
   // Replace all backslashes with forward slashes
   const normalized = filePath.replace(/\\/g, '/')

@@ -27,25 +27,8 @@ import { useUIStore, type DomainView } from '@/store/uiStore'
 import { usePreferencesStore } from '@/store/preferencesStore'
 import type { Book, ReadingProgress } from '@/lib/tauri'
 import { api } from '@/lib/tauri'
-import { formatFileSize, isMangaDomain } from '@/lib/utils'
+import { formatFileSize, isMangaDomain, proxyExternalCover } from '@/lib/utils'
 import { useTorboxStore } from '@/store/useTorboxStore'
-
-// ── Shared constant ──────────────────────────────
-const isAndroid = typeof window !== 'undefined' && /android/i.test(navigator.userAgent);
-
-function proxyExternalCover(url: string): string {
-  // Route known hotlink-protected sources through shiori-proxy
-  // (matches the logic in useCoverImage.ts so all cover displays are consistent)
-  const sourceMap: Record<string, string> = {
-    'libgen': 'libgen', 'toontop': 'toontop', 'toonily': 'toonily',
-    'manhwaread': 'manhwaread', 'toongod': 'toongod', 'weebrook': 'weebrook',
-    'manhwahub': 'manhwahub', 'mangafire': 'mangafire', 'mangadex': 'mangadex',
-  };
-  const sourceId = Object.keys(sourceMap).find(k => url.includes(k)) ?? 'generic';
-  return isAndroid
-    ? `http://shiori-proxy.localhost?source=${sourceId}&url=${encodeURIComponent(url)}`
-    : `shiori-proxy://localhost?source=${sourceId}&url=${encodeURIComponent(url)}`;
-}
 
 function getCoverUrl(path: string | null | undefined): string {
   if (!path) return '';
