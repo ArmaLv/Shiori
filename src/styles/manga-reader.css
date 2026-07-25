@@ -41,33 +41,33 @@
 }
 
 /* ────────────────────────────────────────────────────────────
-   LIGHT THEME
+   LIGHT THEME  (Sepia)
    ──────────────────────────────────────────────────────────── */
 [data-manga-theme="light"] .manga-reader {
-  --manga-canvas-bg: #F5F3EF;
-  --manga-topbar-bg: rgba(255, 255, 255, 0.92);
-  --manga-topbar-border: #E8E5E0;
-  --manga-sidebar-bg: #FAFAFA;
-  --manga-sidebar-border: #E8E5E0;
-  --manga-text-primary: #1A1817;
-  --manga-text-secondary: #4A4745;
-  --manga-text-tertiary: #6E6B68;
-  --manga-control-hover: rgba(0, 0, 0, 0.04);
-  --manga-control-active: rgba(59, 130, 246, 0.1);
-  --manga-accent: #3B82F6;
-  --manga-accent-subtle: rgba(59, 130, 246, 0.08);
-  --manga-border: #E8E5E0;
-  --manga-elevated: rgba(255, 255, 255, 0.95);
-  --manga-shadow: rgba(0, 0, 0, 0.08);
-  --manga-overlay: rgba(0, 0, 0, 0.2);
-  --manga-page-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-  --manga-progress-track: rgba(0, 0, 0, 0.08);
-  --manga-progress-fill: #3B82F6;
+  --manga-canvas-bg: #F4ECD8;
+  --manga-topbar-bg: rgba(242, 231, 207, 0.96);
+  --manga-topbar-border: #D9C9A3;
+  --manga-sidebar-bg: #F0E6CE;
+  --manga-sidebar-border: #D9C9A3;
+  --manga-text-primary: #2C1E0F;
+  --manga-text-secondary: #5C4430;
+  --manga-text-tertiary: #8A6A50;
+  --manga-control-hover: rgba(139, 90, 43, 0.08);
+  --manga-control-active: rgba(180, 120, 60, 0.15);
+  --manga-accent: #A0522D;
+  --manga-accent-subtle: rgba(160, 82, 45, 0.1);
+  --manga-border: #D9C9A3;
+  --manga-elevated: rgba(245, 235, 210, 0.98);
+  --manga-shadow: rgba(80, 40, 10, 0.12);
+  --manga-overlay: rgba(60, 30, 10, 0.25);
+  --manga-page-shadow: 0 2px 16px rgba(80, 40, 10, 0.14);
+  --manga-progress-track: rgba(139, 90, 43, 0.12);
+  --manga-progress-fill: #A0522D;
   --manga-vignette: none;
-  --manga-input-bg: rgba(0, 0, 0, 0.03);
-  --manga-input-border: #E8E5E0;
-  --manga-dropdown-bg: #FFFFFF;
-  --manga-tooltip-bg: rgba(255, 255, 255, 0.95);
+  --manga-input-bg: rgba(139, 90, 43, 0.06);
+  --manga-input-border: #D9C9A3;
+  --manga-dropdown-bg: #F5EDDA;
+  --manga-tooltip-bg: rgba(242, 231, 207, 0.98);
 }
 
 
