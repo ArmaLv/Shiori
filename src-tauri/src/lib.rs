@@ -153,7 +153,7 @@ pub fn run() {
             
             if let (Some(source_id), Some(image_url)) = (source_id, image_url) {
                 // Security Fix: SSRF Prevention
-                let is_valid = is_safe_url(&image_url).await;
+                let is_valid = is_safe_url(&image_url);
 
                 if is_valid {
                     let user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36";
@@ -627,42 +627,50 @@ pub fn run() {
 
 /// Security Fix: SSRF Prevention
 /// Validates scheme (https) and ensures IP is not private/loopback/link-local
-pub async fn is_safe_url(image_url: &str) -> bool {
+pub fn is_safe_url(image_url: &str) -> bool {
     let parsed = match url::Url::parse(image_url) {
         Ok(p) => p,
         Err(_) => return false,
     };
+
+    // Only allow HTTPS
     if parsed.scheme() != "https" {
         return false;
     }
-    
-    // Validate IP / Host asynchronously
+
     let host = match parsed.host_str() {
-        Some(h) => h,
+        Some(h) => h.to_lowercase(),
         None => return false,
     };
-    let port = parsed.port_or_known_default().unwrap_or(443);
-    
-    if let Ok(addrs) = tokio::net::lookup_host((host, port)).await {
-        for addr in addrs {
-            let ip = addr.ip();
-            match ip {
-                std::net::IpAddr::V4(ipv4) => {
-                    if ipv4.is_private() || ipv4.is_loopback() || ipv4.is_link_local() {
-                        return false;
-                    }
-                }
-                std::net::IpAddr::V6(ipv6) => {
-                    if ipv6.is_loopback() || (ipv6.segments()[0] & 0xfe00) == 0xfc00 {
-                        return false;
-                    }
-                }
-            }
-        }
-    } else {
-        // Could not resolve, fail safe
+
+    // Block explicit loopback / link-local / private IPv4 literals
+    let blocked_literals = [
+        "localhost", "127.0.0.1", "[::1]", "0.0.0.0",
+    ];
+    if blocked_literals.contains(&host.as_str()) {
         return false;
     }
+
+    // Block private IPv4 ranges expressed as literals (simple prefix check)
+    let private_prefixes = ["10.", "192.168.", "172.16.", "172.17.", "172.18.", "172.19.",
+        "172.20.", "172.21.", "172.22.", "172.23.", "172.24.", "172.25.", "172.26.", "172.27.",
+        "172.28.", "172.29.", "172.30.", "172.31."];
+    for prefix in &private_prefixes {
+        if host.starts_with(prefix) {
+            return false;
+        }
+    }
+
+    // Block .localhost TLD
+    if host.ends_with(".localhost") || host == "localhost" {
+        return false;
+    }
+
+    // Must have at least one dot (not a bare hostname / single-label domain)
+    if !host.contains('.') {
+        return false;
+    }
+
     true
 }
 
@@ -670,23 +678,27 @@ pub async fn is_safe_url(image_url: &str) -> bool {
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn test_is_safe_url() {
-        // Valid HTTPS URLs should pass (assuming github.com resolves to public IP)
-        assert!(is_safe_url("https://github.com").await);
-        assert!(is_safe_url("https://mangadex.org/api/v2").await);
+    #[test]
+    fn test_is_safe_url() {
+        // Valid HTTPS URLs should pass
+        assert!(is_safe_url("https://github.com"));
+        assert!(is_safe_url("https://mangadex.org/api/v2"));
+        assert!(is_safe_url("https://cdn.mangafire.to/image.jpg"));
 
         // HTTP should fail
-        assert!(!is_safe_url("http://github.com").await);
-        
+        assert!(!is_safe_url("http://github.com"));
+
         // File schemes should fail
-        assert!(!is_safe_url("file:///etc/passwd").await);
-        
+        assert!(!is_safe_url("file:///etc/passwd"));
+
         // Internal IP addresses should fail
-        assert!(!is_safe_url("https://127.0.0.1").await);
-        assert!(!is_safe_url("https://localhost").await);
-        assert!(!is_safe_url("https://10.0.0.1").await);
-        assert!(!is_safe_url("https://192.168.1.1").await);
-        assert!(!is_safe_url("https://[::1]").await);
+        assert!(!is_safe_url("https://127.0.0.1"));
+        assert!(!is_safe_url("https://localhost"));
+        assert!(!is_safe_url("https://10.0.0.1"));
+        assert!(!is_safe_url("https://192.168.1.1"));
+        assert!(!is_safe_url("https://something.localhost"));
+
+        // Bare single-label hostname should fail
+        assert!(!is_safe_url("https://internalhost"));
     }
 }

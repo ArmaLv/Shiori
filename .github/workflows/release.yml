@@ -190,7 +190,7 @@ jobs:
           - platform: windows-latest
             rust_targets: ''
             args: ''
-            include_updater_json: false
+            include_updater_json: true
 
           # macOS — Apple Silicon (M1+)
           - platform: macos-latest

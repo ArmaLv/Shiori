@@ -1991,14 +1991,55 @@ const AboutSettings = () => {
           toast.success("You are on the latest version.");
         }
       } else {
-        const update = await check()
-        if (update) {
-          toast.info(`Update ${update.version} is available! Downloading...`)
-          await update.downloadAndInstall()
-          toast.success("Update installed successfully. Restarting...")
-          await relaunch()
-        } else {
-          toast.success("You are on the latest version.")
+        // Desktop: try Tauri updater plugin first, fall back to GitHub API
+        let updated = false;
+        try {
+          const update = await check()
+          if (update) {
+            toast.info(`Update ${update.version} is available! Downloading...`)
+            await update.downloadAndInstall()
+            toast.success("Update installed successfully. Restarting...")
+            await relaunch()
+            updated = true;
+          } else {
+            toast.success("You are on the latest version.")
+            updated = true;
+          }
+        } catch (pluginErr) {
+          // Tauri updater failed — fall back to GitHub API (Windows may lack latest.json in older releases)
+          console.warn('[Update] Tauri updater failed, falling back to GitHub API:', pluginErr)
+          try {
+            const res = await fetch("https://api.github.com/repos/vinayydv3695/Shiori/releases/latest");
+            if (!res.ok) throw new Error("GitHub API request failed");
+            const data = await res.json();
+            const latestVersion = data.tag_name.replace(/^v/, '');
+            const isNewer = (v1: string, v2: string) => {
+              const p1 = v1.split('.').map(Number);
+              const p2 = v2.split('.').map(Number);
+              for (let i = 0; i < 3; i++) {
+                if ((p1[i] || 0) > (p2[i] || 0)) return true;
+                if ((p1[i] || 0) < (p2[i] || 0)) return false;
+              }
+              return false;
+            };
+            if (isNewer(latestVersion, appVersion)) {
+              toast.info(`Update v${latestVersion} is available! Opening releases page...`)
+              setTimeout(() => {
+                open(data.html_url).catch(err => {
+                  console.error('Failed to open link:', err);
+                  try { window.open(data.html_url, '_blank'); } catch (e) {}
+                });
+              }, 1500);
+            } else {
+              toast.success("You are on the latest version.")
+            }
+            updated = true;
+          } catch (ghErr) {
+            console.error('[Update] GitHub API fallback also failed:', ghErr)
+          }
+        }
+        if (!updated) {
+          toast.error("Failed to check for updates. Make sure you are connected to the internet.")
         }
       }
     } catch (error) {
