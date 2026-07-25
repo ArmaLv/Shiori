@@ -74,39 +74,39 @@
     --ring: 262 83% 58%;
   }
 
-  /* Premium Dark (Deep Obsidian & Cyan) */
+  /* Premium Dark (Deep Obsidian) */
   [data-theme="premium-dark"] {
-    --background: 225 10% 6%; /* Deep True Dark */
+    --background: 0 0% 0%; /* Obsidian True Black */
     --foreground: 40 25% 90%; /* Cool Cream text */
     
-    --surface-1: 225 10% 9%;
-    --surface-2: 225 10% 12%;
-    --surface-3: 225 10% 15%;
-    --surface-4: 225 10% 18%;
+    --surface-1: 0 0% 3%;
+    --surface-2: 0 0% 6%;
+    --surface-3: 0 0% 9%;
+    --surface-4: 0 0% 12%;
     
-    --card: 225 10% 8%; 
+    --card: 0 0% 4%; 
     --card-foreground: 40 25% 90%;
-    --popover: 225 10% 8%;
+    --popover: 0 0% 4%;
     --popover-foreground: 40 25% 90%;
     
-    --primary: 195 100% 50%; /* Vibrant Cyan for contrast */
+    --primary: 43 100% 50%; /* Premium Gold/Amber instead of Cyan */
     --primary-foreground: 0 0% 10%;
     
-    --secondary: 225 10% 14%;
+    --secondary: 0 0% 12%;
     --secondary-foreground: 40 25% 90%;
     
-    --muted: 225 10% 14%;
+    --muted: 0 0% 12%;
     --muted-foreground: 40 10% 65%;
     
-    --accent: 195 100% 50%;
+    --accent: 43 100% 50%;
     --accent-foreground: 0 0% 10%;
     
     --destructive: 0 80% 60%;
     --destructive-foreground: 0 0% 100%;
     
-    --border: 225 10% 16%;
-    --input: 225 10% 16%;
-    --ring: 195 100% 50%;
+    --border: 0 0% 12%;
+    --input: 0 0% 12%;
+    --ring: 43 100% 50%;
     
     --card-overlay: 0 0% 0%;
     --card-overlay-text: 40 25% 90%;
