@@ -505,7 +505,7 @@ export function PdfReader({ bookPath, bookId, readerContent, onClose }: PdfReade
 
   useEffect(() => {
     if (numPages <= 0) return;
-    setActivePage();
+    setActivePage(`pdf-${bookId}-${pageNumber}`);
 
     // Update global progress
     setScrollProgress(Math.min(100, (pageNumber / numPages) * 100));

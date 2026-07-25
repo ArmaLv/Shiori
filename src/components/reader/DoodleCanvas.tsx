@@ -26,6 +26,7 @@ export const DoodleCanvas = memo(function DoodleCanvas({
     const saveTimeoutRef = useRef<number | null>(null);
     const lastFrameRef = useRef<number>(0);
     const containerRectRef = useRef<{w: number, h: number}>({w: 1, h: 1});
+    const localSvgRef = useRef<SVGSVGElement>(null);
 
     const {
         isDoodleMode,
@@ -286,3 +287,5 @@ export const DoodleCanvas = memo(function DoodleCanvas({
         </svg>
     );
 }, (prev, next) => prev.pageId === next.pageId && prev.bookId === next.bookId);
+
+export default DoodleCanvas;
