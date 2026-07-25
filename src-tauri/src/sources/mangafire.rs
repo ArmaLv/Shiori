@@ -210,20 +210,55 @@ impl MangaFireSource {
         Err(ShioriError::Other("Browser RPC not initialized for MangaFire".into()))
     }
 
+    /// Fetch a MangaFire API path directly via reqwest (CfClient).
+    /// Used on Android where WebviewWindowBuilder is not supported
+    /// (it would navigate the single main WebView away from the app).
+    async fn fetch_rpc_direct(&self, url: &str) -> Result<String> {
+        self.wait_for_init().await?;
+        let cf = self.cf_client.read().await.clone()
+            .ok_or_else(|| ShioriError::Other("MangaFire CF client not ready".into()))?;
+
+        // Build the full URL — paths are relative like /api/titles?keyword=...
+        let full_url = if url.starts_with("/") {
+            format!("{}{}", BASE_URL, url)
+        } else {
+            url.to_string()
+        };
+
+        // Use get_bytes with JSON accept so we get the raw JSON body
+        let bytes = cf.get_bytes(
+            &full_url,
+            Some("application/json, text/javascript, */*; q=0.01"),
+        ).await?;
+
+        String::from_utf8(bytes)
+            .map_err(|e| ShioriError::Other(format!("MangaFire response not UTF-8: {e}")))
+    }
+
     async fn fetch_rpc(&self, url: &str) -> Result<String> {
-        let js = format!(r#"
-            const [path, queryString] = '{}'.split('?');
-            const queryParams = {{}};
-            if (queryString) {{
-                const searchParams = new URLSearchParams(queryString);
-                for (const [key, value] of searchParams.entries()) {{
-                    queryParams[key] = value;
+        // On Android, WebviewWindowBuilder navigates the main (only) WebView,
+        // which would take the entire app to mangafire.to. Use reqwest instead.
+        #[cfg(target_os = "android")]
+        {
+            return self.fetch_rpc_direct(url).await;
+        }
+
+        #[cfg(not(target_os = "android"))]
+        {
+            let js = format!(r#"
+                const [path, queryString] = '{}'.split('?');
+                const queryParams = {{}};
+                if (queryString) {{
+                    const searchParams = new URLSearchParams(queryString);
+                    for (const [key, value] of searchParams.entries()) {{
+                        queryParams[key] = value;
+                    }}
                 }}
-            }}
-            let res = await window.myAxios.get(path, {{ params: queryParams }});
-            return res.data;
-        "#, url);
-        self.evaluate_js_on_site(&js).await
+                let res = await window.myAxios.get(path, {{ params: queryParams }});
+                return res.data;
+            "#, url);
+            self.evaluate_js_on_site(&js).await
+        }
     }
 }
 
