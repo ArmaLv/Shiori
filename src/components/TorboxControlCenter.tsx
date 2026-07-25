@@ -3,6 +3,8 @@ import { useIsMobile } from '@/hooks/useIsMobile'
 import { motion, AnimatePresence } from 'framer-motion'
 import DOMPurify from 'dompurify'
 import { invoke, convertFileSrc } from '@tauri-apps/api/core'
+import { open as shellOpen } from '@tauri-apps/plugin-shell'
+import { isAndroid, isTauri } from '@/lib/tauri'
 import * as Tabs from '@radix-ui/react-tabs'
 import {
   AlertCircle,
@@ -33,7 +35,6 @@ import { useToast } from '@/store/toastStore'
 import { TrendingExplore } from './torbox/TrendingExplore'
 import { useTorboxStore, TorboxQueueItem } from '@/store/useTorboxStore'
 import { parsePageUrl } from '@/lib/utils'
-import { isAndroid } from '@/lib/tauri'
 import { useOnlineSearchStore } from '@/store/onlineSearchStore'
 
 type SearchType = 'manga' | 'books' | 'all'
@@ -1001,12 +1002,16 @@ export default function TorboxControlCenter({ initialTab = 'discover' }: { initi
                                   <Button
                                     variant="secondary"
                                     className="bg-white text-black hover:bg-white/90 h-9 px-4 rounded-md text-sm font-medium shadow-sm"
-                                    onClick={() => {
+                                    onClick={async () => {
                                       try {
                                         const url = new URL(source.magnetLink);
                                         if (url.protocol === 'http:' || url.protocol === 'https:' || url.protocol === 'magnet:') {
-                                          const openedWindow = window.open(source.magnetLink, '_blank', 'noopener,noreferrer')
-                                          if (!openedWindow) window.location.assign(source.magnetLink)
+                                          if (isTauri) {
+                                            await shellOpen(source.magnetLink);
+                                          } else {
+                                            const openedWindow = window.open(source.magnetLink, '_blank', 'noopener,noreferrer');
+                                            if (!openedWindow && !isAndroid) window.location.assign(source.magnetLink);
+                                          }
                                         } else {
                                           console.error('Blocked unsafe link protocol:', url.protocol);
                                         }

@@ -2044,22 +2044,22 @@ const AboutSettings = () => {
             { label: 'GitHub Repository', url: 'https://github.com/vinayydv3695/Shiori', icon: ExternalLink },
             { label: 'Report an Issue', url: 'https://github.com/vinayydv3695/Shiori/issues', icon: AlertTriangle },
             { label: 'License (MIT)', url: 'https://github.com/vinayydv3695/Shiori?tab=MIT-1-ov-file', icon: FileText },
-            { label: 'Official Website', url: 'https://www.vinayydv.me/projects/shiori', icon: ExternalLink },
+            { label: 'Official Website', url: 'http://shiori.vinayydv.me/', icon: ExternalLink },
           ]).map((link) => (
             <a
               key={link.url}
               href={link.url}
-              onClick={(e) => {
+              onClick={async (e) => {
                 e.preventDefault()
-                open(link.url).catch(err => {
+                try {
+                  await open(link.url);
+                } catch (err) {
                   console.error('Failed to open link:', err);
-                  // Try standard window.open as a fallback if the shell plugin fails
-                  try {
-                    window.open(link.url, '_blank');
-                  } catch (fallbackErr) {
-                    // Fallback also failed
+                  // Web-only fallback — never navigate Tauri app away
+                  if (!isTauri) {
+                    window.open(link.url, '_blank', 'noopener,noreferrer');
                   }
-                })
+                }
               }}
               className="flex items-center gap-3 p-4 rounded-xl border border-border/40 bg-card/10 hover:bg-muted/50 hover:border-border transition-all group cursor-pointer"
             >
