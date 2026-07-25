@@ -246,6 +246,7 @@ struct MfPoster {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct MfChaptersResponse {
     items: Vec<MfChapterItem>,
     meta: Option<MfMeta>,
@@ -253,6 +254,7 @@ struct MfChaptersResponse {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 struct MfMeta {
     last_page: u32,
 }
