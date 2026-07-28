@@ -5,6 +5,7 @@ import { api } from '@/lib/tauri';
 import { logger } from '@/lib/logger';
 import type { TocEntry, Annotation, BookSearchResult, AnnotationCategory } from '@/lib/tauri';
 import { X, BookOpen, Highlighter, FileText, Search, Loader2, Trash2, Edit2, Download } from '@/components/icons';
+import { parseTocLocationToIndex, findCurrentTocEntry } from '@/lib/toc';
 import DOMPurify from 'dompurify';
 import { useToastStore } from '@/store/toastStore';
 import { useIsMobile } from '@/hooks/useIsMobile';
@@ -219,33 +220,8 @@ export function PremiumSidebar({ bookId, currentIndex, onNavigate }: PremiumSide
       }
     };
   }, []);
-  
-   const parseTocLocationToIndex = (location: string): number | null => {
-     // EPUB variants: epubcfi(/0/12), epubcfi(/12/), epubcfi(/12)
-     const cfiNestedMatch = location.match(/epubcfi\(\/\d+\/(\d+)\b/i);
-     if (cfiNestedMatch) return parseInt(cfiNestedMatch[1], 10);
 
-     const cfiSimpleMatch = location.match(/epubcfi\(\/(\d+)\b/i);
-     if (cfiSimpleMatch) return parseInt(cfiSimpleMatch[1], 10);
-
-     // Generic chapter formats
-     const chapterMatch = location.match(/(?:^|[^\w])(?:chapter|chapter_|chapter-|html-chapter-|md-chapter-|fb2-chapter-|docx-chapter-|generic-chapter-|mobi-chapter-|[a-z0-9]+-chapter-)(\d+)/i);
-     if (chapterMatch) return parseInt(chapterMatch[1], 10);
-
-     // Renderer fallback: "chapter:12"
-     const chapterColon = location.match(/^chapter:(\d+)/i);
-     if (chapterColon) return parseInt(chapterColon[1], 10);
-
-     // PDF TOC style: "page:12" / annotation style "page-12"
-    const pageMatch = location.match(/^page[:-](\d+)/i);
-     if (pageMatch) {
-       const pageNumber = parseInt(pageMatch[1], 10);
-       return Number.isNaN(pageNumber) ? null : pageNumber;
-     }
-
-     return null;
-   };
-
+    // Moved to toc.ts for reuse in PremiumEpubReader and PremiumSidebar
    const handleTocClick = (entry: TocEntry) => {
      const index = parseTocLocationToIndex(entry.location);
      if (index !== null && !Number.isNaN(index)) {
@@ -419,6 +395,9 @@ export function PremiumSidebar({ bookId, currentIndex, onNavigate }: PremiumSide
   const highlights = annotations.filter(a => a.annotationType === 'highlight');
   const notes = annotations.filter(a => a.annotationType === 'note');
 
+  // The TOC entry the reader is currently inside.
+  const currentTocEntry = findCurrentTocEntry(toc, currentIndex);
+
   /** Format a raw location string for display */
   const formatLocation = (loc: string): string => {
     const chapterMatch = loc.match(/^chapter_(\d+)/);
@@ -531,7 +510,7 @@ export function PremiumSidebar({ bookId, currentIndex, onNavigate }: PremiumSide
                       <TocItem
                         entry={entry}
                         onClick={handleTocClick}
-                        currentIndex={currentIndex}
+                        currentEntry={currentTocEntry}
                       />
                     </motion.div>
                   ))}
@@ -856,28 +835,24 @@ export function PremiumSidebar({ bookId, currentIndex, onNavigate }: PremiumSide
 interface TocItemProps {
   entry: TocEntry;
   onClick: (entry: TocEntry) => void;
-  currentIndex: number;
+  currentEntry: TocEntry | null;
 }
 
-function TocItem({ entry, onClick, currentIndex }: TocItemProps) {
-  const chapterMatch = entry.location.match(/(?:^|[^\w])(?:chapter[_:-]?|generic-chapter-|mobi-chapter-|[a-z0-9]+-chapter-)(\d+)/i);
-  const pageMatch = entry.location.match(/^page[:-](\d+)/i);
-  const cfiNestedMatch = entry.location.match(/epubcfi\(\/\d+\/(\d+)\b/i);
-  const cfiSimpleMatch = entry.location.match(/epubcfi\(\/(\d+)\b/i);
-  const chapterIndex = chapterMatch
-    ? parseInt(chapterMatch[1], 10)
-    : pageMatch
-      ? parseInt(pageMatch[1], 10)
-      : cfiNestedMatch
-        ? parseInt(cfiNestedMatch[1], 10)
-        : cfiSimpleMatch
-          ? parseInt(cfiSimpleMatch[1], 10)
-          : -1;
-  const isCurrent = chapterIndex === currentIndex;
-  
+function TocItem({ entry, onClick, currentEntry }: TocItemProps) {
+  const isCurrent = currentEntry === entry;
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  // Bring the current chapter into view when the TOC opens
+  useEffect(() => {
+    if (isCurrent && buttonRef.current) {
+      buttonRef.current.scrollIntoView({ block: 'center' });
+    }
+  }, [isCurrent]);
+
   return (
     <div className="premium-toc-item" style={{ paddingLeft: `${entry.level * 16}px` }}>
       <button
+        ref={buttonRef}
         onClick={() => onClick(entry)}
         className={`premium-toc-button ${isCurrent ? 'premium-toc-button--current' : ''}`}
       >
@@ -891,7 +866,7 @@ function TocItem({ entry, onClick, currentIndex }: TocItemProps) {
               key={index}
               entry={child}
               onClick={onClick}
-              currentIndex={currentIndex}
+              currentEntry={currentEntry}
             />
           ))}
         </div>
