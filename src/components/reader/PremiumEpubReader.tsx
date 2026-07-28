@@ -1,7 +1,8 @@
 import { logger } from '@/lib/logger';
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { api, isAndroid } from '@/lib/tauri';
-import type { BookMetadata, Chapter } from '@/lib/tauri';
+import type { BookMetadata, Chapter, TocEntry } from '@/lib/tauri';
+import { findCurrentTocEntry } from '@/lib/toc';
 import { useReaderUIStore, useReadingSettings, applyReaderThemeToElement, removeReaderThemeFromElement, applyAllSettingsToDOM } from '@/store/premiumReaderStore';
 import { useReaderStore } from '@/store/readerStore';
 import { useDoodleStore } from '@/store/doodleStore';
@@ -230,6 +231,7 @@ export function PremiumEpubReader({ bookPath, bookId, readerContent, onClose }: 
 
   // Book state
   const [metadata, setMetadata] = useState<BookMetadata | null>(null);
+  const [toc, setToc] = useState<TocEntry[]>([]);
   const [currentChapter, setCurrentChapter] = useState<Chapter | null>(null);
   const [adjacentChapter, setAdjacentChapter] = useState<Chapter | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -442,8 +444,7 @@ export function PremiumEpubReader({ bookPath, bookId, readerContent, onClose }: 
       scrollPositionsRef.current.set(chapterIndex, scrollRatio);
     }
 
-    const chapterFraction = scrollRatio / totalChapters;
-    const progressPercent = ((chapterIndex + chapterFraction) / totalChapters) * 100;
+    const progressPercent = ((chapterIndex + scrollRatio) / totalChapters) * 100;
     const loc = scrollRatio > 0
       ? `chapter_${chapterIndex}:scroll_${scrollRatio.toFixed(6)}`
       : `chapter_${chapterIndex}`;
@@ -493,29 +494,10 @@ export function PremiumEpubReader({ bookPath, bookId, readerContent, onClose }: 
             if (saveScrollProgressRef.current) {
               clearTimeout(saveScrollProgressRef.current);
             }
+            // Save via flushProgressNow: Reads chapter index from a ref to prevent delayed timers from writing stale progress.
             saveScrollProgressRef.current = window.setTimeout(() => {
-              let scrollRatio = 0;
-              if (isPag) {
-                const { scrollLeft, scrollWidth, clientWidth } = canvas;
-                scrollRatio = scrollWidth > clientWidth ? scrollLeft / (scrollWidth - clientWidth) : 0;
-              } else {
-                const activeEl = canvas.querySelector(`[data-chapter-index="${currentIndex}"]`) as HTMLElement;
-                if (activeEl) {
-                   const distance = canvas.scrollTop - activeEl.offsetTop;
-                   scrollRatio = distance > 0 && activeEl.scrollHeight > 0 ? distance / activeEl.scrollHeight : 0;
-                   scrollRatio = Math.max(0, Math.min(1, scrollRatio));
-                } else {
-                   scrollRatio = scrollHeight > clientHeight ? scrollTop / (scrollHeight - clientHeight) : 0;
-                }
-              }
-              const totalChapters = metadata?.total_chapters ?? 1;
-              const chapterFraction = scrollRatio / totalChapters;
-              const progressPercent = ((currentIndex + chapterFraction) / totalChapters) * 100;
-              const loc = scrollRatio > 0
-                ? `chapter_${currentIndex}:scroll_${scrollRatio.toFixed(6)}`
-                : `chapter_${currentIndex}`;
-              const cfi = `epubcfi(/0/${currentIndex}!/scroll/${scrollRatio.toFixed(6)})`;
-              api.saveReadingProgress(bookId, loc, Math.min(100, progressPercent), undefined, undefined, cfi).catch(() => { });
+              saveScrollProgressRef.current = null;
+              flushProgressNow();
             }, 2000);
           }
           ticking = false;
@@ -523,7 +505,7 @@ export function PremiumEpubReader({ bookPath, bookId, readerContent, onClose }: 
         ticking = true;
       }
     };
-  }, [setScrollProgress, metadata, currentIndex, bookId, isFocusMode, isTopBarShortcutOnly, setTopBarVisible]);
+  }, [setScrollProgress, isFocusMode, isTopBarShortcutOnly, setTopBarVisible, flushProgressNow]);
 
 
   // ────────────────────────────────────────────────────────────
@@ -540,6 +522,9 @@ export function PremiumEpubReader({ bookPath, bookId, readerContent, onClose }: 
 
         const bookMetadata = await api.openBookRenderer(bookId, bookPath, 'epub');
         setMetadata(bookMetadata);
+
+        // Load the TOC so the top bar can show the real chapter the user is in
+        api.getBookToc(bookId).then(setToc).catch(() => setToc([]));
 
         // Add another small delay to ensure HashMap insert completes
         await new Promise(resolve => setTimeout(resolve, 200));
@@ -647,6 +632,11 @@ export function PremiumEpubReader({ bookPath, bookId, readerContent, onClose }: 
               // Silently ignore
             }
           }
+        }
+
+        // Seed the scroll map so continuous-flow mode restores the exact position.
+        if (savedScrollRatio > 0) {
+          scrollPositionsRef.current.set(startIndex, savedScrollRatio);
         }
 
         await loadChapterRef.current(startIndex, null, savedScrollRatio);
@@ -1074,6 +1064,11 @@ export function PremiumEpubReader({ bookPath, bookId, readerContent, onClose }: 
     ? ((currentIndex + 1) / metadata.total_chapters) * 100
     : 0;
 
+  // Use the TOC to resolve readable chapter names instead of the renderer's manifest ID.
+  const chapterSubtitle =
+    findCurrentTocEntry(toc, currentIndex)?.label?.trim() ||
+    (metadata ? `Chapter ${currentIndex + 1} of ${metadata.total_chapters}` : currentChapter.title);
+
   return (
     <div 
       ref={readerContainerRef} 
@@ -1087,7 +1082,7 @@ export function PremiumEpubReader({ bookPath, bookId, readerContent, onClose }: 
       <ReaderTopBar
         bookId={bookId}
         title={metadata?.title || readerContent?.title || 'Loading...'}
-        subtitle={currentChapter.title}
+        subtitle={chapterSubtitle}
         progress={progressPercentage}
         format="epub"
         onClose={handleClose}
@@ -1159,13 +1154,9 @@ export function PremiumEpubReader({ bookPath, bookId, readerContent, onClose }: 
           initialScrollRatio={scrollPositionsRef.current.get(currentIndex)}
           onChapterChange={(idx) => {
             setCurrentIndex(idx);
-            // Save progress directly instead of calling loadChapter which causes duplicate fetching
-            const progressPercent = metadata
-              ? ((idx + 1) / metadata.total_chapters) * 100
-              : 0;
-            const location = `chapter_${idx}`;
-            const cfi = `epubcfi(/0/${idx}!/scroll/0.000000)`;
-            api.saveReadingProgress(bookId, location, progressPercent, undefined, undefined, cfi).catch(() => {});
+            // Update the ref immediately and save with the real scroll position instead of a hardcoded
+            currentIndexRef.current = idx;
+            flushProgressNow();
           }}
           widthClass={width}
           isFocusMode={isFocusMode}

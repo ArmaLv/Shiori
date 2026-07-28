@@ -2258,6 +2258,37 @@ select {
   transform: none !important;
 }
 
+/* Phone: the toolbar spans the screen width, so the inner panels must stretch with it instead of keeping their fixed desktop-popup widths. */
+.text-selection-toolbar--android .translation-popup,
+.text-selection-toolbar--android .text-selection-toolbar-note {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  box-sizing: border-box;
+}
+
+.text-selection-toolbar--android .text-selection-toolbar-actions {
+  width: 100%;
+}
+
+/* Spread the action buttons evenly across the full toolbar width */
+.text-selection-toolbar--android .text-selection-toolbar-actions > div {
+  flex: 1 1 auto;
+  min-width: 0;
+  justify-content: center;
+}
+
+.text-selection-toolbar--android .text-selection-toolbar-actions > div > .text-selection-toolbar-btn {
+  flex: 1 1 auto;
+  min-width: 0;
+  justify-content: center;
+}
+
+.text-selection-toolbar--android .text-selection-toolbar-colors {
+  justify-content: space-evenly;
+  flex-wrap: wrap;
+}
+
 .text-selection-toolbar {
   position: fixed;
   z-index: 10000;
