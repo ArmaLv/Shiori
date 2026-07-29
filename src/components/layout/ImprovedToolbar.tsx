@@ -474,20 +474,6 @@ export function PremiumTopbar({
           )}
         </button>
 
-        {/* ── Online Toggle ── */}
-        <button
-          type="button"
-          onClick={handleOnlineToggle}
-          title={currentView?.startsWith('online') ? 'Back to Library' : 'Online Mode (Torbox/Nyaa)'}
-          className={cn(
-            'flex items-center justify-center w-9 h-9 rounded-full transition-all duration-200 hover:scale-105 active:scale-95',
-            currentView?.startsWith('online')
-              ? 'text-primary-foreground bg-gradient-to-b from-primary to-primary/90 shadow-md shadow-primary/20 ring-1 ring-primary/20'
-              : 'text-muted-foreground hover:text-foreground hover:bg-muted',
-          )}
-        >
-          <Globe size={16} className={currentView?.startsWith('online') ? 'animate-pulse' : ''} />
-        </button>
 
 
 
