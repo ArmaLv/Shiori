@@ -72,7 +72,7 @@ export function ShelfBookGrid({ shelf, books, onBack }: ShelfBookGridProps) {
             const hasSelected = rowBooks.some(b => b.id === selectedBookId);
             const selectedIndex = rowBooks.findIndex(b => b.id === selectedBookId);
             const selectedBook = rowBooks[selectedIndex];
-            const showAbove = rowIndex > 0;
+            const showAbove = true; // Always show above the selected book
 
             const ExpandedCard = () => (
               <AnimatePresence>
@@ -161,18 +161,16 @@ export function ShelfBookGrid({ shelf, books, onBack }: ShelfBookGridProps) {
                       )}
                       
                       <div className="flex items-center gap-4 text-xs">
-                        {(selectedBook.rating !== undefined && selectedBook.rating !== null) && (
-                          <div className="flex items-center gap-1 text-white/90">
-                            <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
-                            <span className="font-medium">{selectedBook.rating}</span>
-                          </div>
-                        )}
+                        <div className="flex items-center gap-1 text-white/90">
+                          <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+                          <span className="font-medium">
+                            {selectedBook.rating !== undefined && selectedBook.rating !== null ? selectedBook.rating : 'N/A'}
+                          </span>
+                        </div>
                         
-                        {(selectedBook.page_count !== undefined && selectedBook.page_count !== null) && (
-                          <div className="text-white/50 font-medium">
-                            {selectedBook.page_count} pages
-                          </div>
-                        )}
+                        <div className="text-white/50 font-medium">
+                          {selectedBook.page_count !== undefined && selectedBook.page_count !== null ? selectedBook.page_count : '0'} pages
+                        </div>
 
                         {selectedBook.tags && selectedBook.tags.length > 0 && (
                           <div 
