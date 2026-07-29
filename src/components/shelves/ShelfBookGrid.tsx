@@ -16,8 +16,6 @@ function ShelfBookCard({ book, isSelected, onClick, shelfColor }: { book: Book, 
   const [imgLoaded, setImgLoaded] = useState(false);
   const [imgError, setImgError] = useState(false);
   
-  const hue = (book.id || 0) * 137.508 % 360;
-  const coverColor = `hsl(${hue}, 40%, 30%)`;
   const authorStr = book.authors && book.authors.length > 0 ? book.authors.map(a => a.name).join(', ') : 'Unknown Author';
 
   return (
@@ -35,17 +33,19 @@ function ShelfBookCard({ book, isSelected, onClick, shelfColor }: { book: Book, 
         outlineColor: isSelected ? shelfColor : undefined,
       }}
     >
-      <div 
-        className="absolute inset-0 z-0 p-4 flex flex-col items-center justify-center gap-2"
-        style={{
-          background: `linear-gradient(135deg, ${coverColor} 0%, hsl(${hue}, 50%, 20%) 100%)`,
-        }}
-      >
-        <BookOpen size={32} className="text-white/25" />
-        <div className="font-serif text-white/90 font-medium text-sm leading-tight line-clamp-3 text-center shadow-black drop-shadow-md">
-          {book.title}
+      {(!coverUrl || imgError) && imgLoaded === false && !loading && (
+        <div
+          className={cn(
+            'absolute inset-0 flex flex-col items-center justify-center gap-2',
+            'bg-gradient-to-br from-muted to-muted/60 z-0'
+          )}
+        >
+          <BookOpen size={32} className="text-muted-foreground/25" />
+          <p className="text-[9px] text-muted-foreground/40 text-center px-2 line-clamp-2 font-medium">
+            {book.title}
+          </p>
         </div>
-      </div>
+      )}
 
       {coverUrl && !imgError && (
         <img
