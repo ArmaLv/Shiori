@@ -46,16 +46,13 @@ export const OnlineResultCard = memo(function OnlineResultCard({
   onTorbox,
   isDownloading,
   torboxAvailable,
-  scrollRoot,
 }: OnlineResultCardProps) {
-  const [visible, setVisible] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
   const [imgError, setImgError] = useState(false);
   const [proxyUrl, setProxyUrl] = useState<string | null>(null);
-  const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!visible || !coverUrl || imgError) return;
+    if (!coverUrl || imgError) return;
     
     let active = true;
     const needsProxy = coverUrl.includes('libgen') || 
@@ -80,8 +77,6 @@ export const OnlineResultCard = memo(function OnlineResultCard({
 
       const proxyUri = getProxyUrl(sourceId, coverUrl);
       setProxyUrl(proxyUri);
-    } else if (coverUrl.startsWith('http://') || coverUrl.startsWith('https://')) {
-      setProxyUrl(getProxyUrl('generic', coverUrl));
     } else {
       setProxyUrl(coverUrl);
     }
@@ -92,25 +87,10 @@ export const OnlineResultCard = memo(function OnlineResultCard({
         URL.revokeObjectURL(proxyUrl);
       }
     };
-  }, [visible, coverUrl, imgError]);
+  }, [coverUrl, imgError]);
 
   useEffect(() => {
-    const el = cardRef.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setVisible(true);
-          observer.disconnect();
-        }
-      },
-      { root: scrollRoot ?? null, threshold: 0.05 }
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [scrollRoot]);
-  useEffect(() => {
-    if (!visible || !coverUrl || !imgError) return;
+    if (!coverUrl || !imgError) return;
     let active = true;
     
     // If the primary image errors out (e.g., shiori-proxy fails), try the fallback
@@ -125,31 +105,27 @@ export const OnlineResultCard = memo(function OnlineResultCard({
     });
 
     return () => { active = false; };
-  }, [visible, coverUrl, imgError, title, author]);
+  }, [coverUrl, imgError, title, author]);
 
 
   return (
     <div
-      ref={cardRef}
       onClick={onReadOnline || onViewDetails}
       className={cn(
-        'group relative flex rounded-2xl border border-border/60 bg-card/60 backdrop-blur-md',
-        'hover:bg-accent/40 hover:border-border/80 transition-all duration-300',
-        'shadow-sm hover:shadow-md cursor-pointer',
-        'md:gap-4 md:p-4',
-        'max-md:flex-col max-md:p-0 max-md:overflow-hidden',
-        !visible && 'opacity-0 translate-y-4',
-        visible && 'animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-forwards'
+        "group relative flex bg-card/60 backdrop-blur-xl border border-border/50 rounded-xl overflow-hidden hover:shadow-xl hover:border-primary/50 transition-all duration-300 max-md:h-[130px] max-md:flex-row max-md:rounded-none max-md:border-x-0 max-md:border-t-0 max-md:border-b max-md:border-border/30",
+        "h-48 sm:h-56 cursor-pointer transform hover:-translate-y-1"
       )}
     >
       {/* Cover */}
       <div className={cn(
         "flex-shrink-0 bg-muted/50 overflow-hidden relative shadow-sm border",
         "w-24 h-36 sm:w-28 sm:h-40 rounded-lg border-border/40",
-        "max-md:w-full max-md:aspect-[2/3] max-md:rounded-none max-md:border-none"
+        "max-md:w-full max-md:aspect-[2/3]"
       )}>
-        {!visible && <div className="absolute inset-0 bg-muted animate-pulse" />}
-        {visible && proxyUrl && !imgError && (
+        <div className="absolute inset-0 bg-secondary/30 pointer-events-none" />
+        
+        {(!imgLoaded && !imgError) && <div className="absolute inset-0 bg-muted animate-pulse" />}
+        {proxyUrl && !imgError && (
           <>
             {!imgLoaded && (
               <div className="absolute inset-0 bg-muted animate-pulse z-0" />
@@ -167,7 +143,7 @@ export const OnlineResultCard = memo(function OnlineResultCard({
             />
           </>
         )}
-        {(!coverUrl || imgError) && visible && (
+        {(!coverUrl || imgError) && (
           <div className="w-full h-full p-2.5 flex flex-col justify-between text-center select-none bg-gradient-to-br from-indigo-950 via-slate-900 to-blue-950 text-slate-200 border border-indigo-500/20 shadow-inner relative overflow-hidden">
             {/* Elegant corner patterns or glows */}
             <div className="absolute top-0 right-0 w-12 h-12 bg-primary/20 rounded-full blur-xl pointer-events-none" />

@@ -23,35 +23,16 @@ export const ModernBookCard = memo(function ModernBookCard({
   format,
   year,
   onClick,
-  scrollRoot,
 }: ModernBookCardProps) {
-  const [visible, setVisible] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
   const [imgError, setImgError] = useState(false);
   const [proxyUrl, setProxyUrl] = useState<string | null>(null);
-  const cardRef = useRef<HTMLDivElement>(null);
   
   const downloads = useOnlineDownloadStore((state) => state.downloads);
   const downloadState = downloads[id]; // check if this book is downloading
 
   useEffect(() => {
-    const el = cardRef.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setVisible(true);
-          observer.disconnect();
-        }
-      },
-      { root: scrollRoot ?? null, threshold: 0.01 }
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [scrollRoot]);
-
-  useEffect(() => {
-    if (!visible || !coverUrl || imgError) return;
+    if (!coverUrl || imgError) return;
     let active = true;
     const objectUrl: string | null = null;
     
@@ -77,8 +58,6 @@ export const ModernBookCard = memo(function ModernBookCard({
 
       const proxyUri = getProxyUrl(sourceId, coverUrl);
       setProxyUrl(proxyUri);
-    } else if (coverUrl.startsWith('http://') || coverUrl.startsWith('https://')) {
-      setProxyUrl(getProxyUrl('generic', coverUrl));
     } else {
       setProxyUrl(coverUrl);
     }
@@ -87,11 +66,11 @@ export const ModernBookCard = memo(function ModernBookCard({
       active = false;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [visible, coverUrl, imgError, title, author]);
+  }, [coverUrl, imgError, title, author]);
   const [fallbackAttempted, setFallbackAttempted] = useState(false);
 
   useEffect(() => {
-    if (!visible || !coverUrl || !imgError || fallbackAttempted) return;
+    if (!coverUrl || !imgError || fallbackAttempted) return;
     let active = true;
     
     setFallbackAttempted(true); // Only attempt fallback once
@@ -112,50 +91,43 @@ export const ModernBookCard = memo(function ModernBookCard({
 
     return () => { active = false; };
   }, [visible, coverUrl, imgError, title, author, fallbackAttempted]);
-  // Calculate download progress if available
+  }, [coverUrl, imgError, title, author, fallbackAttempted]);
+
   const progressPercent = downloadState?.total_bytes && downloadState.total_bytes > 0 
     ? Math.min(100, Math.round((downloadState.downloaded_bytes / downloadState.total_bytes) * 100))
     : null;
 
   return (
-    <div
-      ref={cardRef}
+    <div 
       onClick={onClick}
       className={cn(
-        'group/card relative flex flex-col cursor-pointer transition-all duration-300',
-        !visible && 'opacity-0 translate-y-8',
-        visible && 'animate-in fade-in slide-in-from-bottom-8 duration-700 ease-out fill-mode-forwards'
+        "group relative flex flex-col h-full rounded-xl overflow-hidden cursor-pointer",
+        "bg-secondary/20 shadow-md transition-all duration-300",
+        "hover:shadow-[0_8px_30px_rgb(0,0,0,0.4)] hover:-translate-y-1 border border-border/50",
       )}
     >
       {/* Cover Container with Aspect Ratio */}
       <div className="relative w-full aspect-[2/3] rounded-2xl bg-secondary/40 backdrop-blur-md shadow-md border border-border/40 group-hover/card:border-border group-hover/card:shadow-xl transition-all duration-500 overflow-hidden">
         
-        {/* Actual Image */}
-        {visible && proxyUrl && !imgError ? (
-          <>
-            {!imgLoaded && (
-              <div className="absolute inset-0 bg-muted animate-pulse z-0" />
-            )}
+        {/* Image Container */}
+        <div className="relative aspect-[2/3] w-full overflow-hidden bg-muted/30">
+          {(!imgLoaded && !imgError) && (
+            <div className="absolute inset-0 bg-muted animate-pulse" />
+          )}
+          
+          {proxyUrl && !imgError && (
             <img
               src={proxyUrl}
               alt={title}
-              loading="lazy"
-              decoding="async"
               className={cn(
-                'w-full h-full object-cover group-hover/card:scale-105 transition-all duration-700 relative z-10',
-                imgLoaded ? 'opacity-100' : 'opacity-0 scale-110'
+                "w-full h-full object-cover transition-all duration-500",
+                imgLoaded ? "opacity-100 scale-100" : "opacity-0 scale-105",
+                "group-hover:scale-105"
               )}
+              loading="lazy"
               onLoad={() => setImgLoaded(true)}
               onError={() => setImgError(true)}
             />
-          </>
-        ) : visible && (
-          <div className="w-full h-full flex flex-col justify-center items-center p-4 bg-gradient-to-br from-indigo-950 to-slate-900 text-center relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-primary/20 rounded-full blur-2xl pointer-events-none" />
-            <div className="text-[10px] font-semibold text-primary/80 mb-2">{format || 'BOOK'}</div>
-            <div className="font-serif font-bold text-sm text-foreground line-clamp-4 leading-snug">{title}</div>
-            {author && <div className="text-xs text-muted-foreground mt-2 line-clamp-2">{author}</div>}
-          </div>
         )}
 
         {/* Hover Glassmorphism Overlay */}
