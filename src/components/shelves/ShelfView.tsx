@@ -106,7 +106,7 @@ export function ShelfView() {
             <Loader2 className="w-8 h-8 animate-spin text-white/30" />
           </div>
         ) : (
-          <ShelfBookGrid shelf={selectedShelf} books={books} />
+          <ShelfBookGrid shelf={selectedShelf} books={books} onBack={() => selectShelf(null)} />
         )}
       </div>
 

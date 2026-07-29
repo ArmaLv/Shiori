@@ -1,15 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Book, Shelf } from '../../lib/tauri';
-import { Star, X, BookOpen } from 'lucide-react';
+import { Star, X, BookOpen, ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface ShelfBookGridProps {
   shelf: Shelf;
   books: Book[];
+  onBack: () => void;
 }
 
-export function ShelfBookGrid({ shelf, books }: ShelfBookGridProps) {
+export function ShelfBookGrid({ shelf, books, onBack }: ShelfBookGridProps) {
   const [selectedBookId, setSelectedBookId] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [columns, setColumns] = useState(5);
@@ -43,7 +44,17 @@ export function ShelfBookGrid({ shelf, books }: ShelfBookGridProps) {
     <div className="p-4 sm:p-8 h-full overflow-y-auto" ref={containerRef}>
       <div className="max-w-[1400px] mx-auto">
         {/* Header */}
-        <div className="mb-12">
+        <div className="mb-12 relative">
+          <button 
+            onClick={onBack}
+            className="mb-6 flex items-center gap-2 text-white/50 hover:text-white transition-colors group"
+          >
+            <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-white/10 transition-colors">
+              <ArrowLeft size={16} />
+            </div>
+            <span className="text-sm font-medium">Back to Shelves</span>
+          </button>
+
           <div className="text-[11px] font-bold tracking-[0.2em] text-white/50 uppercase mb-3">
             MY SHELF · {books.length} BOOKS
           </div>
