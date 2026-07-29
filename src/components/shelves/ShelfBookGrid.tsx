@@ -72,9 +72,130 @@ export function ShelfBookGrid({ shelf, books, onBack }: ShelfBookGridProps) {
             const hasSelected = rowBooks.some(b => b.id === selectedBookId);
             const selectedIndex = rowBooks.findIndex(b => b.id === selectedBookId);
             const selectedBook = rowBooks[selectedIndex];
+            const showAbove = rowIndex > 0;
+
+            const ExpandedCard = () => (
+              <AnimatePresence>
+                {hasSelected && selectedBook && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0, [showAbove ? 'marginBottom' : 'marginTop']: -12 }}
+                    animate={{ height: 'auto', opacity: 1, [showAbove ? 'marginBottom' : 'marginTop']: 0 }}
+                    exit={{ height: 0, opacity: 0, [showAbove ? 'marginBottom' : 'marginTop']: -12 }}
+                    transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                    className="overflow-hidden"
+                  >
+                    <div 
+                      className={cn(
+                        "relative rounded-2xl p-4 sm:p-5",
+                        showAbove ? "mb-4" : "mt-4"
+                      )}
+                      style={{ backgroundColor: '#1a1a1a', border: `1px solid ${shelfColor}40` }}
+                    >
+                      {/* Triangle Pointer */}
+                      <div 
+                        className={cn(
+                          "absolute w-6 h-6 rotate-45 bg-[#1a1a1a]",
+                          showAbove ? "-bottom-3 border-r border-b" : "-top-3 border-l border-t"
+                        )}
+                        style={{
+                          left: `calc(${(selectedIndex + 0.5) / columns * 100}% - 12px)`,
+                          borderColor: `${shelfColor}40`,
+                          transition: 'left 0.3s ease-out'
+                        }}
+                      />
+
+                      {/* Top/Bottom glowing line accent */}
+                      <div 
+                        className={cn(
+                          "absolute left-0 right-0 h-[2px]",
+                          showAbove ? "bottom-0 rounded-b-2xl" : "top-0 rounded-t-2xl"
+                        )}
+                        style={{ 
+                          background: `linear-gradient(90deg, transparent, ${shelfColor}, transparent)`,
+                          opacity: 0.5
+                        }}
+                      />
+
+                      <div className="flex justify-between items-start mb-3">
+                        <div className="pr-4">
+                          <h2 className="text-xl font-bold text-white italic mb-1" style={{ fontFamily: 'var(--font-serif)' }}>
+                            {selectedBook.title}
+                          </h2>
+                          <div className="text-white/50 text-xs">
+                            {selectedBook.authors && selectedBook.authors.length > 0 ? selectedBook.authors.map(a => a.name).join(', ') : 'Unknown Author'}
+                            {selectedBook.pubdate && ` · ${new Date(selectedBook.pubdate).getFullYear()}`}
+                          </div>
+                        </div>
+                        
+                        <div className="flex bg-white/5 rounded-full p-1 border border-white/10 shrink-0 items-center">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              window.dispatchEvent(
+                                new CustomEvent('open-book', { detail: { bookId: selectedBook.id } })
+                              );
+                            }}
+                            className="px-3 py-1 rounded-full text-white/80 hover:text-white hover:bg-white/10 transition-colors text-xs font-medium flex items-center gap-1.5"
+                          >
+                            <BookOpen className="w-3.5 h-3.5" />
+                            Read
+                          </button>
+                          <div className="w-px h-3 bg-white/20 mx-1"></div>
+                          <button
+                            onClick={() => setSelectedBookId(null)}
+                            className="p-1.5 rounded-full text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {selectedBook.notes ? (
+                         <p className="text-white/80 text-sm leading-relaxed max-w-3xl mb-4 line-clamp-2">
+                           {selectedBook.notes}
+                         </p>
+                      ) : (
+                         <p className="text-white/80 text-sm leading-relaxed max-w-3xl mb-4 italic opacity-60 line-clamp-2">
+                           No description or notes available.
+                         </p>
+                      )}
+                      
+                      <div className="flex items-center gap-4 text-xs">
+                        {(selectedBook.rating !== undefined && selectedBook.rating !== null) && (
+                          <div className="flex items-center gap-1 text-white/90">
+                            <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+                            <span className="font-medium">{selectedBook.rating}</span>
+                          </div>
+                        )}
+                        
+                        {(selectedBook.page_count !== undefined && selectedBook.page_count !== null) && (
+                          <div className="text-white/50 font-medium">
+                            {selectedBook.page_count} pages
+                          </div>
+                        )}
+
+                        {selectedBook.tags && selectedBook.tags.length > 0 && (
+                          <div 
+                            className="px-2 py-0.5 rounded-full border text-[10px] font-medium"
+                            style={{ 
+                              borderColor: `${shelfColor}50`, 
+                              color: shelfColor,
+                              backgroundColor: `${shelfColor}10` 
+                            }}
+                          >
+                            {selectedBook.tags[0].name}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            );
 
             return (
               <React.Fragment key={rowIndex}>
+                {showAbove && <ExpandedCard />}
                 <div 
                   className="grid gap-4 sm:gap-6" 
                   style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
@@ -110,115 +231,7 @@ export function ShelfBookGrid({ shelf, books, onBack }: ShelfBookGridProps) {
                     );
                   })}
                 </div>
-
-                {/* Expanded Details Card */}
-                <AnimatePresence>
-                  {hasSelected && selectedBook && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0, marginTop: -12 }}
-                      animate={{ height: 'auto', opacity: 1, marginTop: 0 }}
-                      exit={{ height: 0, opacity: 0, marginTop: -12 }}
-                      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-                      className="overflow-hidden"
-                    >
-                      <div 
-                        className="relative rounded-2xl p-4 sm:p-5 mt-4"
-                        style={{ backgroundColor: '#1a1a1a', border: `1px solid ${shelfColor}40` }}
-                      >
-                        {/* Triangle Pointer */}
-                        <div 
-                          className="absolute -top-3 w-6 h-6 rotate-45 border-l border-t bg-[#1a1a1a]"
-                          style={{
-                            left: `calc(${(selectedIndex + 0.5) / columns * 100}% - 12px)`,
-                            borderColor: `${shelfColor}40`,
-                            transition: 'left 0.3s ease-out'
-                          }}
-                        />
-
-                        {/* Top glowing line accent */}
-                        <div 
-                          className="absolute top-0 left-0 right-0 h-[2px] rounded-t-2xl"
-                          style={{ 
-                            background: `linear-gradient(90deg, transparent, ${shelfColor}, transparent)`,
-                            opacity: 0.5
-                          }}
-                        />
-
-                        <div className="flex justify-between items-start mb-3">
-                          <div className="pr-4">
-                            <h2 className="text-xl font-bold text-white italic mb-1" style={{ fontFamily: 'var(--font-serif)' }}>
-                              {selectedBook.title}
-                            </h2>
-                            <div className="text-white/50 text-xs">
-                              {selectedBook.authors && selectedBook.authors.length > 0 ? selectedBook.authors.map(a => a.name).join(', ') : 'Unknown Author'}
-                              {selectedBook.pubdate && ` · ${new Date(selectedBook.pubdate).getFullYear()}`}
-                            </div>
-                          </div>
-                          
-                          <div className="flex bg-white/5 rounded-full p-1 border border-white/10 shrink-0 items-center">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                window.dispatchEvent(
-                                  new CustomEvent('open-book', { detail: { bookId: selectedBook.id } })
-                                );
-                              }}
-                              className="px-3 py-1 rounded-full text-white/80 hover:text-white hover:bg-white/10 transition-colors text-xs font-medium flex items-center gap-1.5"
-                            >
-                              <BookOpen className="w-3.5 h-3.5" />
-                              Read
-                            </button>
-                            <div className="w-px h-3 bg-white/20 mx-1"></div>
-                            <button
-                              onClick={() => setSelectedBookId(null)}
-                              className="p-1.5 rounded-full text-white/60 hover:text-white hover:bg-white/10 transition-colors"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-
-                        {selectedBook.notes ? (
-                           <p className="text-white/80 text-sm leading-relaxed max-w-3xl mb-4 line-clamp-2">
-                             {selectedBook.notes}
-                           </p>
-                        ) : (
-                           <p className="text-white/80 text-sm leading-relaxed max-w-3xl mb-4 italic opacity-60 line-clamp-2">
-                             No description or notes available.
-                           </p>
-                        )}
-                        
-                        <div className="flex items-center gap-4 text-xs">
-                          {selectedBook.rating !== undefined && (
-                            <div className="flex items-center gap-1 text-white/90">
-                              <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
-                              <span className="font-medium">{selectedBook.rating || '0'}</span>
-                            </div>
-                          )}
-                          
-                          {selectedBook.page_count !== undefined && (
-                            <div className="text-white/50">
-                              {selectedBook.page_count} pages
-                            </div>
-                          )}
-
-                          {selectedBook.tags && selectedBook.tags.length > 0 && (
-                            <div 
-                              className="px-2 py-0.5 rounded-full border text-[10px] font-medium"
-                              style={{ 
-                                borderColor: `${shelfColor}50`, 
-                                color: shelfColor,
-                                backgroundColor: `${shelfColor}10` 
-                              }}
-                            >
-                              {selectedBook.tags[0].name}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                {!showAbove && <ExpandedCard />}
               </React.Fragment>
             );
           })}
