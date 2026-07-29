@@ -122,7 +122,7 @@ export function ShelfBookGrid({ shelf, books, onBack }: ShelfBookGridProps) {
                       className="overflow-hidden"
                     >
                       <div 
-                        className="relative rounded-2xl p-6 sm:p-8 mt-4"
+                        className="relative rounded-2xl p-4 sm:p-5 mt-4"
                         style={{ backgroundColor: '#1a1a1a', border: `1px solid ${shelfColor}40` }}
                       >
                         {/* Triangle Pointer */}
@@ -144,56 +144,55 @@ export function ShelfBookGrid({ shelf, books, onBack }: ShelfBookGridProps) {
                           }}
                         />
 
-                        <div className="flex justify-between items-start mb-6">
-                          <div>
-                            <h2 className="text-2xl font-bold text-white mb-2" style={{ fontFamily: 'var(--font-serif)' }}>
+                        <div className="flex justify-between items-start mb-3">
+                          <div className="pr-4">
+                            <h2 className="text-xl font-bold text-white italic mb-1" style={{ fontFamily: 'var(--font-serif)' }}>
                               {selectedBook.title}
                             </h2>
-                            <div className="text-white/50 text-sm">
+                            <div className="text-white/50 text-xs">
                               {selectedBook.authors && selectedBook.authors.length > 0 ? selectedBook.authors.map(a => a.name).join(', ') : 'Unknown Author'}
                               {selectedBook.pubdate && ` · ${new Date(selectedBook.pubdate).getFullYear()}`}
                             </div>
                           </div>
                           
-                          <button
-                            onClick={() => setSelectedBookId(null)}
-                            className="px-4 py-2 rounded-full border border-white/10 text-white/60 hover:text-white hover:bg-white/5 transition-colors text-xs font-medium flex items-center gap-1.5 shrink-0 ml-4"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                            Close
-                          </button>
+                          <div className="flex bg-white/5 rounded-full p-1 border border-white/10 shrink-0 items-center">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                window.dispatchEvent(
+                                  new CustomEvent('open-book', { detail: { bookId: selectedBook.id } })
+                                );
+                              }}
+                              className="px-3 py-1 rounded-full text-white/80 hover:text-white hover:bg-white/10 transition-colors text-xs font-medium flex items-center gap-1.5"
+                            >
+                              <BookOpen className="w-3.5 h-3.5" />
+                              Read
+                            </button>
+                            <div className="w-px h-3 bg-white/20 mx-1"></div>
+                            <button
+                              onClick={() => setSelectedBookId(null)}
+                              className="p-1.5 rounded-full text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
 
                         {selectedBook.notes ? (
-                           <p className="text-white/80 text-sm sm:text-base leading-relaxed max-w-3xl mb-8">
+                           <p className="text-white/80 text-sm leading-relaxed max-w-3xl mb-4 line-clamp-2">
                              {selectedBook.notes}
                            </p>
                         ) : (
-                           <p className="text-white/80 text-sm sm:text-base leading-relaxed max-w-3xl mb-8 italic opacity-60">
-                             No description or notes available for this book.
+                           <p className="text-white/80 text-sm leading-relaxed max-w-3xl mb-4 italic opacity-60 line-clamp-2">
+                             No description or notes available.
                            </p>
                         )}
                         
-                        <div className="flex items-center gap-4 mb-8">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              window.dispatchEvent(
-                                new CustomEvent('open-book', { detail: { bookId: selectedBook.id } })
-                              );
-                            }}
-                            className="px-6 py-2.5 rounded-full bg-white text-black font-semibold hover:bg-white/90 transition-colors flex items-center gap-2 text-sm"
-                          >
-                            <BookOpen className="w-4 h-4" />
-                            Read Book
-                          </button>
-                        </div>
-
-                        <div className="flex items-center gap-6 text-sm">
+                        <div className="flex items-center gap-4 text-xs">
                           {selectedBook.rating !== undefined && (
-                            <div className="flex items-center gap-1.5 text-white/90">
-                              <Star className="w-4 h-4 fill-amber-500 text-amber-500" />
-                              <span className="font-medium">{selectedBook.rating || 'N/A'}</span>
+                            <div className="flex items-center gap-1 text-white/90">
+                              <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+                              <span className="font-medium">{selectedBook.rating || '0'}</span>
                             </div>
                           )}
                           
@@ -205,7 +204,7 @@ export function ShelfBookGrid({ shelf, books, onBack }: ShelfBookGridProps) {
 
                           {selectedBook.tags && selectedBook.tags.length > 0 && (
                             <div 
-                              className="px-3 py-1 rounded-full border text-xs font-medium"
+                              className="px-2 py-0.5 rounded-full border text-[10px] font-medium"
                               style={{ 
                                 borderColor: `${shelfColor}50`, 
                                 color: shelfColor,
