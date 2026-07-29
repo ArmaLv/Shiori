@@ -275,6 +275,7 @@ pub struct Shelf {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SmartRule {
     pub field: String, // "author", "tag", "format", "rating", "series", "added_date", etc.
     pub operator: String, // "equals", "contains", "greater_than", "less_than", "in_last"

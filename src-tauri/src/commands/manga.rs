@@ -231,6 +231,8 @@ pub async fn auto_group_manga_volumes(state: State<'_, AppState>) -> Result<usiz
         let mut stmt = conn.prepare(
             "SELECT id, title FROM books 
              WHERE manga_series_id IS NULL 
+             AND domain = 'manga_comics'
+             AND in_trash = 0
              ORDER BY title ASC"
         )?;
 
