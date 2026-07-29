@@ -189,7 +189,7 @@ function ShelfCard({
           <h3 className="font-bold text-base text-foreground truncate transition-colors leading-tight">
             {shelf.name}
           </h3>
-          <p className="text-xs mt-0.5 font-medium" style={{ color: `${color}cc` }}>
+          <p className="text-xs mt-0.5 font-medium text-muted-foreground">
             {count} {count === 1 ? 'book' : 'books'}
           </p>
         </div>
