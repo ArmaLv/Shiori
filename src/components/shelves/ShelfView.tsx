@@ -7,6 +7,7 @@ import { ShelfBookGrid } from './ShelfBookGrid';
 import { Shelf, Book, api } from '../../lib/tauri';
 import { Loader2 } from 'lucide-react';
 import { logger } from '@/lib/logger';
+import { useBackButton } from '@/hooks/useBackButton';
 
 export function ShelfView() {
   const setCurrentView = useUIStore(state => state.setCurrentView);
@@ -22,6 +23,8 @@ export function ShelfView() {
   const [books, setBooks] = useState<Book[]>([]);
   const [loadingBooks, setLoadingBooks] = useState(false);
   const [loadingShelves, setLoadingShelves] = useState(true);
+
+  useBackButton(!!selectedShelf, () => selectShelf(null));
 
   useEffect(() => {
     async function loadShelfs() {

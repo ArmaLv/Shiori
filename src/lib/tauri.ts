@@ -659,6 +659,7 @@ export const api = {
     try {
       const result = await invoke<ImportResult>("import_books", { paths })
       logger.debug('[API] importBooks result:', result)
+      this._autoFetchMetadata(result)
       return result
     } catch (error) {
       logger.error('[API] importBooks error:', error)
@@ -668,6 +669,35 @@ export const api = {
 
   async enrichBookMetadata(bookId: number): Promise<boolean> {
     return invoke("enrich_book_metadata", { bookId })
+  },
+
+  async _autoFetchMetadata(result: ImportResult) {
+    if (result.success && result.success.length > 0) {
+      try {
+        const books = await this.getBooksByPaths(result.success);
+        for (const book of books) {
+          if (book.id !== undefined) {
+            this.enrichBookMetadata(book.id).catch(e => 
+              logger.error(`[API] Auto fetch metadata failed for book ${book.id}:`, e)
+            );
+          }
+        }
+      } catch (e) {
+        logger.error("[API] Failed to query books for auto metadata fetch:", e);
+      }
+    }
+  },
+
+  async _autoGroupMangaIfEnabled() {
+    try {
+      const settings = await this.getSettings();
+      if (settings?.preferences?.autoGroupManga) {
+        await this.autoGroupMangaVolumes();
+        logger.debug('[API] Auto-grouped manga after import');
+      }
+    } catch (e) {
+      logger.error("[API] Failed to auto-group manga:", e);
+    }
   },
 
   // Search
@@ -981,7 +1011,15 @@ export const api = {
         duplicates: []
       })
     }
-    return invoke("scan_folder_unified", { folderPath })
+    try {
+      const result = await invoke<ImportResult>("scan_folder_unified", { folderPath })
+      this._autoFetchMetadata(result)
+      this._autoGroupMangaIfEnabled()
+      return result
+    } catch (error) {
+      logger.error('[API] scanFolderUnified error:', error)
+      throw error
+    }
   },
 
   // Domain-separated import
@@ -990,6 +1028,8 @@ export const api = {
     try {
       const result = await invoke<ImportResult>("import_manga", { paths })
       logger.debug('[API] importManga result:', result)
+      this._autoFetchMetadata(result)
+      this._autoGroupMangaIfEnabled()
       return result
     } catch (error) {
       logger.error('[API] importManga error:', error)
@@ -998,7 +1038,15 @@ export const api = {
   },
 
   async scanFolderForManga(folderPath: string): Promise<ImportResult> {
-    return invoke("scan_folder_for_manga", { folderPath })
+    try {
+      const result = await invoke<ImportResult>("scan_folder_for_manga", { folderPath })
+      this._autoFetchMetadata(result)
+      this._autoGroupMangaIfEnabled()
+      return result
+    } catch (error) {
+      logger.error('[API] scanFolderForManga error:', error)
+      throw error
+    }
   },
 
   async importComics(paths: string[]): Promise<ImportResult> {
@@ -1006,6 +1054,8 @@ export const api = {
     try {
       const result = await invoke<ImportResult>("import_comics", { paths })
       logger.debug('[API] importComics result:', result)
+      this._autoFetchMetadata(result)
+      this._autoGroupMangaIfEnabled()
       return result
     } catch (error) {
       logger.error('[API] importComics error:', error)
@@ -1014,7 +1064,15 @@ export const api = {
   },
 
   async scanFolderForComics(folderPath: string): Promise<ImportResult> {
-    return invoke("scan_folder_for_comics", { folderPath })
+    try {
+      const result = await invoke<ImportResult>("scan_folder_for_comics", { folderPath })
+      this._autoFetchMetadata(result)
+      this._autoGroupMangaIfEnabled()
+      return result
+    } catch (error) {
+      logger.error('[API] scanFolderForComics error:', error)
+      throw error
+    }
   },
 
   async getBooksByDomain(domain: 'books' | 'manga_comics', limit: number = 50, offset: number = 0): Promise<BookSummary[]> {

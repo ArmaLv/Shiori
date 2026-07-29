@@ -281,7 +281,7 @@ impl ShelfService {
 
         let match_type = rules
             .first()
-            .map(|r| r.match_type.clone())
+            .and_then(|r| r.match_type.clone())
             .unwrap_or_else(|| "all".to_string());
 
         for rule in &rules {

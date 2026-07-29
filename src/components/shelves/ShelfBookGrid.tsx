@@ -44,7 +44,7 @@ export function ShelfBookGrid({ shelf, books, onBack }: ShelfBookGridProps) {
     <div className="p-4 sm:p-8 h-full overflow-y-auto" ref={containerRef}>
       <div className="max-w-[1400px] mx-auto">
         {/* Header */}
-        <div className="mb-12 relative">
+        <div className="mb-8 relative sticky top-0 z-10 bg-[#0a0a0a]/90 backdrop-blur-md pt-2 pb-4 -mx-4 px-4 sm:-mx-8 sm:px-8 border-b border-white/5">
           <button 
             onClick={onBack}
             className="mb-6 flex items-center gap-2 text-white/50 hover:text-white transition-colors group"
@@ -55,10 +55,10 @@ export function ShelfBookGrid({ shelf, books, onBack }: ShelfBookGridProps) {
             <span className="text-sm font-medium">Back to Shelves</span>
           </button>
 
-          <div className="text-[11px] font-bold tracking-[0.2em] text-white/50 uppercase mb-3">
+          <div className="text-[11px] font-bold tracking-[0.2em] text-white/50 uppercase mb-3 mt-2">
             MY SHELF · {books.length} BOOKS
           </div>
-          <h1 className="text-5xl font-bold tracking-tight text-white mb-3" style={{ fontFamily: 'var(--font-serif)', letterSpacing: '-0.02em' }}>
+          <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-white mb-2" style={{ fontFamily: 'var(--font-serif)', letterSpacing: '-0.02em' }}>
             {shelf.name}
           </h1>
           <p className="text-white/40 text-sm">
@@ -72,7 +72,11 @@ export function ShelfBookGrid({ shelf, books, onBack }: ShelfBookGridProps) {
             const hasSelected = rowBooks.some(b => b.id === selectedBookId);
             const selectedIndex = rowBooks.findIndex(b => b.id === selectedBookId);
             const selectedBook = rowBooks[selectedIndex];
-            const showAbove = true; // Always show above the selected book
+            // If clicked on top half of the grid (index < length / 2), show on bottom.
+            // If clicked on bottom half, show on top.
+            // Wait, the user said: "when i am clikc on top it should apper on top not bottom"
+            // So if rowIndex is in the first half, showAbove = true.
+            const showAbove = rowIndex < (rows.length / 2);
 
             const ExpandedCard = () => (
               <AnimatePresence>
@@ -121,9 +125,17 @@ export function ShelfBookGrid({ shelf, books, onBack }: ShelfBookGridProps) {
                           <h2 className="text-xl font-bold text-white italic mb-1" style={{ fontFamily: 'var(--font-serif)' }}>
                             {selectedBook.title}
                           </h2>
-                          <div className="text-white/50 text-xs">
-                            {selectedBook.authors && selectedBook.authors.length > 0 ? selectedBook.authors.map(a => a.name).join(', ') : 'Unknown Author'}
-                            {selectedBook.pubdate && ` · ${new Date(selectedBook.pubdate).getFullYear()}`}
+                          <div className="text-white/50 text-xs flex flex-wrap items-center gap-2">
+                            <span>{selectedBook.authors && selectedBook.authors.length > 0 ? selectedBook.authors.map(a => a.name).join(', ') : 'Unknown Author'}</span>
+                            {selectedBook.pubdate && <span>· {new Date(selectedBook.pubdate).getFullYear()}</span>}
+                            {selectedBook.rating ? (
+                              <span className="flex items-center gap-0.5 text-yellow-500">
+                                · ★ {selectedBook.rating}
+                              </span>
+                            ) : null}
+                            {selectedBook.page_count ? (
+                              <span>· {selectedBook.page_count} pages</span>
+                            ) : null}
                           </div>
                         </div>
                         
