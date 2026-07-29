@@ -374,26 +374,26 @@ export function HomePage({ onOpenBook, onViewRSS, searchQuery = "", onSearchChan
       <div className="flex gap-3 mb-6 overflow-x-auto pb-2 scrollbar-none hidden md:flex">
         <div 
           onClick={handleViewLibrary}
-          className="flex items-center gap-2 px-4 py-2 rounded-full bg-pink-500/10 text-pink-500 hover:bg-pink-500/20 cursor-pointer transition-colors border border-pink-500/20 shadow-sm"
+          className="flex items-center gap-2 px-4 py-2 rounded-full bg-card/50 text-muted-foreground hover:text-foreground hover:bg-card hover:border-primary/30 cursor-pointer transition-all duration-200 border border-border/50 shadow-sm"
         >
-          <Heart size={16} />
-          <span className="font-bold text-sm tabular-nums">{favoriteBooks.length}</span>
+          <Heart size={16} className="opacity-70" />
+          <span className="font-bold text-sm tabular-nums text-foreground">{favoriteBooks.length}</span>
           <span className="text-sm font-medium">Favorites</span>
         </div>
         <div 
           onClick={handleViewLibrary}
-          className="flex items-center gap-2 px-4 py-2 rounded-full bg-green-500/10 text-green-500 hover:bg-green-500/20 cursor-pointer transition-colors border border-green-500/20 shadow-sm"
+          className="flex items-center gap-2 px-4 py-2 rounded-full bg-card/50 text-muted-foreground hover:text-foreground hover:bg-card hover:border-primary/30 cursor-pointer transition-all duration-200 border border-border/50 shadow-sm"
         >
-          <CheckCircle2 size={16} />
-          <span className="font-bold text-sm tabular-nums">{completedBooks.length}</span>
+          <CheckCircle2 size={16} className="opacity-70" />
+          <span className="font-bold text-sm tabular-nums text-foreground">{completedBooks.length}</span>
           <span className="text-sm font-medium">Completed</span>
         </div>
         <div 
           onClick={handleViewLibrary}
-          className="flex items-center gap-2 px-4 py-2 rounded-full bg-orange-500/10 text-orange-500 hover:bg-orange-500/20 cursor-pointer transition-colors border border-orange-500/20 shadow-sm"
+          className="flex items-center gap-2 px-4 py-2 rounded-full bg-card/50 text-muted-foreground hover:text-foreground hover:bg-card hover:border-primary/30 cursor-pointer transition-all duration-200 border border-border/50 shadow-sm"
         >
-          <PauseCircle size={16} />
-          <span className="font-bold text-sm tabular-nums">{onHoldBooks.length}</span>
+          <PauseCircle size={16} className="opacity-70" />
+          <span className="font-bold text-sm tabular-nums text-foreground">{onHoldBooks.length}</span>
           <span className="text-sm font-medium">On Hold</span>
         </div>
       </div>
