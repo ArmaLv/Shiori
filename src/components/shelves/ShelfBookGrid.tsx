@@ -18,30 +18,32 @@ function ShelfBookCard({ book, isSelected, onClick, shelfColor }: { book: Book, 
   
   const hue = (book.id || 0) * 137.508 % 360;
   const coverColor = `hsl(${hue}, 40%, 30%)`;
+  const authorStr = book.authors && book.authors.length > 0 ? book.authors.map(a => a.name).join(', ') : 'Unknown Author';
 
   return (
     <button
       onClick={onClick}
       className={cn(
-        "relative aspect-[2/3] w-full rounded-xl overflow-hidden transition-all duration-300 text-left flex flex-col p-4 group",
-        isSelected ? "ring-2 ring-offset-4 ring-offset-background scale-[1.02] shadow-2xl z-10" : "hover:scale-[1.02] hover:shadow-xl opacity-90 hover:opacity-100"
+        "relative aspect-[2/3] w-full rounded-xl overflow-hidden transition-all duration-[400ms] cubic-bezier(0.25, 1, 0.5, 1) text-left flex flex-col group cursor-pointer bg-muted/30 border border-border/40",
+        isSelected 
+          ? "ring-2 ring-primary border-primary shadow-[0_8px_30px_rgba(var(--primary),0.4)] z-10 scale-105"
+          : "shadow-lg dark:shadow-[0_8px_20px_rgba(0,0,0,0.8)] ring-1 ring-black/10 dark:ring-white/10 hover:shadow-2xl hover:shadow-primary/20 dark:hover:shadow-primary/10 hover:-translate-y-1.5 hover:ring-black/20 dark:hover:ring-white/20 opacity-100"
       )}
       style={{
-        boxShadow: isSelected ? `0 0 20px ${shelfColor}40` : undefined,
-        borderColor: isSelected ? shelfColor : 'transparent',
+        boxShadow: isSelected ? `0 8px 30px ${shelfColor}50` : undefined,
+        borderColor: isSelected ? shelfColor : undefined,
+        outlineColor: isSelected ? shelfColor : undefined,
       }}
     >
       <div 
-        className="absolute inset-0 z-0 p-4 flex flex-col"
+        className="absolute inset-0 z-0 p-4 flex flex-col items-center justify-center gap-2"
         style={{
           background: `linear-gradient(135deg, ${coverColor} 0%, hsl(${hue}, 50%, 20%) 100%)`,
         }}
       >
-        <div className="font-serif text-white/90 font-medium text-lg leading-tight line-clamp-4 shadow-black drop-shadow-md">
+        <BookOpen size={32} className="text-white/25" />
+        <div className="font-serif text-white/90 font-medium text-sm leading-tight line-clamp-3 text-center shadow-black drop-shadow-md">
           {book.title}
-        </div>
-        <div className="mt-auto text-xs text-white/60 font-medium truncate">
-          {book.authors && book.authors.length > 0 ? book.authors.map(a => a.name).join(', ') : 'Unknown Author'}
         </div>
       </div>
 
@@ -54,14 +56,38 @@ function ShelfBookCard({ book, isSelected, onClick, shelfColor }: { book: Book, 
           onError={() => setImgError(true)}
           className={cn(
             'absolute inset-0 w-full h-full object-cover bg-muted z-10',
-            'transition-opacity duration-500',
+            'transition-all duration-500 ease-out group-hover:scale-105',
             imgLoaded ? 'opacity-100' : 'opacity-0'
           )}
         />
       )}
       
-      <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/0 to-white/20 pointer-events-none mix-blend-overlay opacity-0 group-hover:opacity-100 transition-opacity duration-500 z-20" />
+      {/* Premium Inner Sheen / Glare */}
+      <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/0 to-white/30 pointer-events-none mix-blend-overlay opacity-0 group-hover:opacity-100 transition-opacity duration-500 z-20" />
       <div className="absolute inset-0 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.1)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)] pointer-events-none z-20" />
+
+      {/* Info Strip (Tachiyomi Style) */}
+      <div className={cn(
+        'absolute bottom-0 left-0 right-0 z-30',
+        'flex flex-col justify-end',
+        'bg-gradient-to-t from-card-overlay/95 via-card-overlay/80 to-transparent',
+        'px-2 pt-8 pb-2 rounded-b-[inherit]',
+      )}>
+        <h3
+          className="font-bold text-sm leading-tight drop-shadow-sm text-card-overlay-text/95 line-clamp-2"
+          title={book.title}
+        >
+          {book.title}
+        </h3>
+        {authorStr !== 'Unknown Author' && (
+          <p
+            className="text-xs truncate drop-shadow-sm text-card-overlay-text/75 font-medium mt-0.5"
+            title={authorStr}
+          >
+            {authorStr}
+          </p>
+        )}
+      </div>
     </button>
   );
 }
@@ -98,7 +124,7 @@ export function ShelfBookGrid({ shelf, books, onBack }: ShelfBookGridProps) {
   return (
     <div className="p-4 sm:p-8 h-full overflow-y-auto" ref={containerRef}>
       <div className="max-w-[1400px] mx-auto">
-        <div className="mb-8 relative sticky top-0 z-10 bg-background/90 backdrop-blur-md pt-2 pb-4 -mx-4 px-4 sm:-mx-8 sm:px-8 border-b border-border/50">
+        <div className="mb-8 relative sticky top-0 z-40 bg-background/90 backdrop-blur-md pt-2 pb-4 -mx-4 px-4 sm:-mx-8 sm:px-8 border-b border-border/50">
           <button 
             onClick={onBack}
             className="mb-6 flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors group"
@@ -120,7 +146,7 @@ export function ShelfBookGrid({ shelf, books, onBack }: ShelfBookGridProps) {
           </p>
         </div>
 
-        <div className="flex flex-col gap-6 relative">
+        <div className="flex flex-col gap-6 relative z-10">
           {rows.map((rowBooks, rowIndex) => {
             const hasSelected = rowBooks.some(b => b.id === selectedBookId);
             const selectedIndex = rowBooks.findIndex(b => b.id === selectedBookId);
@@ -135,7 +161,7 @@ export function ShelfBookGrid({ shelf, books, onBack }: ShelfBookGridProps) {
                     animate={{ height: 'auto', opacity: 1, [showAbove ? 'marginBottom' : 'marginTop']: 0 }}
                     exit={{ height: 0, opacity: 0, [showAbove ? 'marginBottom' : 'marginTop']: -12 }}
                     transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-                    className="overflow-hidden"
+                    className="overflow-hidden relative z-0"
                   >
                     <div 
                       className={cn(
@@ -254,7 +280,7 @@ export function ShelfBookGrid({ shelf, books, onBack }: ShelfBookGridProps) {
               <React.Fragment key={rowIndex}>
                 {showAbove && <ExpandedCard />}
                 <div 
-                  className="grid gap-4 sm:gap-6" 
+                  className="grid gap-4 sm:gap-6 relative z-10" 
                   style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
                 >
                   {rowBooks.map((book) => {
@@ -277,7 +303,7 @@ export function ShelfBookGrid({ shelf, books, onBack }: ShelfBookGridProps) {
         </div>
         
         {books.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
+          <div className="flex flex-col items-center justify-center py-20 text-center relative z-10">
             <h2 className="text-xl font-semibold mb-2 text-foreground">Shelf is empty</h2>
             <p className="text-muted-foreground mb-8 max-w-sm">
               You haven't added any books to this shelf yet.
