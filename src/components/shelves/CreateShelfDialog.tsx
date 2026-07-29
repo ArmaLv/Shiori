@@ -2,10 +2,9 @@ import { useState, useEffect } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Folder, Sparkles, BookMarked, Loader2, Library, Star, Heart, Bookmark, BookOpen, Target, Lightbulb, Palette, Flame, FolderOpen } from 'lucide-react';
-import { api, Shelf, SmartRule } from '../../lib/tauri';
+import { api, Shelf } from '../../lib/tauri';
 import { logger } from '@/lib/logger';
 import { useShelfStore } from '../../store/shelfStore';
-import { SmartShelfEditor } from './SmartShelfEditor';
 import { useToast } from '@/store/toastStore';
 import { cn } from '@/lib/utils';
 
@@ -50,15 +49,11 @@ export const CreateShelfDialog = ({
   const [description, setDescription] = useState('');
   const [color, setColor] = useState(PRESET_COLORS[0]);
   const [icon, setIcon] = useState('');
-  const [isSmart, setIsSmart] = useState(false);
   const [shelfType, setShelfType] = useState<'regular' | 'books' | 'manga' | 'mixed' | 'shelf'>('regular');
-  const [smartRules, setSmartRules] = useState<SmartRule[]>([]);
   const [selectedParentId, setSelectedParentId] = useState<number | null>(null);
   const [allShelfs, setAllShelfs] = useState<Shelf[]>([]);
   const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState<{ name?: string; rules?: string }>({});
-  const [previewCount, setPreviewCount] = useState<number | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
+  const [errors, setErrors] = useState<{ name?: string }>({});
 
   const toast = useToast();
 
@@ -74,18 +69,8 @@ export const CreateShelfDialog = ({
         setDescription(editShelf.description || '');
         setColor(editShelf.color || PRESET_COLORS[0]);
         setIcon(editShelf.icon || '');
-        setIsSmart(editShelf.isSmart);
         setShelfType((editShelf.shelfType as any) || 'regular');
         setSelectedParentId(editShelf.parentId || null);
-
-        if (editShelf.smartRules) {
-          try {
-            const rules = JSON.parse(editShelf.smartRules);
-            setSmartRules(rules);
-          } catch (e) {
-             logger.error('Failed to parse smart rules:', e);
-          }
-        }
       } else {
         resetForm();
         setSelectedParentId(parentId || null);
@@ -107,38 +92,15 @@ export const CreateShelfDialog = ({
     setDescription('');
     setColor(PRESET_COLORS[0]);
     setIcon('');
-    setIsSmart(false);
     setShelfType('regular');
-    setSmartRules([]);
     setSelectedParentId(null);
     setErrors({});
-    setPreviewCount(null);
   };
 
-  const updatePreview = async (rules: SmartRule[]) => {
-    if (rules.length === 0) {
-      setPreviewCount(null);
-      return;
-    }
-
-    setPreviewLoading(true);
-    try {
-      const count = await api.previewSmartShelf(JSON.stringify(rules));
-      setPreviewCount(count);
-    } catch (error) {
-      logger.error('Failed to preview smart shelf:', error);
-      setPreviewCount(null);
-    } finally {
-      setPreviewLoading(false);
-    }
-  };
 
   const validate = () => {
     const newErrors: typeof errors = {};
     if (!name.trim()) newErrors.name = "Required";
-    if (isSmart && smartRules.length === 0) {
-      newErrors.rules = "Needs at least one rule";
-    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -153,8 +115,8 @@ export const CreateShelfDialog = ({
         name: name.trim(),
         description: description.trim() || null,
         parent_id: selectedParentId,
-        is_smart: isSmart,
-        smart_rules: isSmart ? JSON.stringify(smartRules) : null,
+        is_smart: false,
+        smart_rules: null,
         icon: icon || null,
         color: color || null,
         shelf_type: shelfType,
@@ -213,38 +175,12 @@ export const CreateShelfDialog = ({
             </Dialog.Close>
           </div>
 
-          <form onSubmit={handleSubmit} className="flex flex-col gap-8">
-            {/* Type Toggle */}
-            <div className="flex p-1 bg-white/5 rounded-2xl border border-white/5 w-full max-w-sm">
-              <button
-                type="button"
-                onClick={() => setIsSmart(false)}
-                className={cn(
-                  "flex flex-1 items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-all duration-300",
-                  !isSmart ? "bg-white/10 text-white shadow-sm" : "text-white/40 hover:text-white/80 hover:bg-white/5"
-                )}
-              >
-                <Folder className="w-4 h-4" />
-                Manual
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsSmart(true)}
-                className={cn(
-                  "flex flex-1 items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-all duration-300",
-                  isSmart ? "bg-white/10 text-white shadow-sm" : "text-white/40 hover:text-white/80 hover:bg-white/5"
-                )}
-              >
-                <Sparkles className="w-4 h-4" />
-                Smart
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
-              {/* Left Column: Basic Info */}
-              <div className="space-y-6">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-white/70">Name</label>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-10 mt-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-10">
+              {/* Left Column: Text Inputs */}
+              <div className="space-y-8">
+                <div className="space-y-3">
+                  <label className="text-sm font-semibold text-white/90 ml-1">Name</label>
                   <input
                     type="text"
                     value={name}
@@ -253,75 +189,80 @@ export const CreateShelfDialog = ({
                       setErrors(prev => ({ ...prev, name: undefined }));
                     }}
                     className={cn(
-                      "flex w-full rounded-xl border-b-2 bg-transparent px-2 py-3 text-lg text-white/90 placeholder:text-white/30 transition-all focus:outline-none",
-                      errors.name ? "border-rose-500/50" : "border-white/10 focus:border-white/40 hover:border-white/30"
+                      "flex w-full rounded-2xl bg-white/5 border px-5 py-4 text-base text-white/90 placeholder:text-white/30 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-white/20",
+                      errors.name ? "border-rose-500/50 bg-rose-500/10" : "border-white/10 hover:border-white/20 hover:bg-white/10"
                     )}
                     placeholder="e.g. Science Fiction"
                     required
                   />
-                  {errors.name && <p className="text-xs text-rose-500">{errors.name}</p>}
+                  {errors.name && <p className="text-xs text-rose-500 ml-1">{errors.name}</p>}
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-white/70">Description (Optional)</label>
+                <div className="space-y-3">
+                  <label className="text-sm font-semibold text-white/90 ml-1">Description (Optional)</label>
                   <textarea
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    className="flex min-h-[60px] w-full rounded-xl border-b-2 border-white/10 bg-transparent px-2 py-3 text-sm text-white/90 placeholder:text-white/30 transition-all focus:outline-none focus:border-white/40 hover:border-white/30 resize-none"
+                    className="flex min-h-[140px] w-full rounded-2xl bg-white/5 border border-white/10 px-5 py-4 text-sm text-white/90 placeholder:text-white/30 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-white/20 hover:border-white/20 hover:bg-white/10 resize-none leading-relaxed"
                     placeholder="What's this shelf about?"
                   />
                 </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-white/70">Parent Shelf (Optional)</label>
-                  <select
-                    value={selectedParentId || ''}
-                    onChange={(e) => setSelectedParentId(e.target.value ? Number(e.target.value) : null)}
-                    className="flex w-full appearance-none rounded-xl border-b-2 border-white/10 bg-transparent px-2 py-3 text-sm text-white/90 focus:outline-none focus:border-white/40 hover:border-white/30 transition-all"
-                  >
-                    <option value="" className="bg-[#1a1a1a] text-white">None (Top Level)</option>
-                    {getAvailableParentShelfs().map((col) => (
-                      <option key={col.id} value={col.id} className="bg-[#1a1a1a] text-white">{col.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {!isSmart && (
-                  <div className="space-y-3 pt-2">
-                    <label className="text-sm font-medium text-white/70">Content Type</label>
-                    <div className="grid grid-cols-3 gap-3">
-                      {[
-                        { id: 'mixed', label: 'Mixed', icon: FolderOpen },
-                        { id: 'books', label: 'Books', icon: BookMarked },
-                        { id: 'manga', label: 'Manga', icon: Sparkles }
-                      ].map(type => {
-                        const Icon = type.icon;
-                        const isActive = shelfType === type.id || (type.id === 'mixed' && shelfType === 'regular');
-                        return (
-                          <button
-                            key={type.id}
-                            type="button"
-                            onClick={() => setShelfType(type.id as any)}
-                            className={cn(
-                              "flex flex-col items-center justify-center gap-2 py-3 rounded-2xl border text-xs font-medium transition-all duration-300",
-                              isActive ? "bg-white/10 border-white/20 text-white shadow-sm" : "bg-transparent border-white/5 text-white/40 hover:bg-white/5 hover:text-white/80"
-                            )}
-                          >
-                            <Icon className={cn("w-5 h-5", isActive ? "text-white" : "")} />
-                            {type.label}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
               </div>
 
-              {/* Right Column: Styling & Smart Rules */}
+              {/* Right Column: Selectors */}
               <div className="space-y-8">
+                <div className="space-y-3">
+                  <label className="text-sm font-semibold text-white/90 ml-1">Parent Shelf (Optional)</label>
+                  <div className="relative">
+                    <select
+                      value={selectedParentId || ''}
+                      onChange={(e) => setSelectedParentId(e.target.value ? Number(e.target.value) : null)}
+                      className="flex w-full appearance-none rounded-2xl bg-white/5 border border-white/10 px-5 py-4 text-sm text-white/90 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-white/20 hover:border-white/20 hover:bg-white/10 cursor-pointer"
+                    >
+                      <option value="" className="bg-[#1a1a1a] text-white">None (Top Level)</option>
+                      {getAvailableParentShelfs().map((col) => (
+                        <option key={col.id} value={col.id} className="bg-[#1a1a1a] text-white">{col.name}</option>
+                      ))}
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-5 flex items-center text-white/40">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <label className="text-sm font-semibold text-white/90 ml-1">Content Type</label>
+                  <div className="grid grid-cols-3 gap-3">
+                    {[
+                      { id: 'mixed', label: 'Mixed', icon: FolderOpen },
+                      { id: 'books', label: 'Books', icon: BookMarked },
+                      { id: 'manga', label: 'Manga', icon: Sparkles }
+                    ].map(type => {
+                      const Icon = type.icon;
+                      const isActive = shelfType === type.id || (type.id === 'mixed' && shelfType === 'regular');
+                      return (
+                        <button
+                          key={type.id}
+                          type="button"
+                          onClick={() => setShelfType(type.id as any)}
+                          className={cn(
+                            "flex flex-col items-center justify-center gap-2.5 py-4 rounded-2xl border text-xs font-medium transition-all duration-300",
+                            isActive 
+                              ? "bg-white/10 border-white/30 text-white shadow-[0_0_15px_rgba(255,255,255,0.05)]" 
+                              : "bg-white/5 border-white/5 text-white/50 hover:bg-white/10 hover:text-white/90"
+                          )}
+                        >
+                          <Icon className={cn("w-5 h-5 transition-transform duration-300", isActive ? "scale-110 text-white" : "")} />
+                          {type.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
                 {/* Theme Color */}
-                <div className="space-y-4">
-                  <label className="text-sm font-medium text-white/70">Color Theme</label>
+                <div className="space-y-3">
+                  <label className="text-sm font-semibold text-white/90 ml-1">Color Theme</label>
                   <div className="flex flex-wrap gap-3">
                     {PRESET_COLORS.map((presetColor) => (
                       <button
@@ -329,25 +270,25 @@ export const CreateShelfDialog = ({
                         type="button"
                         onClick={() => setColor(presetColor)}
                         className={cn(
-                          "w-8 h-8 rounded-full transition-all duration-300 outline-none",
-                          color === presetColor ? "ring-2 ring-white/80 ring-offset-2 ring-offset-[#0a0a0a] scale-110 shadow-lg" : "opacity-50 hover:opacity-100 hover:scale-110"
+                          "w-9 h-9 rounded-full transition-all duration-300 outline-none",
+                          color === presetColor ? "ring-2 ring-white ring-offset-2 ring-offset-[#0a0a0a] scale-110 shadow-lg" : "opacity-40 hover:opacity-100 hover:scale-110 hover:ring-2 hover:ring-white/30 hover:ring-offset-2 hover:ring-offset-[#0a0a0a]"
                         )}
-                        style={{ backgroundColor: presetColor, boxShadow: color === presetColor ? `0 0 15px ${presetColor}80` : 'none' }}
+                        style={{ backgroundColor: presetColor, boxShadow: color === presetColor ? `0 0 20px ${presetColor}60` : 'none' }}
                       />
                     ))}
                   </div>
                 </div>
 
                 {/* SVG Icon Picker */}
-                <div className="space-y-4">
-                  <label className="text-sm font-medium text-white/70">Icon Symbol</label>
-                  <div className="flex flex-wrap gap-2">
+                <div className="space-y-3">
+                  <label className="text-sm font-semibold text-white/90 ml-1">Icon Symbol</label>
+                  <div className="flex flex-wrap gap-2.5">
                     <button
                       type="button"
                       onClick={() => setIcon('')}
                       className={cn(
-                        "w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300",
-                        !icon ? "bg-white/20 text-white shadow-lg" : "bg-transparent text-white/30 hover:bg-white/5 hover:text-white"
+                        "w-11 h-11 rounded-xl flex items-center justify-center transition-all duration-300 border",
+                        !icon ? "bg-white/15 border-white/30 text-white shadow-lg" : "bg-white/5 border-white/5 text-white/40 hover:bg-white/10 hover:text-white/90"
                       )}
                     >
                       <X className="w-5 h-5" />
@@ -360,8 +301,8 @@ export const CreateShelfDialog = ({
                           type="button"
                           onClick={() => setIcon(preset.id)}
                           className={cn(
-                            "w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300",
-                            icon === preset.id ? "bg-white/20 text-white shadow-lg" : "bg-transparent text-white/30 hover:bg-white/5 hover:text-white"
+                            "w-11 h-11 rounded-xl flex items-center justify-center transition-all duration-300 border",
+                            icon === preset.id ? "bg-white/15 border-white/30 text-white shadow-lg" : "bg-white/5 border-white/5 text-white/40 hover:bg-white/10 hover:text-white/90"
                           )}
                         >
                           <IconComponent className="w-5 h-5" />
@@ -370,29 +311,6 @@ export const CreateShelfDialog = ({
                     })}
                   </div>
                 </div>
-
-                {isSmart && (
-                  <div className="space-y-3 pt-2">
-                    <label className="text-sm font-medium text-white/70">Smart Rules</label>
-                    <div className={cn("rounded-2xl border overflow-hidden", errors.rules ? "border-rose-500/50" : "border-white/10")}>
-                      <SmartShelfEditor 
-                        rules={smartRules} 
-                        onChange={(rules) => {
-                          setSmartRules(rules);
-                          setErrors(prev => ({ ...prev, rules: undefined }));
-                          updatePreview(rules);
-                        }} 
-                      />
-                    </div>
-                    {errors.rules && <p className="text-xs text-rose-500">{errors.rules}</p>}
-                    
-                    {previewLoading ? (
-                      <p className="text-xs text-white/40 flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Calculating preview...</p>
-                    ) : previewCount !== null ? (
-                      <p className="text-xs text-green-400/80 font-medium">Matches {previewCount} books</p>
-                    ) : null}
-                  </div>
-                )}
               </div>
             </div>
 
