@@ -116,7 +116,7 @@ export function RadialMenu({ children, items }: RadialMenuProps) {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="absolute inset-0 bg-background/70 backdrop-blur-sm pointer-events-auto" 
+                className="absolute inset-0 bg-black/60 dark:bg-black/80 pointer-events-auto" 
                 onClick={() => setIsOpen(false)}
                 onTouchEnd={(e) => {
                   e.preventDefault();
@@ -133,10 +133,10 @@ export function RadialMenu({ children, items }: RadialMenuProps) {
                   animate={{ scale: 1, opacity: 1, rotate: 0 }}
                   exit={{ scale: 0.3, opacity: 0, rotate: 20 }}
                   transition={{ type: 'spring', stiffness: 350, damping: 25 }}
-                  className="absolute left-0 top-0 pointer-events-none"
+                  className="absolute left-0 top-0 pointer-events-none will-change-transform"
                 >
                   {/* SVG Pie Slices */}
-                  <svg width="340" height="340" className="absolute pointer-events-none drop-shadow-2xl" style={{ left: -170, top: -170 }}>
+                  <svg width="340" height="340" className="absolute pointer-events-none" style={{ left: -170, top: -170 }}>
                     {items.map((item, i) => {
                       const anglePerSlice = 360 / items.length;
                       const startAngle = i * anglePerSlice - anglePerSlice / 2;
@@ -221,7 +221,7 @@ export function RadialMenu({ children, items }: RadialMenuProps) {
                   initial={{ scale: 0, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   exit={{ scale: 0, opacity: 0 }}
-                  className="absolute w-16 h-16 rounded-full bg-card/90 backdrop-blur-md border border-border shadow-2xl flex items-center justify-center text-muted-foreground z-20 pointer-events-auto cursor-pointer hover:bg-muted hover:text-foreground hover:scale-110 transition-all duration-200"
+                  className="absolute w-16 h-16 rounded-full bg-card border border-border shadow-2xl flex items-center justify-center text-muted-foreground z-20 pointer-events-auto cursor-pointer hover:bg-muted hover:text-foreground hover:scale-110 transition-all duration-200 will-change-transform"
                   style={{ left: -32, top: -32 }}
                   onClick={(e) => {
                     e.stopPropagation();
