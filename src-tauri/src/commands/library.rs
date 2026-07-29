@@ -621,7 +621,7 @@ pub async fn download_gutenberg_epub(
     let file_name = format!("{}.epub", safe_title.trim());
 
     let prefs = crate::commands::preferences::get_user_preferences(state.clone()).await?;
-    let downloads_dir = if !prefs.default_import_path.is_empty() {
+    let downloads_dir = if !prefs.default_import_path.is_empty() && !prefs.default_import_path.starts_with("content://") {
         std::path::PathBuf::from(&prefs.default_import_path).join("Online Books")
     } else {
         app_handle
@@ -857,7 +857,7 @@ pub async fn download_libgen_epub(
     
     let state = app_handle.state::<AppState>();
     let prefs = crate::commands::preferences::get_user_preferences(state.clone()).await?;
-    let downloads_dir = if !prefs.default_import_path.is_empty() {
+    let downloads_dir = if !prefs.default_import_path.is_empty() && !prefs.default_import_path.starts_with("content://") {
         std::path::PathBuf::from(&prefs.default_import_path).join("Online Books")
     } else {
         app_handle

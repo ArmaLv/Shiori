@@ -431,7 +431,7 @@ pub async fn download_manga_chapter_as_cbz(
     let store = app_handle.store("preferences.json").map_err(|e| ShioriError::Other(e.to_string()))?;
     let downloads_dir = if let Some(path_val) = store.get("defaultImportPath") {
         if let Some(path_str) = path_val.as_str() {
-            if !path_str.is_empty() {
+            if !path_str.is_empty() && !path_str.starts_with("content://") {
                 std::path::PathBuf::from(path_str).join("Online Manga")
             } else {
                 app_handle.path().download_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")).join("Shiori Downloads")
