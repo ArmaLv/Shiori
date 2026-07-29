@@ -114,7 +114,7 @@ export const ModernBookCard = memo(function ModernBookCard({
             <div className="absolute inset-0 bg-muted animate-pulse" />
           )}
           
-          {proxyUrl && !imgError && (
+          {proxyUrl && !imgError ? (
             <img
               src={proxyUrl}
               alt={title}
@@ -127,7 +127,15 @@ export const ModernBookCard = memo(function ModernBookCard({
               onLoad={() => setImgLoaded(true)}
               onError={() => setImgError(true)}
             />
-        )}
+          ) : (
+            <div className="w-full h-full flex flex-col justify-center items-center p-4 bg-gradient-to-br from-indigo-950 to-slate-900 text-center relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-primary/20 rounded-full blur-2xl pointer-events-none" />
+              <div className="text-[10px] font-semibold text-primary/80 mb-2">{format || 'BOOK'}</div>
+              <div className="font-serif font-bold text-sm text-foreground line-clamp-4 leading-snug">{title}</div>
+              {author && <div className="text-xs text-muted-foreground mt-2 line-clamp-2">{author}</div>}
+            </div>
+          )}
+        </div>
 
         {/* Hover Glassmorphism Overlay */}
         <div className="absolute inset-0 bg-card-overlay/60 opacity-0 group-hover/card:opacity-100 transition-all duration-500 flex flex-col items-center justify-center backdrop-blur-md z-20">
