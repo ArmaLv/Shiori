@@ -19,6 +19,7 @@ pub fn extract_from_file(file_path: &str) -> Result<Metadata> {
         "mobi" | "azw3" => extract_mobi_metadata(file_path),
         "fb2" => extract_fb2_metadata(file_path),
         "docx" => extract_docx_metadata(file_path),
+        "cbz" | "cbr" | "zip" => extract_cbz_metadata(file_path),
         _ => Ok(Metadata::default_from_filename(path)),
     }
 }
@@ -614,6 +615,44 @@ fn extract_pdf_cover(
 
     log::warn!("[extract_pdf_cover] No suitable cover image found in first pages");
     Ok(None)
+}
+
+fn extract_cbz_metadata(file_path: &str) -> Result<Metadata> {
+    let path = Path::new(file_path);
+    let mut metadata = Metadata::default_from_filename(path);
+    
+    // Attempt to open the archive and count valid images
+    if let Ok(file_data) = fs::read(file_path) {
+        let cursor = Cursor::new(&file_data);
+        if let Ok(mut archive) = ZipArchive::new(cursor) {
+            let mut image_count = 0;
+            for i in 0..archive.len() {
+                if let Ok(file) = archive.by_index(i) {
+                    if file.is_file() {
+                        let name = file.name().to_string();
+                        let lower = name.to_lowercase();
+                        if !name.starts_with('.') && !name.starts_with("__MACOSX") && (
+                            lower.ends_with(".jpg")
+                            || lower.ends_with(".jpeg")
+                            || lower.ends_with(".png")
+                            || lower.ends_with(".webp")
+                            || lower.ends_with(".gif")
+                            || lower.ends_with(".bmp")
+                            || lower.ends_with(".avif")
+                            || lower.ends_with(".heic")
+                        ) {
+                            image_count += 1;
+                        }
+                    }
+                }
+            }
+            if image_count > 0 {
+                metadata.page_count = Some(image_count);
+            }
+        }
+    }
+    
+    Ok(metadata)
 }
 
 fn extract_epub_metadata(file_path: &str) -> Result<Metadata> {
