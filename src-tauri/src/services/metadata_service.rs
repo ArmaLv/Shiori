@@ -679,9 +679,9 @@ fn extract_epub_metadata(file_path: &str) -> Result<Metadata> {
 
     // Estimate page count
     let mut total_words = 0;
-    let spine_len = doc.get_num_pages();
+    let spine_len = doc.get_num_chapters();
     for i in 0..spine_len {
-        doc.set_current_page(i);
+        doc.set_current_chapter(i);
         if let Some((_, html)) = doc.get_current_str() {
             // Very naive HTML stripping to approximate words
             let mut in_tag = false;
