@@ -617,7 +617,7 @@ fn extract_pdf_cover(
 }
 
 fn extract_epub_metadata(file_path: &str) -> Result<Metadata> {
-    let doc = epub::doc::EpubDoc::new(file_path)
+    let mut doc = epub::doc::EpubDoc::new(file_path)
         .map_err(|e| ShioriError::MetadataExtraction(format!("Failed to parse EPUB: {}", e)))?;
 
     let mut metadata = Metadata {
@@ -636,6 +636,33 @@ fn extract_epub_metadata(file_path: &str) -> Result<Metadata> {
     // Get authors (can be multiple)
     if let Some(creator) = doc.mdata("creator") {
         metadata.authors.push(creator.value.clone());
+    }
+
+    // Estimate page count
+    let mut total_words = 0;
+    let spine_len = doc.get_num_pages();
+    for i in 0..spine_len {
+        doc.set_current_page(i);
+        if let Some((_, html)) = doc.get_current_str() {
+            // Very naive HTML stripping to approximate words
+            let mut in_tag = false;
+            let mut text = String::with_capacity(html.len());
+            for c in html.chars() {
+                if c == '<' {
+                    in_tag = true;
+                } else if c == '>' {
+                    in_tag = false;
+                    text.push(' '); // space out tags
+                } else if !in_tag {
+                    text.push(c);
+                }
+            }
+            total_words += text.split_whitespace().count();
+        }
+    }
+    
+    if total_words > 0 {
+        metadata.page_count = Some(((total_words + 249) / 250) as i32);
     }
 
     Ok(metadata)
