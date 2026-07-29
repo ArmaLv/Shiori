@@ -112,38 +112,37 @@ function ShelfCard({
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: Math.min(delay * 0.07, 0.5), duration: 0.5, ease: [0.23, 1, 0.32, 1] }}
       onClick={onClick}
-      className="group relative flex flex-col text-left rounded-2xl overflow-hidden transition-all duration-400 hover:-translate-y-1 hover:shadow-2xl"
-      style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}
+      className="group relative flex flex-col text-left rounded-2xl overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-xl bg-card border border-border"
     >
       {/* Hover glow */}
       <div
         className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none rounded-2xl"
-        style={{ boxShadow: `0 0 40px ${color}20 inset, 0 0 0 1px ${color}25` }}
+        style={{ boxShadow: `0 0 40px ${color}15 inset, 0 0 0 1px ${color}30` }}
       />
 
       {/* Cover / Hero area */}
-      <div className="relative w-full aspect-[4/3] overflow-hidden rounded-t-2xl border-b border-white/5 bg-[#0a0a0a]">
+      <div className="relative w-full aspect-[5/4] overflow-hidden rounded-t-2xl border-b border-border/50 bg-muted/20">
         {hasCover ? (
           <>
             {/* Ambient colored glow */}
             <div
-              className="absolute inset-0 opacity-30"
+              className="absolute inset-0 opacity-20"
               style={{
                 background: `radial-gradient(circle at 50% 30%, ${color}80 0%, transparent 75%)`
               }}
             />
             {/* Blurred background from first cover */}
             <div
-              className="absolute inset-0 scale-[1.2] blur-[24px] opacity-25 mix-blend-screen"
+              className="absolute inset-0 scale-[1.1] blur-[20px] opacity-[0.15] mix-blend-overlay dark:mix-blend-screen"
               style={{
                 backgroundImage: `url(${covers[0]})`,
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
               }}
             />
-            {/* Cover stack in center */}
-            <div className="absolute inset-0 flex items-center justify-center p-6">
-              <div className="relative w-[50%] h-[85%] mt-2">
+            {/* Cover stack in center - Made much larger to reduce free space */}
+            <div className="absolute inset-0 flex items-center justify-center p-4 pt-6 pb-2">
+              <div className="relative w-[70%] h-[95%]">
                 <CoverStack covers={covers} color={color} />
               </div>
             </div>
@@ -151,19 +150,19 @@ function ShelfCard({
         ) : (
           <div
             className="absolute inset-0 flex items-center justify-center"
-            style={{ background: `radial-gradient(circle at 50% 50%, ${color}20, transparent 80%)` }}
+            style={{ background: `radial-gradient(circle at 50% 50%, ${color}15, transparent 70%)` }}
           >
             <div
-              className="w-16 h-16 rounded-2xl flex items-center justify-center border shadow-xl"
-              style={{ background: `${color}15`, borderColor: `${color}30`, color, boxShadow: `0 8px 32px ${color}25` }}
+              className="w-20 h-20 rounded-2xl flex items-center justify-center border shadow-lg transition-transform group-hover:scale-110"
+              style={{ background: `${color}10`, borderColor: `${color}30`, color, boxShadow: `0 8px 32px ${color}15` }}
             >
-              <Icon className="w-8 h-8 opacity-90" strokeWidth={1.8} />
+              <Icon className="w-10 h-10 opacity-80" strokeWidth={1.5} />
             </div>
           </div>
         )}
 
         {/* Gradient overlay bottom */}
-        <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+        <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-background/80 to-transparent opacity-50" />
 
         {/* Smart badge */}
         {shelf.isSmart && (
@@ -176,9 +175,9 @@ function ShelfCard({
       </div>
 
       {/* Info footer */}
-      <div className="relative z-10 p-4 flex items-center justify-between">
-        <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-base text-white/90 truncate group-hover:text-white transition-colors leading-tight">
+      <div className="relative z-10 p-5 flex items-center justify-between bg-card">
+        <div className="flex-1 min-w-0 pr-2">
+          <h3 className="font-bold text-base text-foreground truncate transition-colors leading-tight">
             {shelf.name}
           </h3>
           <p className="text-xs mt-0.5 font-medium" style={{ color: `${color}cc` }}>
