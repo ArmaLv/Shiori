@@ -224,7 +224,7 @@ export async function getViewer(token: string): Promise<AnilistUser> {
 export async function getMediaListShelf(userId: number, token: string): Promise<AnilistMediaListShelf> {
   const query = `
     query ($userId: Int) {
-      MediaListShelf(userId: $userId, type: MANGA) {
+      MediaListCollection(userId: $userId, type: MANGA) {
         user {
           id
           name
@@ -279,7 +279,7 @@ export async function getMediaListShelf(userId: number, token: string): Promise<
   `;
 
   const data = await fetchAnilistAPI(query, { userId }, token);
-  return data.MediaListShelf;
+  return data.MediaListCollection;
 }
 
 let cachedScoreFormat: string | null = null;
