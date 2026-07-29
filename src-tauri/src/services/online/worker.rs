@@ -262,16 +262,20 @@ impl MetadataWorker {
                 current_book.notes.clone()
             };
 
+            let new_rating = meta.rating.or(current_book.rating);
+
             let _result = conn.execute(
                 "UPDATE books
                  SET online_metadata_fetched = 1,
                      metadata_source = ?1,
                      metadata_last_sync = CURRENT_TIMESTAMP,
-                     notes = ?2
-                 WHERE id = ?3",
+                     notes = ?2,
+                     rating = ?3
+                 WHERE id = ?4",
                 rusqlite::params![
                     meta.provider_id.unwrap_or_else(|| "unknown".to_string()),
                     new_notes,
+                    new_rating,
                     item_id
                 ],
             );

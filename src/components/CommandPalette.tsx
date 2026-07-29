@@ -142,9 +142,9 @@ export const CommandPalette = ({
                     </div>
                   </div>
                   {book.rating && book.rating > 0 && (
-                    <div className="flex items-center gap-1 ml-2 text-xs text-muted-foreground">
-                      <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
-                      {book.rating}
+                    <div className="flex items-center text-xs font-medium text-yellow-500 bg-yellow-500/10 px-1.5 py-0.5 rounded-sm">
+                      <Star className="w-3 h-3 mr-1 fill-current" />
+                      {book.rating} / {book.metadata_source === 'anilist' ? '10' : '5'}
                     </div>
                   )}
                 </Command.Item>

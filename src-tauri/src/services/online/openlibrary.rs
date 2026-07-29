@@ -111,6 +111,7 @@ impl MetadataProvider for OpenLibraryProvider {
                 description: None, // Description usually needs a second query for works
                 cover_url,
                 genres: doc.subject.unwrap_or_default(),
+                rating: None,
                 extra_data: Some(serde_json::json!({"openlibrary_id": doc.key})),
             }));
         }

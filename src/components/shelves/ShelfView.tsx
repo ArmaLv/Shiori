@@ -7,6 +7,7 @@ import { ShelfBookGrid } from './ShelfBookGrid';
 import { Shelf, Book, api } from '../../lib/tauri';
 import { Loader2 } from 'lucide-react';
 import { logger } from '@/lib/logger';
+import { useToast } from '../../store/toastStore';
 import { useBackButton } from '@/hooks/useBackButton';
 
 export function ShelfView() {
@@ -15,6 +16,7 @@ export function ShelfView() {
   const selectShelf = useShelfStore(state => state.selectShelf);
   const shelves = useShelfStore(state => state.shelves);
   const setShelfs = useShelfStore(state => state.setShelfs);
+  const toast = useToast();
   
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editShelf, setEditShelf] = useState<Shelf | null>(null);
@@ -26,33 +28,34 @@ export function ShelfView() {
 
   useBackButton(!!selectedShelf, () => selectShelf(null));
 
-  useEffect(() => {
-    async function loadShelfs() {
-      setLoadingShelves(true);
-      try {
-        const nested = await api.getNestedShelfs();
-        
-        // Also load special shelves
-        const [favs, shelfList] = await Promise.all([
-          api.getShelfsByType('favorites'),
-          api.getShelfsByType('shelf'),
-        ]);
-        
-        const allShelves = [
-          ...(favs || []),
-          ...(shelfList || []),
-          ...(nested || [])
-        ];
-        
-        // Deduplicate shelves by ID
-        const uniqueShelves = Array.from(new Map(allShelves.map(s => [s.id, s])).values());
-        setShelfs(uniqueShelves);
-      } catch (error) {
-        logger.error('Failed to load shelves:', error);
-      } finally {
-        setLoadingShelves(false);
-      }
+  const loadShelfs = async () => {
+    setLoadingShelves(true);
+    try {
+      const nested = await api.getNestedShelfs();
+      
+      // Also load special shelves
+      const [favs, shelfList] = await Promise.all([
+        api.getShelfsByType('favorites'),
+        api.getShelfsByType('shelf'),
+      ]);
+      
+      const allShelves = [
+        ...(favs || []),
+        ...(shelfList || []),
+        ...(nested || [])
+      ];
+      
+      // Deduplicate shelves by ID
+      const uniqueShelves = Array.from(new Map(allShelves.map(s => [s.id, s])).values());
+      setShelfs(uniqueShelves);
+    } catch (error) {
+      logger.error('Failed to load shelves:', error);
+    } finally {
+      setLoadingShelves(false);
     }
+  };
+
+  useEffect(() => {
     loadShelfs();
   }, [setShelfs]);
 
@@ -90,6 +93,23 @@ export function ShelfView() {
     setDialogOpen(true);
   };
 
+  const handleDeleteShelf = async (shelf: Shelf) => {
+    if (!confirm(`Delete "${shelf.name}" and all its subshelves?`)) {
+      return;
+    }
+    try {
+      await api.deleteShelf(shelf.id!);
+      await loadShelfs();
+      if (selectedShelf?.id === shelf.id) {
+        selectShelf(null);
+      }
+      toast.success('Shelf deleted', `"${shelf.name}" has been deleted`);
+    } catch (error) {
+      logger.error('Failed to delete shelf:', error);
+      toast.error('Failed to delete shelf', 'An error occurred while deleting the shelf');
+    }
+  };
+
   return (
     <div className="flex flex-col h-full w-full bg-background pt-16 md:pt-0 overflow-hidden relative">
       {/* Dynamic Content */}
@@ -103,6 +123,8 @@ export function ShelfView() {
             shelves={shelves} 
             onSelectShelf={selectShelf} 
             onCreateShelf={() => handleCreateShelf()} 
+            onEditShelf={handleEditShelf}
+            onDeleteShelf={handleDeleteShelf}
           />
         ) : loadingBooks ? (
           <div className="flex items-center justify-center h-full">

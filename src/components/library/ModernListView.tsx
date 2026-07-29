@@ -153,9 +153,9 @@ export const ModernListView = ({
             <div className="hidden lg:flex items-center gap-6 text-xs text-muted-foreground flex-shrink-0">
               {/* Rating */}
               {book.rating && book.rating > 0 && (
-                <div className="flex items-center gap-1">
-                  <Star className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400" />
-                  <span>{book.rating}</span>
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-yellow-600 dark:text-yellow-500 bg-yellow-500/10 px-2 py-0.5 rounded-full ring-1 ring-yellow-500/20">
+                  <Star className="w-3.5 h-3.5 fill-current" />
+                  <span>{book.rating} / {book.metadata_source === 'anilist' ? '10' : '5'}</span>
                 </div>
               )}
 

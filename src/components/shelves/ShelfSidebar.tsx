@@ -211,30 +211,30 @@ const ShelfItem = ({ shelf, depth, onEdit, onDelete, onAddSubshelf }: ShelfItemP
               </DropdownMenu.Trigger>
               <DropdownMenu.Portal>
                 <DropdownMenu.Content
-                  className="min-w-[180px] bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 p-1"
+                  className="min-w-[180px] bg-background/80 backdrop-blur-xl border border-border/50 rounded-xl shadow-2xl p-1.5 z-50 text-sm animate-in fade-in zoom-in-95 duration-200"
                   sideOffset={5}
                 >
                   <DropdownMenu.Item
-                    className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer rounded hover:bg-gray-100 dark:hover:bg-gray-700 outline-none"
+                    className="flex items-center px-3 py-2 rounded-lg cursor-pointer outline-none transition-all duration-150 select-none hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground text-foreground/90"
                     onSelect={() => onEdit(shelf)}
                   >
-                    <Edit className="w-4 h-4" />
-                    Edit Shelf
+                    <Edit className="w-4 h-4 mr-2.5" />
+                    <span className="font-medium tracking-tight">Edit Shelf</span>
                   </DropdownMenu.Item>
                   <DropdownMenu.Item
-                    className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer rounded hover:bg-gray-100 dark:hover:bg-gray-700 outline-none"
+                    className="flex items-center px-3 py-2 rounded-lg cursor-pointer outline-none transition-all duration-150 select-none hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground text-foreground/90"
                     onSelect={() => onAddSubshelf(shelf.id!)}
                   >
-                    <FolderPlus className="w-4 h-4" />
-                    Add Subshelf
+                    <FolderPlus className="w-4 h-4 mr-2.5" />
+                    <span className="font-medium tracking-tight">Add Subshelf</span>
                   </DropdownMenu.Item>
-                  <DropdownMenu.Separator className="h-px bg-gray-200 dark:bg-gray-700 my-1" />
+                  <DropdownMenu.Separator className="h-px bg-border/50 my-1.5 mx-1" />
                   <DropdownMenu.Item
-                    className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 outline-none"
+                    className="flex items-center px-3 py-2 rounded-lg cursor-pointer outline-none transition-all duration-150 select-none hover:bg-destructive/15 focus:bg-destructive/15 text-destructive"
                     onSelect={() => onDelete(shelf)}
                   >
-                    <Trash2 className="w-4 h-4" />
-                    Delete Shelf
+                    <Trash2 className="w-4 h-4 mr-2.5" />
+                    <span className="font-medium tracking-tight">Delete Shelf</span>
                   </DropdownMenu.Item>
                 </DropdownMenu.Content>
               </DropdownMenu.Portal>
@@ -243,39 +243,39 @@ const ShelfItem = ({ shelf, depth, onEdit, onDelete, onAddSubshelf }: ShelfItemP
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
           <DropdownMenu.Content
-            className="min-w-[180px] bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 p-1 z-50"
+            className="min-w-[180px] bg-background/80 backdrop-blur-xl border border-border/50 rounded-xl shadow-2xl p-1.5 z-50 text-sm animate-in fade-in zoom-in-95 duration-200"
             sideOffset={5}
           >
             <DropdownMenu.Item
-              className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer rounded hover:bg-gray-100 dark:hover:bg-gray-700 outline-none"
+              className="flex items-center px-3 py-2 rounded-lg cursor-pointer outline-none transition-all duration-150 select-none hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground text-foreground/90"
               onSelect={() => {
                 onEdit(shelf);
                 setContextMenuOpen(false);
               }}
             >
-              <Edit className="w-4 h-4" />
-              Edit Shelf
+              <Edit className="w-4 h-4 mr-2.5" />
+              <span className="font-medium tracking-tight">Edit Shelf</span>
             </DropdownMenu.Item>
             <DropdownMenu.Item
-              className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer rounded hover:bg-gray-100 dark:hover:bg-gray-700 outline-none"
+              className="flex items-center px-3 py-2 rounded-lg cursor-pointer outline-none transition-all duration-150 select-none hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground text-foreground/90"
               onSelect={() => {
                 onAddSubshelf(shelf.id!);
                 setContextMenuOpen(false);
               }}
             >
-              <FolderPlus className="w-4 h-4" />
-              Add Subshelf
+              <FolderPlus className="w-4 h-4 mr-2.5" />
+              <span className="font-medium tracking-tight">Add Subshelf</span>
             </DropdownMenu.Item>
-            <DropdownMenu.Separator className="h-px bg-gray-200 dark:bg-gray-700 my-1" />
+            <DropdownMenu.Separator className="h-px bg-border/50 my-1.5 mx-1" />
             <DropdownMenu.Item
-              className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 outline-none"
+              className="flex items-center px-3 py-2 rounded-lg cursor-pointer outline-none transition-all duration-150 select-none hover:bg-destructive/15 focus:bg-destructive/15 text-destructive"
               onSelect={() => {
                 onDelete(shelf);
                 setContextMenuOpen(false);
               }}
             >
-              <Trash2 className="w-4 h-4" />
-              Delete Shelf
+              <Trash2 className="w-4 h-4 mr-2.5" />
+              <span className="font-medium tracking-tight">Delete Shelf</span>
             </DropdownMenu.Item>
           </DropdownMenu.Content>
         </DropdownMenu.Portal>

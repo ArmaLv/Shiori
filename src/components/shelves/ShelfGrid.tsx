@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Shelf, api } from '../../lib/tauri';
+import * as ContextMenu from '@radix-ui/react-context-menu';
 import { 
   Folder, 
   Sparkles, 
@@ -15,6 +16,8 @@ import {
   Plus,
   ChevronRight,
   BookMarked,
+  Edit,
+  Trash2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { convertFileSrc } from '@tauri-apps/api/core';
@@ -36,6 +39,8 @@ interface ShelfGridProps {
   shelves: Shelf[];
   onSelectShelf: (shelf: Shelf) => void;
   onCreateShelf?: () => void;
+  onEditShelf?: (shelf: Shelf) => void;
+  onDeleteShelf?: (shelf: Shelf) => void;
 }
 
 interface ShelfCovers {
@@ -91,11 +96,15 @@ function ShelfCard({
   shelf,
   covers,
   onClick,
+  onEdit,
+  onDelete,
   delay,
 }: {
   shelf: Shelf;
   covers: string[];
   onClick: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
   delay: number;
 }) {
   const Icon = shelf.icon && PRESET_ICONS[shelf.icon]
@@ -106,13 +115,13 @@ function ShelfCard({
   const count = shelf.bookCount ?? 0;
   const hasCover = covers.length > 0;
 
-  return (
+  const button = (
     <motion.button
       initial={{ opacity: 0, y: 24 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: Math.min(delay * 0.07, 0.5), duration: 0.5, ease: [0.23, 1, 0.32, 1] }}
       onClick={onClick}
-      className="group relative flex flex-col text-left rounded-2xl overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-xl bg-card border border-border"
+      className="group relative flex flex-col text-left rounded-2xl overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-xl bg-card border border-border w-full"
     >
       {/* Hover glow */}
       <div
@@ -200,9 +209,46 @@ function ShelfCard({
       />
     </motion.button>
   );
+
+  if (!onEdit && !onDelete) return button;
+
+  return (
+    <ContextMenu.Root>
+      <ContextMenu.Trigger asChild>
+        {button}
+      </ContextMenu.Trigger>
+      <ContextMenu.Portal>
+        <ContextMenu.Content
+          className="min-w-[160px] bg-background/80 backdrop-blur-xl border border-border/50 rounded-xl shadow-2xl p-1.5 z-50 text-sm animate-in fade-in zoom-in-95 duration-200"
+        >
+          {onEdit && (
+            <ContextMenu.Item
+              className="flex items-center px-3 py-2 rounded-lg cursor-pointer outline-none transition-all duration-150 select-none hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground text-foreground/90"
+              onSelect={onEdit}
+            >
+              <Edit className="w-4 h-4 mr-2.5" />
+              <span className="font-medium tracking-tight">Edit Shelf</span>
+            </ContextMenu.Item>
+          )}
+          {onDelete && (
+            <>
+              {onEdit && <ContextMenu.Separator className="h-px bg-border/50 my-1.5 mx-1" />}
+              <ContextMenu.Item
+                className="flex items-center px-3 py-2 rounded-lg cursor-pointer outline-none transition-all duration-150 select-none hover:bg-destructive/15 focus:bg-destructive/15 text-destructive"
+                onSelect={onDelete}
+              >
+                <Trash2 className="w-4 h-4 mr-2.5" />
+                <span className="font-medium tracking-tight">Delete Shelf</span>
+              </ContextMenu.Item>
+            </>
+          )}
+        </ContextMenu.Content>
+      </ContextMenu.Portal>
+    </ContextMenu.Root>
+  );
 }
 
-export function ShelfGrid({ shelves, onSelectShelf, onCreateShelf }: ShelfGridProps) {
+export function ShelfGrid({ shelves, onSelectShelf, onCreateShelf, onEditShelf, onDeleteShelf }: ShelfGridProps) {
   const [shelfCovers, setShelfCovers] = useState<ShelfCovers>({});
 
   const flattenShelves = (shelfs: Shelf[]): Shelf[] => {
@@ -298,15 +344,18 @@ export function ShelfGrid({ shelves, onSelectShelf, onCreateShelf }: ShelfGridPr
         </div>
 
         {/* Shelves grid */}
+            {/* Shelves grid */}
         <AnimatePresence>
           {allShelves.length > 0 ? (
             <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 md:gap-5">
               {allShelves.map((shelf, idx) => (
                 <ShelfCard
-                  key={shelf.id}
+                  key={shelf.id || idx}
                   shelf={shelf}
                   covers={shelfCovers[shelf.id!] || []}
                   onClick={() => onSelectShelf(shelf)}
+                  onEdit={onEditShelf && shelf.shelfType !== 'favorites' && !shelf.isSmart ? () => onEditShelf(shelf) : undefined}
+                  onDelete={onDeleteShelf && shelf.shelfType !== 'favorites' && !shelf.isSmart ? () => onDeleteShelf(shelf) : undefined}
                   delay={idx}
                 />
               ))}

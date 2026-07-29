@@ -96,7 +96,7 @@ impl Database {
                 pubdate TEXT,
                 series TEXT,
                 series_index REAL,
-                rating INTEGER CHECK(rating >= 0 AND rating <= 5),
+                rating INTEGER CHECK(rating >= 0 AND rating <= 10),
                 file_path TEXT NOT NULL UNIQUE,
                 file_format TEXT NOT NULL,
                 file_size INTEGER,

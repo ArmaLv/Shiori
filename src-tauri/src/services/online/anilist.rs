@@ -83,6 +83,8 @@ struct MediaData {
     id: i64,
     title: TitleData,
     description: Option<String>,
+    #[serde(rename = "averageScore")]
+    average_score: Option<i32>,
     #[serde(rename = "coverImage")]
     cover_image: CoverImageData,
     genres: Vec<String>,
@@ -137,10 +139,14 @@ impl MetadataProvider for AniListProvider {
         &self,
         query: &MetadataQuery,
     ) -> Result<Option<FetchedMetadata>, MetadataError> {
-        let title_to_search = match query {
+        let raw_title = match query {
             MetadataQuery::Title(t) | MetadataQuery::TitleAuthor { title: t, .. } => t,
             _ => return Ok(None), // ISBN not supported by AniList effectively
         };
+
+        // Fuzzy match: Strip trailing volume/chapter identifiers (e.g. "One Piece 1" -> "One Piece")
+        let re = regex::Regex::new(r"(?i)(?:\s*(?:vol|volume|ch|chapter|v|book)\.?\s*\d+|\s+\d+)$").unwrap();
+        let title_to_search = re.replace(raw_title, "").to_string();
 
         let graphql_query = r#"
             query ($search: String) {
@@ -149,6 +155,7 @@ impl MetadataProvider for AniListProvider {
                         id
                         title { romaji english }
                         description
+                        averageScore
                         coverImage { extraLarge }
                         genres
                         staff(perPage: 5) {
@@ -212,6 +219,9 @@ impl MetadataProvider for AniListProvider {
                             .replace("</b>", "")
                     });
 
+                    // Scale AniList rating (out of 100) to out of 10
+                    let rating = media.average_score.map(|score| (score as f64) / 10.0);
+
                     return Ok(Some(FetchedMetadata {
                         provider_id: Some(self.name().to_string()),
                         title: Some(media.title.english.unwrap_or(media.title.romaji)),
@@ -219,6 +229,7 @@ impl MetadataProvider for AniListProvider {
                         description,
                         cover_url: media.cover_image.large.or(media.cover_image.extra_large),
                         genres: media.genres,
+                        rating,
                         extra_data: Some(serde_json::json!({"anilist_id": media.id})),
                     }));
                 }

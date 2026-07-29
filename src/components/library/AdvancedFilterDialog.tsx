@@ -37,7 +37,7 @@ const EMPTY_FILTERS: FilterCriteria = {
   languages: [],
   publishers: [],
   ratingMin: 0,
-  ratingMax: 5,
+  ratingMax: 10,
   dateFrom: '',
   dateTo: '',
   readingStatus: [],
@@ -331,7 +331,7 @@ export function AdvancedFilterDialog({ open, onOpenChange }: AdvancedFilterDialo
                       <div className="flex items-center gap-3 bg-muted/30 p-3 rounded-lg border border-border/50">
                         <span className="text-sm font-medium text-muted-foreground w-8">Max:</span>
                         <StarRating
-                          value={filters.ratingMax ?? 5}
+                          value={filters.ratingMax ?? 10}
                           onChange={v => updateFilter('ratingMax', v)}
                         />
                       </div>
@@ -510,7 +510,7 @@ function StarRating({ value, onChange }: { value: number; onChange: (v: number) 
 
   return (
     <div className="flex items-center gap-0.5">
-      {[1, 2, 3, 4, 5].map(star => {
+      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(star => {
         const filled = star <= (hover >= 0 ? hover : value)
         return (
           <button

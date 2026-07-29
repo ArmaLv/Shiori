@@ -40,7 +40,7 @@ import { CompanionDiscovery } from '../companion/CompanionDiscovery'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { AniListSettings } from './AniListSettings'
 import { VoiceManager } from './VoiceManager'
-
+import { UpdateChangelogDialog } from '../dialogs/UpdateChangelogDialog'
 
 import { READING_FONTS, normalizeLegacyFontPreference, resolveReadingFontCss } from '@/lib/readingFonts'
 
@@ -1943,6 +1943,7 @@ const CommunityPluginsSettings = ({
 const AboutSettings = () => {
   const [appVersion, setAppVersion] = useState('Loading...')
   const [isChecking, setIsChecking] = useState(false)
+  const [updateData, setUpdateData] = useState<{ version: string; notes: string; url: string; tauriUpdate?: any } | null>(null)
   const toast = useToast()
 
   useEffect(() => {
@@ -1980,13 +1981,11 @@ const AboutSettings = () => {
         };
         
         if (isNewer(latestVersion, appVersion)) {
-          toast.info(`Update v${latestVersion} is available! Opening releases page...`);
-          setTimeout(() => {
-            open(data.html_url).catch(err => {
-              console.error('Failed to open link:', err);
-              try { window.open(data.html_url, '_blank'); } catch (e) {}
-            });
-          }, 1500);
+          setUpdateData({
+            version: latestVersion,
+            notes: data.body || 'No release notes available.',
+            url: data.html_url,
+          })
         } else {
           toast.success("You are on the latest version.");
         }
@@ -1996,10 +1995,12 @@ const AboutSettings = () => {
         try {
           const update = await check()
           if (update) {
-            toast.info(`Update ${update.version} is available! Downloading...`)
-            await update.downloadAndInstall()
-            toast.success("Update installed successfully. Restarting...")
-            await relaunch()
+            setUpdateData({
+              version: update.version,
+              notes: update.body || 'No release notes available.',
+              url: '',
+              tauriUpdate: update
+            })
             updated = true;
           } else {
             toast.success("You are on the latest version.")
@@ -2023,13 +2024,11 @@ const AboutSettings = () => {
               return false;
             };
             if (isNewer(latestVersion, appVersion)) {
-              toast.info(`Update v${latestVersion} is available! Opening releases page...`)
-              setTimeout(() => {
-                open(data.html_url).catch(err => {
-                  console.error('Failed to open link:', err);
-                  try { window.open(data.html_url, '_blank'); } catch (e) {}
-                });
-              }, 1500);
+              setUpdateData({
+                version: latestVersion,
+                notes: data.body || 'No release notes available.',
+                url: data.html_url,
+              })
             } else {
               toast.success("You are on the latest version.")
             }
@@ -2120,6 +2119,35 @@ const AboutSettings = () => {
           <span>Tauri</span> &middot; <span>React</span> &middot; <span>Tailwind CSS</span> &middot; <span>Radix UI</span>
         </p>
       </motion.div>
+
+      <UpdateChangelogDialog
+        open={!!updateData}
+        onOpenChange={(o) => { if (!o) setUpdateData(null) }}
+        version={updateData?.version || ''}
+        notes={updateData?.notes || ''}
+        onConfirm={async () => {
+          if (!updateData) return;
+          if (updateData.tauriUpdate) {
+            try {
+              toast.info(`Downloading update...`);
+              await updateData.tauriUpdate.downloadAndInstall();
+              toast.success("Update installed successfully. Restarting...");
+              await relaunch();
+            } catch (e) {
+              console.error(e);
+              toast.error("Failed to install update.");
+            }
+          } else if (updateData.url) {
+            try {
+              await open(updateData.url);
+            } catch (err) {
+              console.error('Failed to open link:', err);
+              try { window.open(updateData.url, '_blank'); } catch (e) {}
+            }
+          }
+          setUpdateData(null);
+        }}
+      />
     </div>
   )
 }

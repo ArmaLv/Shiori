@@ -42,6 +42,7 @@ pub struct FetchedMetadata {
     pub description: Option<String>,
     pub cover_url: Option<String>,
     pub genres: Vec<String>,
+    pub rating: Option<f64>,
     pub extra_data: Option<serde_json::Value>,
 }
 

@@ -281,36 +281,36 @@ pub fn run() {
                 }
             }
 
-            #[allow(unused_mut)]
-            let mut builder = tauri::WebviewWindowBuilder::new(
-                app,
-                "main",
-                tauri::WebviewUrl::App("index.html".into())
-            )
-            .title("Shiori")
-            .inner_size(1200.0, 800.0)
-            .resizable(true);
-
             #[cfg(not(any(target_os = "android", target_os = "ios")))]
             {
-                builder = builder.fullscreen(false).decorations(false);
-            }
+                #[allow(unused_mut)]
+                let mut builder = tauri::WebviewWindowBuilder::new(
+                    app,
+                    "main",
+                    tauri::WebviewUrl::App("index.html".into())
+                )
+                .title("Shiori")
+                .inner_size(1200.0, 800.0)
+                .resizable(true)
+                .fullscreen(false)
+                .decorations(false);
 
-            // Silence unused_assignments on platforms where variables aren't used
-            let _ = is_first_time;
-            let _ = is_transparent;
+                // Silence unused_assignments on platforms where variables aren't used
+                let _ = is_first_time;
+                let _ = is_transparent;
 
-            #[cfg(target_os = "windows")]
-            {
-                if is_first_time {
-                    builder = builder.maximized(true);
+                #[cfg(target_os = "windows")]
+                {
+                    if is_first_time {
+                        builder = builder.maximized(true);
+                    }
                 }
+
+                #[cfg(not(target_os = "macos"))]
+                let builder = builder.transparent(is_transparent);
+
+                let _window = builder.build()?;
             }
-
-            #[cfg(not(target_os = "macos"))]
-            let builder = builder.transparent(is_transparent);
-
-            let _window = builder.build()?;
 
             let covers_dir = app_dir.join("covers");
             std::fs::create_dir_all(&covers_dir)?;

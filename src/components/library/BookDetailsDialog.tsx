@@ -219,7 +219,7 @@ export const BookDetailsDialog = ({
                     {book.rating && book.rating > 0 && (
                       <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 backdrop-blur-md">
                         <Star className="w-3.5 h-3.5 fill-current mr-1" />
-                        {book.rating} / 5
+                        {book.rating} / {book.metadata_source === 'anilist' ? '10' : '5'}
                       </span>
                     )}
                     <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-secondary text-secondary-foreground border border-border backdrop-blur-md uppercase tracking-wider">
