@@ -660,10 +660,10 @@ fn extract_epub_metadata(file_path: &str) -> Result<Metadata> {
             total_words += text.split_whitespace().count();
         }
     }
+    let estimated_pages = ((total_words + 249) / 250) as i32;
+    let fallback_pages = spine_len as i32;
     
-    if total_words > 0 {
-        metadata.page_count = Some(((total_words + 249) / 250) as i32);
-    }
+    metadata.page_count = Some(estimated_pages.max(fallback_pages));
 
     Ok(metadata)
 }
