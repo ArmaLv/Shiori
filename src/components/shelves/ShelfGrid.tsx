@@ -46,23 +46,39 @@ function CoverStack({ covers, color }: { covers: string[]; color: string }) {
   if (covers.length === 0) return null;
 
   return (
-    <div className="relative w-full h-full">
+    <div className="relative w-full h-full flex items-center justify-center" style={{ perspective: '1000px' }}>
       {covers.slice(0, 3).reverse().map((cover, i) => {
         const revIdx = Math.min(covers.length - 1, 2) - i;
-        const offset = revIdx * 6;
-        const scale = 1 - revIdx * 0.05;
-        const opacity = 1 - revIdx * 0.15;
+        
+        let offset = 0;
+        let rotate = 0;
+        let rotateY = 0;
+        let scale = 1 - revIdx * 0.06;
+        let opacity = 1 - revIdx * 0.1;
+        
+        if (revIdx === 1) {
+          offset = -20;
+          rotate = -6;
+          rotateY = -12;
+        } else if (revIdx === 2) {
+          offset = 20;
+          rotate = 6;
+          rotateY = 12;
+        }
+
         return (
           <img
             key={i}
             src={cover}
             alt=""
-            className="absolute inset-0 w-full h-full object-cover rounded-xl"
+            className="absolute w-auto h-full max-w-full object-cover rounded-xl"
             style={{
-              transform: `translateX(${offset}px) translateY(${-offset * 0.5}px) scale(${scale})`,
+              transform: `translateX(${offset}px) scale(${scale}) rotate(${rotate}deg) rotateY(${rotateY}deg)`,
               opacity,
-              zIndex: i,
-              boxShadow: `0 4px 20px rgba(0,0,0,0.4)`,
+              zIndex: 10 - revIdx,
+              boxShadow: revIdx === 0 
+                ? `0 10px 30px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.15)`
+                : `0 4px 20px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05)`,
             }}
           />
         );
@@ -106,12 +122,19 @@ function ShelfCard({
       />
 
       {/* Cover / Hero area */}
-      <div className="relative w-full aspect-[4/3] overflow-hidden bg-black/20">
+      <div className="relative w-full aspect-[4/3] overflow-hidden rounded-t-2xl border-b border-white/5 bg-[#0a0a0a]">
         {hasCover ? (
           <>
+            {/* Ambient colored glow */}
+            <div
+              className="absolute inset-0 opacity-30"
+              style={{
+                background: `radial-gradient(circle at 50% 30%, ${color}80 0%, transparent 75%)`
+              }}
+            />
             {/* Blurred background from first cover */}
             <div
-              className="absolute inset-0 scale-110 blur-md opacity-40"
+              className="absolute inset-0 scale-[1.2] blur-[24px] opacity-25 mix-blend-screen"
               style={{
                 backgroundImage: `url(${covers[0]})`,
                 backgroundSize: 'cover',
@@ -120,7 +143,7 @@ function ShelfCard({
             />
             {/* Cover stack in center */}
             <div className="absolute inset-0 flex items-center justify-center p-6">
-              <div className="relative w-[60%] h-[90%]">
+              <div className="relative w-[50%] h-[85%] mt-2">
                 <CoverStack covers={covers} color={color} />
               </div>
             </div>
@@ -128,25 +151,25 @@ function ShelfCard({
         ) : (
           <div
             className="absolute inset-0 flex items-center justify-center"
-            style={{ background: `radial-gradient(circle at 50% 60%, ${color}18, transparent 70%)` }}
+            style={{ background: `radial-gradient(circle at 50% 50%, ${color}20, transparent 80%)` }}
           >
             <div
-              className="w-16 h-16 rounded-2xl flex items-center justify-center border"
-              style={{ background: `${color}15`, borderColor: `${color}30`, color }}
+              className="w-16 h-16 rounded-2xl flex items-center justify-center border shadow-xl"
+              style={{ background: `${color}15`, borderColor: `${color}30`, color, boxShadow: `0 8px 32px ${color}25` }}
             >
-              <Icon className="w-8 h-8 opacity-80" strokeWidth={1.8} />
+              <Icon className="w-8 h-8 opacity-90" strokeWidth={1.8} />
             </div>
           </div>
         )}
 
         {/* Gradient overlay bottom */}
-        <div className="absolute inset-x-0 bottom-0 h-3/4 bg-gradient-to-t from-black/70 to-transparent" />
+        <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
 
         {/* Smart badge */}
         {shelf.isSmart && (
-          <div className="absolute top-3 right-3 flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase"
-            style={{ background: `${color}25`, border: `1px solid ${color}40`, color }}>
-            <Sparkles className="w-2.5 h-2.5" />
+          <div className="absolute top-3 right-3 flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase backdrop-blur-md shadow-lg"
+            style={{ background: `${color}30`, border: `1px solid ${color}40`, color }}>
+            <Sparkles className="w-3 h-3" />
             Smart
           </div>
         )}
@@ -300,7 +323,7 @@ export function ShelfGrid({ shelves, onSelectShelf, onCreateShelf }: ShelfGridPr
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: Math.min(allShelves.length * 0.07, 0.5) + 0.05, duration: 0.5 }}
                   onClick={onCreateShelf}
-                  className="group flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed transition-all duration-300 aspect-[4/3] hover:border-white/20 hover:bg-white/[0.02]"
+                  className="group flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed transition-all duration-300 h-full min-h-[200px] hover:border-white/20 hover:bg-white/[0.02]"
                   style={{ borderColor: 'rgba(255,255,255,0.08)' }}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
