@@ -269,14 +269,14 @@ export function ShelfGrid({ shelves, onSelectShelf, onCreateShelf }: ShelfGridPr
         {/* Header */}
         <div className="flex items-end justify-between mb-10">
           <div>
-            <p className="text-xs font-bold tracking-[0.2em] text-white/30 uppercase mb-2">
+            <p className="text-xs font-bold tracking-[0.2em] text-muted-foreground uppercase mb-2">
               Your Collection
             </p>
-            <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-white/90 leading-none">
+            <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-foreground leading-none">
               Shelves
             </h1>
             {allShelves.length > 0 && (
-              <p className="text-sm text-white/30 mt-2">
+              <p className="text-sm text-muted-foreground mt-2">
                 {allShelves.length} {allShelves.length === 1 ? 'shelf' : 'shelves'}
               </p>
             )}
@@ -287,12 +287,8 @@ export function ShelfGrid({ shelves, onSelectShelf, onCreateShelf }: ShelfGridPr
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               onClick={onCreateShelf}
-              className="group flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold text-white/80 hover:text-white transition-all duration-300 border"
-              style={{
-                background: 'rgba(255,255,255,0.04)',
-                borderColor: 'rgba(255,255,255,0.1)',
-              }}
-              whileHover={{ scale: 1.03, background: 'rgba(255,255,255,0.08)' }}
+              className="group flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold text-muted-foreground hover:text-foreground transition-all duration-300 border border-border bg-card hover:bg-muted"
+              whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}
             >
               <Plus className="w-4 h-4 transition-transform duration-300 group-hover:rotate-90" />
@@ -322,15 +318,14 @@ export function ShelfGrid({ shelves, onSelectShelf, onCreateShelf }: ShelfGridPr
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: Math.min(allShelves.length * 0.07, 0.5) + 0.05, duration: 0.5 }}
                   onClick={onCreateShelf}
-                  className="group flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed transition-all duration-300 h-full min-h-[200px] hover:border-white/20 hover:bg-white/[0.02]"
-                  style={{ borderColor: 'rgba(255,255,255,0.08)' }}
+                  className="group flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed transition-all duration-300 h-full min-h-[200px] border-border hover:border-primary/50 hover:bg-muted"
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                 >
-                  <div className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center group-hover:bg-white/10 group-hover:border-white/20 transition-all duration-300">
-                    <Plus className="w-5 h-5 text-white/30 group-hover:text-white/60 transition-colors" />
+                  <div className="w-10 h-10 rounded-full bg-muted border border-border flex items-center justify-center group-hover:bg-primary/20 group-hover:border-primary/50 transition-all duration-300">
+                    <Plus className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
                   </div>
-                  <span className="text-xs font-medium text-white/25 group-hover:text-white/50 transition-colors">New Shelf</span>
+                  <span className="text-xs font-medium text-muted-foreground group-hover:text-foreground transition-colors">New Shelf</span>
                 </motion.button>
               )}
             </div>
@@ -343,18 +338,18 @@ export function ShelfGrid({ shelves, onSelectShelf, onCreateShelf }: ShelfGridPr
             >
               <div className="relative mb-8">
                 <div className="absolute inset-0 bg-primary/10 blur-[40px] rounded-full scale-150" />
-                <div className="relative w-20 h-20 rounded-2xl bg-white/[0.03] border border-white/[0.08] flex items-center justify-center">
-                  <BookOpen className="w-9 h-9 text-white/20" strokeWidth={1.5} />
+                <div className="relative w-20 h-20 rounded-2xl bg-muted border border-border flex items-center justify-center">
+                  <BookOpen className="w-9 h-9 text-muted-foreground" strokeWidth={1.5} />
                 </div>
               </div>
-              <h2 className="text-2xl font-bold text-white/80 mb-3 tracking-tight">No shelves yet</h2>
-              <p className="text-white/35 text-sm max-w-xs leading-relaxed mb-10">
+              <h2 className="text-2xl font-bold text-foreground mb-3 tracking-tight">No shelves yet</h2>
+              <p className="text-muted-foreground text-sm max-w-xs leading-relaxed mb-10">
                 Organize your reading collection by creating shelves — group books by genre, series, or any theme you like.
               </p>
               {onCreateShelf && (
                 <button
                   onClick={onCreateShelf}
-                  className="flex items-center gap-2 px-7 py-3.5 rounded-full bg-primary text-white font-semibold text-sm hover:brightness-110 hover:scale-105 active:scale-95 transition-all duration-300 shadow-[0_0_30px_rgba(99,102,241,0.3)]"
+                  className="flex items-center gap-2 px-7 py-3.5 rounded-full bg-primary text-primary-foreground font-semibold text-sm hover:brightness-110 hover:scale-105 active:scale-95 transition-all duration-300 shadow-[0_0_30px_rgba(var(--primary),0.3)]"
                 >
                   <Plus className="w-4 h-4" />
                   Create your first shelf

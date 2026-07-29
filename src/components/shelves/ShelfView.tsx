@@ -91,12 +91,12 @@ export function ShelfView() {
   };
 
   return (
-    <div className="flex flex-col h-full w-full bg-[#0a0a0a] pt-16 md:pt-0 overflow-hidden relative">
+    <div className="flex flex-col h-full w-full bg-background pt-16 md:pt-0 overflow-hidden relative">
       {/* Dynamic Content */}
       <div className="flex-1 overflow-hidden relative">
         {loadingShelves ? (
           <div className="flex items-center justify-center h-full">
-            <Loader2 className="w-8 h-8 animate-spin text-white/30" />
+            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
           </div>
         ) : !selectedShelf ? (
           <ShelfGrid 
@@ -106,7 +106,7 @@ export function ShelfView() {
           />
         ) : loadingBooks ? (
           <div className="flex items-center justify-center h-full">
-            <Loader2 className="w-8 h-8 animate-spin text-white/30" />
+            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
           </div>
         ) : (
           <ShelfBookGrid shelf={selectedShelf} books={books} onBack={() => selectShelf(null)} />
