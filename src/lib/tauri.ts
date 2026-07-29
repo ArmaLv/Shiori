@@ -690,8 +690,8 @@ export const api = {
 
   async _autoGroupMangaIfEnabled() {
     try {
-      const settings = await this.getSettings();
-      if (settings?.preferences?.autoGroupManga) {
+      const prefs = await this.getUserPreferences();
+      if (prefs?.autoGroupManga) {
         await this.autoGroupMangaVolumes();
         logger.debug('[API] Auto-grouped manga after import');
       }

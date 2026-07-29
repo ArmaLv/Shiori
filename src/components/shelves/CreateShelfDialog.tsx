@@ -141,10 +141,11 @@ export const CreateShelfDialog = ({
   };
 
   const getAvailableParentShelfs = () => {
-    if (!editShelf) return allShelfs;
+    const safeShelfs = Array.isArray(allShelfs) ? allShelfs : [];
+    if (!editShelf) return safeShelfs;
     const excludedIds = new Set<number>([editShelf.id!]);
     const findDescendants = (parentId: number) => {
-      allShelfs.forEach(c => {
+      safeShelfs.forEach(c => {
         if (c.parentId === parentId && !excludedIds.has(c.id!)) {
           excludedIds.add(c.id!);
           findDescendants(c.id!);
@@ -152,7 +153,7 @@ export const CreateShelfDialog = ({
       });
     };
     findDescendants(editShelf.id!);
-    return allShelfs.filter(c => !excludedIds.has(c.id!));
+    return safeShelfs.filter(c => !excludedIds.has(c.id!));
   };
 
   return (
