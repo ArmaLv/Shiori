@@ -369,6 +369,35 @@ export function HomePage({ onOpenBook, onViewRSS, searchQuery = "", onSearchChan
         onOpenAdvancedFilter={onOpenAdvancedFilter}
         hideThemeToggle={true}
       />
+      
+      {/* ── COMPACT COLLECTIONS BAR ── */}
+      <div className="flex gap-3 mb-6 overflow-x-auto pb-2 scrollbar-none hidden md:flex">
+        <div 
+          onClick={handleViewLibrary}
+          className="flex items-center gap-2 px-4 py-2 rounded-full bg-pink-500/10 text-pink-500 hover:bg-pink-500/20 cursor-pointer transition-colors border border-pink-500/20 shadow-sm"
+        >
+          <Heart size={16} />
+          <span className="font-bold text-sm tabular-nums">{favoriteBooks.length}</span>
+          <span className="text-sm font-medium">Favorites</span>
+        </div>
+        <div 
+          onClick={handleViewLibrary}
+          className="flex items-center gap-2 px-4 py-2 rounded-full bg-green-500/10 text-green-500 hover:bg-green-500/20 cursor-pointer transition-colors border border-green-500/20 shadow-sm"
+        >
+          <CheckCircle2 size={16} />
+          <span className="font-bold text-sm tabular-nums">{completedBooks.length}</span>
+          <span className="text-sm font-medium">Completed</span>
+        </div>
+        <div 
+          onClick={handleViewLibrary}
+          className="flex items-center gap-2 px-4 py-2 rounded-full bg-orange-500/10 text-orange-500 hover:bg-orange-500/20 cursor-pointer transition-colors border border-orange-500/20 shadow-sm"
+        >
+          <PauseCircle size={16} />
+          <span className="font-bold text-sm tabular-nums">{onHoldBooks.length}</span>
+          <span className="text-sm font-medium">On Hold</span>
+        </div>
+      </div>
+
       {/* ── ROW 1: THE "NOW" ROW ── */}
       <div className="bento-row now-row">
         {continueReading.length > 0 ? (
@@ -510,90 +539,6 @@ export function HomePage({ onOpenBook, onViewRSS, searchQuery = "", onSearchChan
 
       </div>
 
-      {/* ── ROW 3: COLLECTIONS ── */}
-      <div className="bento-row shelves-row hidden md:grid">
-        
-        {/* Online Discovery */}
-        <div 
-          className="group relative overflow-hidden rounded-3xl bg-secondary/20 hover:bg-secondary/40 border border-white/5 hover:border-primary/30 p-5 transition-all duration-300 cursor-pointer shadow-sm hover:shadow-md"
-          onClick={domain === 'manga_comics' ? handleViewOnlineManga : handleViewOnlineBooks}
-        >
-          <div className="absolute -right-6 -top-6 w-24 h-24 bg-primary/20 rounded-full blur-2xl group-hover:bg-primary/30 transition-colors" />
-          <div className="relative z-10 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary shadow-inner">
-              <Globe size={24} />
-            </div>
-            <div className="flex-1">
-              <h3 className="font-bold text-foreground text-lg">Discovery</h3>
-              <p className="text-sm text-muted-foreground">Search and download</p>
-            </div>
-            <div className="w-8 h-8 rounded-full flex items-center justify-center bg-white/5 text-muted-foreground opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all">
-              <ChevronRight size={18} />
-            </div>
-          </div>
-        </div>
-
-        {/* Favorites */}
-        <div 
-          className="group relative overflow-hidden rounded-3xl bg-secondary/20 hover:bg-secondary/40 border border-white/5 hover:border-pink-500/30 p-5 transition-all duration-300 cursor-pointer shadow-sm hover:shadow-md"
-          onClick={handleViewLibrary}
-        >
-          <div className="absolute -right-6 -top-6 w-24 h-24 bg-pink-500/20 rounded-full blur-2xl group-hover:bg-pink-500/30 transition-colors" />
-          <div className="relative z-10 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-pink-500/10 flex items-center justify-center text-pink-500 shadow-inner">
-              <Heart size={24} />
-            </div>
-            <div className="flex-1">
-              <h3 className="font-bold text-foreground text-lg tabular-nums tracking-tight">{favoriteBooks.length} Favorites</h3>
-              <p className="text-sm text-muted-foreground">View your top picks</p>
-            </div>
-            <div className="w-8 h-8 rounded-full flex items-center justify-center bg-white/5 text-muted-foreground opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all">
-              <ChevronRight size={18} />
-            </div>
-          </div>
-        </div>
-
-        {/* Completed */}
-        <div 
-          className="group relative overflow-hidden rounded-3xl bg-secondary/20 hover:bg-secondary/40 border border-white/5 hover:border-green-500/30 p-5 transition-all duration-300 cursor-pointer shadow-sm hover:shadow-md"
-          onClick={handleViewLibrary}
-        >
-          <div className="absolute -right-6 -top-6 w-24 h-24 bg-green-500/20 rounded-full blur-2xl group-hover:bg-green-500/30 transition-colors" />
-          <div className="relative z-10 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-green-500/10 flex items-center justify-center text-green-500 shadow-inner">
-              <CheckCircle2 size={24} />
-            </div>
-            <div className="flex-1">
-              <h3 className="font-bold text-foreground text-lg tabular-nums tracking-tight">{completedBooks.length} Completed</h3>
-              <p className="text-sm text-muted-foreground">Revisit finished works</p>
-            </div>
-            <div className="w-8 h-8 rounded-full flex items-center justify-center bg-white/5 text-muted-foreground opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all">
-              <ChevronRight size={18} />
-            </div>
-          </div>
-        </div>
-
-        {/* On Hold */}
-        <div 
-          className="group relative overflow-hidden rounded-3xl bg-secondary/20 hover:bg-secondary/40 border border-white/5 hover:border-orange-500/30 p-5 transition-all duration-300 cursor-pointer shadow-sm hover:shadow-md"
-          onClick={handleViewLibrary}
-        >
-          <div className="absolute -right-6 -top-6 w-24 h-24 bg-orange-500/20 rounded-full blur-2xl group-hover:bg-orange-500/30 transition-colors" />
-          <div className="relative z-10 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-orange-500/10 flex items-center justify-center text-orange-500 shadow-inner">
-              <PauseCircle size={24} />
-            </div>
-            <div className="flex-1">
-              <h3 className="font-bold text-foreground text-lg tabular-nums tracking-tight">{onHoldBooks.length} On Hold</h3>
-              <p className="text-sm text-muted-foreground">Pick up where you left</p>
-            </div>
-            <div className="w-8 h-8 rounded-full flex items-center justify-center bg-white/5 text-muted-foreground opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all">
-              <ChevronRight size={18} />
-            </div>
-          </div>
-        </div>
-
-      </div>
     </motion.div>
   )
 }
