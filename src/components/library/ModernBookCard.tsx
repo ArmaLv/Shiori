@@ -264,6 +264,8 @@ export const PremiumBookCard = memo(function PremiumBookCard({
   }
 
   const authorStr = book.authors?.map((a) => a.name).join(', ') || 'Unknown Author'
+  const hue = (book.id || 0) * 137.508 % 360;
+  const coverColor = `hsl(${hue}, 40%, 30%)`;
 
   const menuItems: LibraryMenuItem[] = [
     { label: 'Open', icon: BookOpen, onClick: () => onOpen(book.id!) },
@@ -329,16 +331,22 @@ export const PremiumBookCard = memo(function PremiumBookCard({
 
         {/* Fallback (no cover) */}
         {(!coverUrl || imgError) && imgLoaded === false && !coverLoading && (
-          <div
-            className={cn(
-              'absolute inset-0 flex flex-col items-center justify-center gap-2',
-              'bg-gradient-to-br from-muted to-muted/60',
-            )}
+          <div 
+            className="absolute inset-0 z-0 p-3 flex flex-col"
+            style={{
+              background: `linear-gradient(135deg, ${coverColor} 0%, hsl(${hue}, 50%, 20%) 100%)`,
+            }}
           >
-            <IconBookOpen size={32} className="text-muted-foreground/25" />
-            <p className="text-[9px] text-muted-foreground/40 text-center px-2 line-clamp-2 font-medium">
+            <div className={cn("font-serif text-white/90 font-medium leading-tight line-clamp-4 shadow-black drop-shadow-md text-left",
+              coverSize === 'small' ? 'text-xs' : coverSize === 'medium' ? 'text-sm' : 'text-base'
+            )}>
               {book.title}
-            </p>
+            </div>
+            <div className={cn("mt-auto text-white/60 font-medium truncate text-left w-full",
+              coverSize === 'small' ? 'text-[10px]' : 'text-xs'
+            )}>
+              {authorStr}
+            </div>
           </div>
         )}
 
@@ -398,41 +406,43 @@ export const PremiumBookCard = memo(function PremiumBookCard({
         </div>
 
         {/* ── Info Strip (Tachiyomi Style) ── */}
-        <div className={cn(
-          'absolute bottom-0 left-0 right-0 z-10',
-          'flex flex-col justify-end',
-          'bg-gradient-to-t from-card-overlay/95 via-card-overlay/80 to-transparent',
-          'rounded-b-[inherit]',
-          coverSize === 'small' && 'px-1.5 pt-6 pb-1.5',
-          coverSize === 'medium' && 'px-2 pt-8 pb-2',
-          coverSize === 'large' && 'px-2.5 pt-10 pb-2.5',
-        )}>
-          <h3
-            className={cn(
-              'font-bold leading-tight drop-shadow-sm text-card-overlay-text/95',
-              book.file_format === 'online-manga' ? 'line-clamp-1 text-[13px]' : 'line-clamp-2',
-              book.file_format !== 'online-manga' && coverSize === 'small' && 'text-xs',
-              book.file_format !== 'online-manga' && coverSize === 'medium' && 'text-sm',
-              book.file_format !== 'online-manga' && coverSize === 'large' && 'text-base',
-            )}
-            title={book.title}
-          >
-            {book.title}
-          </h3>
-          {authorStr && authorStr !== 'Unknown Author' && (
-            <p
+        {(coverUrl && !imgError) && (
+          <div className={cn(
+            'absolute bottom-0 left-0 right-0 z-10',
+            'flex flex-col justify-end',
+            'bg-gradient-to-t from-card-overlay/95 via-card-overlay/80 to-transparent',
+            'rounded-b-[inherit]',
+            coverSize === 'small' && 'px-1.5 pt-6 pb-1.5',
+            coverSize === 'medium' && 'px-2 pt-8 pb-2',
+            coverSize === 'large' && 'px-2.5 pt-10 pb-2.5',
+          )}>
+            <h3
               className={cn(
-                'truncate drop-shadow-sm text-card-overlay-text/75 font-medium mt-0.5',
-                coverSize === 'small' && 'text-[11px]',
-                coverSize === 'medium' && 'text-xs',
-                coverSize === 'large' && 'text-sm',
+                'font-bold leading-tight drop-shadow-sm text-card-overlay-text/95',
+                book.file_format === 'online-manga' ? 'line-clamp-1 text-[13px]' : 'line-clamp-2',
+                book.file_format !== 'online-manga' && coverSize === 'small' && 'text-xs',
+                book.file_format !== 'online-manga' && coverSize === 'medium' && 'text-sm',
+                book.file_format !== 'online-manga' && coverSize === 'large' && 'text-base',
               )}
-              title={authorStr}
+              title={book.title}
             >
-              {authorStr}
-            </p>
-          )}
-        </div>
+              {book.title}
+            </h3>
+            {authorStr && authorStr !== 'Unknown Author' && (
+              <p
+                className={cn(
+                  'truncate drop-shadow-sm text-card-overlay-text/75 font-medium mt-0.5',
+                  coverSize === 'small' && 'text-[11px]',
+                  coverSize === 'medium' && 'text-xs',
+                  coverSize === 'large' && 'text-sm',
+                )}
+                title={authorStr}
+              >
+                {authorStr}
+              </p>
+            )}
+          </div>
+        )}
       </div>
           </motion.div>
       </LibraryContextMenu>

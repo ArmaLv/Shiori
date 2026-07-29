@@ -16,6 +16,8 @@ function ShelfBookCard({ book, isSelected, onClick, shelfColor }: { book: Book, 
   const [imgLoaded, setImgLoaded] = useState(false);
   const [imgError, setImgError] = useState(false);
   
+  const hue = (book.id || 0) * 137.508 % 360;
+  const coverColor = `hsl(${hue}, 40%, 30%)`;
   const authorStr = book.authors && book.authors.length > 0 ? book.authors.map(a => a.name).join(', ') : 'Unknown Author';
 
   return (
@@ -33,19 +35,19 @@ function ShelfBookCard({ book, isSelected, onClick, shelfColor }: { book: Book, 
         outlineColor: isSelected ? shelfColor : undefined,
       }}
     >
-      {(!coverUrl || imgError) && imgLoaded === false && !loading && (
-        <div
-          className={cn(
-            'absolute inset-0 flex flex-col items-center justify-center gap-2',
-            'bg-gradient-to-br from-muted to-muted/60 z-0'
-          )}
-        >
-          <BookOpen size={32} className="text-muted-foreground/25" />
-          <p className="text-[9px] text-muted-foreground/40 text-center px-2 line-clamp-2 font-medium">
-            {book.title}
-          </p>
+      <div 
+        className="absolute inset-0 z-0 p-4 flex flex-col"
+        style={{
+          background: `linear-gradient(135deg, ${coverColor} 0%, hsl(${hue}, 50%, 20%) 100%)`,
+        }}
+      >
+        <div className="font-serif text-white/90 font-medium text-lg leading-tight line-clamp-4 shadow-black drop-shadow-md text-left">
+          {book.title}
         </div>
-      )}
+        <div className="mt-auto text-xs text-white/60 font-medium truncate text-left w-full">
+          {authorStr}
+        </div>
+      </div>
 
       {coverUrl && !imgError && (
         <img
@@ -67,27 +69,29 @@ function ShelfBookCard({ book, isSelected, onClick, shelfColor }: { book: Book, 
       <div className="absolute inset-0 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.1)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)] pointer-events-none z-20" />
 
       {/* Info Strip (Tachiyomi Style) */}
-      <div className={cn(
-        'absolute bottom-0 left-0 right-0 z-30',
-        'flex flex-col justify-end',
-        'bg-gradient-to-t from-card-overlay/95 via-card-overlay/80 to-transparent',
-        'px-2 pt-8 pb-2 rounded-b-[inherit]',
-      )}>
-        <h3
-          className="font-bold text-sm leading-tight drop-shadow-sm text-card-overlay-text/95 line-clamp-2"
-          title={book.title}
-        >
-          {book.title}
-        </h3>
-        {authorStr !== 'Unknown Author' && (
-          <p
-            className="text-xs truncate drop-shadow-sm text-card-overlay-text/75 font-medium mt-0.5"
-            title={authorStr}
+      {(coverUrl && !imgError) && (
+        <div className={cn(
+          'absolute bottom-0 left-0 right-0 z-30',
+          'flex flex-col justify-end',
+          'bg-gradient-to-t from-card-overlay/95 via-card-overlay/80 to-transparent',
+          'px-2 pt-8 pb-2 rounded-b-[inherit]',
+        )}>
+          <h3
+            className="font-bold text-sm leading-tight drop-shadow-sm text-card-overlay-text/95 line-clamp-2"
+            title={book.title}
           >
-            {authorStr}
-          </p>
-        )}
-      </div>
+            {book.title}
+          </h3>
+          {authorStr !== 'Unknown Author' && (
+            <p
+              className="text-xs truncate drop-shadow-sm text-card-overlay-text/75 font-medium mt-0.5"
+              title={authorStr}
+            >
+              {authorStr}
+            </p>
+          )}
+        </div>
+      )}
     </button>
   );
 }
