@@ -1,5 +1,5 @@
 import { BookOpen, Star, Download, Edit, Trash2, Calendar, FileType, FolderPlus, Tag as TagIcon } from 'lucide-react'
-import * as ContextMenu from '@radix-ui/react-context-menu'
+import { LibraryContextMenu, type LibraryMenuItem } from '@/components/ui/LibraryContextMenu'
 import { cn, formatFileSize, formatDate } from '@/lib/utils'
 import type { Book } from '@/lib/tauri'
 import { Badge } from '@/components/ui/badge'
@@ -18,7 +18,7 @@ interface ListViewProps {
   onEditBook: (id: number) => void
   onDeleteBook: (id: number) => void
   onDownloadBook: (id: number) => void
-  onAddToCollection?: (id: number) => void
+  onAddToShelf?: (id: number) => void
   onManageTags?: (id: number) => void
 }
 
@@ -30,7 +30,7 @@ export const ModernListView = ({
   onEditBook,
   onDeleteBook,
   onDownloadBook,
-  onAddToCollection,
+  onAddToShelf,
   onManageTags,
 }: ListViewProps) => {
   if (books.length === 0) {
@@ -50,9 +50,16 @@ export const ModernListView = ({
       {books.map((book) => {
         const isSelected = selectedBooks.has(book.id!)
 
+        const menuItems: LibraryMenuItem[] = [
+          { label: 'Open', icon: BookOpen, onClick: () => onOpenBook(book.id!) },
+          { label: 'Edit Metadata', icon: Edit, onClick: () => onEditBook(book.id!) },
+          ...(onAddToShelf ? [{ label: 'Add to Shelf...', icon: FolderPlus, onClick: () => onAddToShelf(book.id!) }] : []),
+          { isSeparator: true as const },
+          { label: 'Delete', icon: Trash2, onClick: () => onDeleteBook(book.id!), destructive: true },
+        ];
+
         return (
-          <ContextMenu.Root key={book.id}>
-            <ContextMenu.Trigger asChild>
+          <LibraryContextMenu key={book.id} items={menuItems}>
               <div
                 onClick={() => onOpenBook(book.id!)}
                 className={cn(
@@ -215,56 +222,7 @@ export const ModernListView = ({
                </button>
             </div>
             </div>
-          </ContextMenu.Trigger>
-          <ContextMenu.Portal>
-            <ContextMenu.Content className="min-w-[160px] bg-background border border-border rounded-md shadow-md p-1 z-50 text-sm">
-              <ContextMenu.Item 
-                className="flex items-center px-2 py-1.5 rounded cursor-pointer hover:bg-muted outline-none"
-                onClick={() => onOpenBook(book.id!)}
-              >
-                <BookOpen className="w-4 h-4 mr-2" />
-                Open
-              </ContextMenu.Item>
-              
-              <ContextMenu.Item 
-                className="flex items-center px-2 py-1.5 rounded cursor-pointer hover:bg-muted outline-none"
-                onClick={() => onEditBook(book.id!)}
-              >
-                <Edit className="w-4 h-4 mr-2" />
-                Edit Metadata
-              </ContextMenu.Item>
-
-              {onAddToCollection && (
-                <ContextMenu.Item 
-                  className="flex items-center px-2 py-1.5 rounded cursor-pointer hover:bg-muted outline-none"
-                  onClick={() => onAddToCollection(book.id!)}
-                >
-                  <FolderPlus className="w-4 h-4 mr-2" />
-                  Add to Collection...
-                </ContextMenu.Item>
-              )}
-
-              {onManageTags && (
-                <ContextMenu.Item 
-                  className="flex items-center px-2 py-1.5 rounded cursor-pointer hover:bg-muted outline-none"
-                  onClick={() => onManageTags(book.id!)}
-                >
-                  <TagIcon className="w-4 h-4 mr-2" />
-                  Manage Tags...
-                </ContextMenu.Item>
-              )}
-
-              <ContextMenu.Separator className="h-px bg-border my-1" />
-              <ContextMenu.Item 
-                className="flex items-center px-2 py-1.5 rounded cursor-pointer hover:bg-destructive/10 text-destructive outline-none"
-                onClick={() => onDeleteBook(book.id!)}
-              >
-                <Trash2 className="w-4 h-4 mr-2" />
-                Delete
-              </ContextMenu.Item>
-            </ContextMenu.Content>
-          </ContextMenu.Portal>
-        </ContextMenu.Root>
+          </LibraryContextMenu>
         )
       })}
     </div>

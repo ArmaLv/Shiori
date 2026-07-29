@@ -257,7 +257,7 @@ export interface ReaderSettings {
   updatedAt: string
 }
 
-export interface Collection {
+export interface Shelf {
   id?: number
   name: string
   description?: string
@@ -266,12 +266,12 @@ export interface Collection {
   smartRules?: string
   icon?: string
   color?: string
-  collectionType: string  // "regular" | "shelf" | "favorites"
+  shelfType: string  // "regular" | "shelf" | "favorites"
   sortOrder: number
   createdAt: string
   updatedAt: string
   bookCount?: number
-  children: Collection[]
+  children: Shelf[]
 }
 
 export interface SmartRule {
@@ -284,7 +284,7 @@ export interface SmartRule {
 export interface ExportOptions {
   format: string  // "csv", "json", "markdown"
   include_metadata: boolean
-  include_collections: boolean
+  include_shelves: boolean
   include_reading_progress: boolean
   file_path: string
 }
@@ -397,7 +397,7 @@ export interface BackupInfo {
   app_version: string
   book_count: number
   annotation_count: number
-  collection_count: number
+  shelf_count: number
   includes_books: boolean
   total_size_bytes: number
 }
@@ -405,7 +405,7 @@ export interface BackupInfo {
 export interface RestoreInfo {
   books_restored: number
   annotations_restored: number
-  collections_restored: number
+  shelves_restored: number
   covers_restored: number
   settings_restored: boolean
   frontend_settings: string | null
@@ -589,6 +589,16 @@ export const api = {
       return books
     } catch (error) {
       logger.error('[API] Failed to get books:', error)
+      throw error
+    }
+  },
+
+  async getBooksByPaths(paths: string[]): Promise<Book[]> {
+    try {
+      const books = await invoke<Book[]>("get_books_by_paths", { paths })
+      return books
+    } catch (error) {
+      logger.error('Failed to get books by paths:', error)
       throw error
     }
   },
@@ -865,20 +875,20 @@ export const api = {
     return invoke("validate_book_file", { path, format })
   },
 
-  // Collections
-  async getCollections(): Promise<Collection[]> {
-    return invoke("get_collections")
+  // Shelfs
+  async getShelfs(): Promise<Shelf[]> {
+    return invoke("get_shelves")
   },
 
-  async getBookCollectionIds(bookId: number): Promise<number[]> {
-    return invoke("get_book_collection_ids", { bookId })
+  async getBookShelfIds(bookId: number): Promise<number[]> {
+    return invoke("get_book_shelf_ids", { bookId })
   },
 
-  async getCollection(id: number): Promise<Collection> {
-    return invoke("get_collection", { id })
+  async getShelf(id: number): Promise<Shelf> {
+    return invoke("get_shelf", { id })
   },
 
-  async createCollection(data: {
+  async createShelf(data: {
     name: string;
     description?: string | null;
     parent_id?: number | null;
@@ -886,9 +896,9 @@ export const api = {
     smart_rules?: string | null;
     icon?: string | null;
     color?: string | null;
-    collection_type?: string | null;
-  }): Promise<Collection> {
-    return invoke("create_collection", {
+    shelf_type?: string | null;
+  }): Promise<Shelf> {
+    return invoke("create_shelf", {
       name: data.name,
       description: data.description,
       parentId: data.parent_id,
@@ -896,11 +906,11 @@ export const api = {
       smartRules: data.smart_rules,
       icon: data.icon,
       color: data.color,
-      collectionType: data.collection_type || 'regular',
+      shelfType: data.shelf_type || 'regular',
     })
   },
 
-  async updateCollection(
+  async updateShelf(
     id: number,
     data: {
       name: string;
@@ -911,8 +921,8 @@ export const api = {
       icon?: string | null;
       color?: string | null;
     }
-  ): Promise<Collection> {
-    return invoke("update_collection", {
+  ): Promise<Shelf> {
+    return invoke("update_shelf", {
       id,
       name: data.name,
       description: data.description,
@@ -923,28 +933,28 @@ export const api = {
     })
   },
 
-  async deleteCollection(id: number): Promise<void> {
-    return invoke("delete_collection", { id })
+  async deleteShelf(id: number): Promise<void> {
+    return invoke("delete_shelf", { id })
   },
 
-  async addBookToCollection(collectionId: number, bookId: number): Promise<void> {
-    return invoke("add_book_to_collection", { collectionId, bookId })
+  async addBookToShelf(shelfId: number, bookId: number): Promise<void> {
+    return invoke("add_book_to_shelf", { shelfId, bookId })
   },
 
-  async removeBookFromCollection(collectionId: number, bookId: number): Promise<void> {
-    return invoke("remove_book_from_collection", { collectionId, bookId })
+  async removeBookFromShelf(shelfId: number, bookId: number): Promise<void> {
+    return invoke("remove_book_from_shelf", { shelfId, bookId })
   },
 
-  async addBooksToCollection(collectionId: number, bookIds: number[]): Promise<void> {
-    return invoke("add_books_to_collection", { collectionId, bookIds })
+  async addBooksToShelf(shelfId: number, bookIds: number[]): Promise<void> {
+    return invoke("add_books_to_shelf", { shelfId, bookIds })
   },
 
-  async getCollectionBooks(collectionId: number): Promise<Book[]> {
-    return invoke("get_collection_books", { collectionId })
+  async getShelfBooks(shelfId: number): Promise<Book[]> {
+    return invoke("get_shelf_books", { shelfId })
   },
 
-  async getNestedCollections(): Promise<Collection[]> {
-    return invoke("get_nested_collections")
+  async getNestedShelfs(): Promise<Shelf[]> {
+    return invoke("get_nested_shelves")
   },
 
   async toggleBookFavorite(bookId: number): Promise<boolean> {
@@ -955,12 +965,12 @@ export const api = {
     return invoke("get_favorite_book_ids")
   },
 
-  async getCollectionsByType(collectionType: string): Promise<Collection[]> {
-    return invoke("get_collections_by_type", { collectionType })
+  async getShelfsByType(shelfType: string): Promise<Shelf[]> {
+    return invoke("get_shelves_by_type", { shelfType })
   },
 
-  async previewSmartCollection(smartRules: string): Promise<number> {
-    return invoke("preview_smart_collection", { smartRules })
+  async previewSmartShelf(smartRules: string): Promise<number> {
+    return invoke("preview_smart_shelf", { smartRules })
   },
 
   async scanFolderUnified(folderPath: string): Promise<ImportResult> {

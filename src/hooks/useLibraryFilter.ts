@@ -1,11 +1,11 @@
 import { useMemo, useState, useEffect, useDeferredValue } from 'react';
 import { useLibraryStore, matchesAdvancedFilters } from '@/store/libraryStore';
-import { useCollectionStore } from '@/store/collectionStore';
+import { useShelfStore } from '@/store/shelfStore';
 import { api, type Book, type SearchQuery } from '@/lib/tauri';
 import { logger } from '@/lib/logger';
 
 /**
- * Extracts the library filtering + collection logic from App.tsx.
+ * Extracts the library filtering + shelf logic from App.tsx.
  * Takes the search query and returns the final displayBooks array.
  */
 export function useLibraryFilter(searchQuery: string) {
@@ -16,41 +16,41 @@ export function useLibraryFilter(searchQuery: string) {
   const serverSearchQueryState = useLibraryStore(state => state.serverSearchQuery);
   const setServerSearchQuery = useLibraryStore(state => state.setServerSearchQuery);
   const loadInitialBooks = useLibraryStore(state => state.loadInitialBooks);
-  const selectedCollection = useCollectionStore(state => state.selectedCollection);
+  const selectedShelf = useShelfStore(state => state.selectedShelf);
   const [filteredBooks, setFilteredBooks] = useState<Book[]>([]);
 
-  // Filter books only when collection changes.
+  // Filter books only when shelf changes.
   // Keep base library (`books`) out of local state to avoid full-array copy churn.
   useEffect(() => {
     let aborted = false;
 
-    const filterByCollection = async () => {
-      if (!selectedCollection) {
+    const filterByShelf = async () => {
+      if (!selectedShelf) {
         if (!aborted) setFilteredBooks([]);
         return;
       }
 
       try {
-        const collectionBooks = await api.getCollectionBooks(selectedCollection.id!);
-        if (!aborted) setFilteredBooks(collectionBooks);
+        const shelfBooks = await api.getShelfBooks(selectedShelf.id!);
+        if (!aborted) setFilteredBooks(shelfBooks);
       } catch (error) {
-        logger.error('Failed to load collection books:', error);
+        logger.error('Failed to load shelf books:', error);
         if (!aborted) setFilteredBooks([]);
       }
     };
 
-    filterByCollection();
+    filterByShelf();
     return () => { aborted = true; };
-  }, [selectedCollection]);
+  }, [selectedShelf]);
 
   const sourceBooks = useMemo(
-    () => (selectedCollection ? filteredBooks : books),
-    [selectedCollection, filteredBooks, books],
+    () => (selectedShelf ? filteredBooks : books),
+    [selectedShelf, filteredBooks, books],
   );
 
   const query = deferredQuery.trim().toLowerCase();
 
-  const canUseServerSearch = !selectedCollection;
+  const canUseServerSearch = !selectedShelf;
 
   const serverSearchQuery = useMemo<SearchQuery | null>(() => {
     if (!canUseServerSearch) return null;
@@ -188,7 +188,7 @@ export function useLibraryFilter(searchQuery: string) {
 
   const displayBooks = useMemo(() => {
     // In server-query mode, store.books already contains the filtered page.
-    if (serverSearchQuery && !selectedCollection) {
+    if (serverSearchQuery && !selectedShelf) {
       return sourceBooks;
     }
 
@@ -258,7 +258,7 @@ export function useLibraryFilter(searchQuery: string) {
     }
 
     return result;
-  }, [sourceBooks, query, searchIndex, selectedFilters, activeFilters, serverSearchQuery, selectedCollection]);
+  }, [sourceBooks, query, searchIndex, selectedFilters, activeFilters, serverSearchQuery, selectedShelf]);
 
   return { displayBooks, books };
 }

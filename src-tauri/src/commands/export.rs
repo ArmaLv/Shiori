@@ -25,7 +25,7 @@ pub fn export_library(state: State<AppState>, options: ExportOptions) -> Result<
     let export_opts = export_service::ExportOptions {
         format,
         include_metadata: options.include_metadata,
-        include_collections: options.include_collections,
+        include_shelves: options.include_shelves,
         include_reading_progress: options.include_reading_progress,
         file_path: options.file_path,
     };

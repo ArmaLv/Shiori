@@ -116,7 +116,7 @@ const DEFAULT_SOURCES: SourceConfig[] = [
     name: 'ManhwaRead',
     kind: 'manga',
     enabled: false,
-    description: 'Large collection of manhwa and webtoons.',
+    description: 'Large shelf of manhwa and webtoons.',
     status: 'active',
     implemented: true,
     torboxCompatible: false,

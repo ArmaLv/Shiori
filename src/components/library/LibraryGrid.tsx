@@ -44,7 +44,7 @@ interface LibraryGridProps {
   onViewDetails?: (bookId: number) => void;
   onEditBook?: (bookId: number) => void;
   onDeleteBook?: (bookId: number) => void;
-  onAddToCollection?: (bookId: number) => void;
+  onAddToShelf?: (bookId: number) => void;
   onManageTags?: (bookId: number) => void;
   searchQuery?: string;
   onSearchChange?: (query: string) => void;
@@ -153,7 +153,7 @@ export function LibraryGrid({
   onViewDetails,
   onEditBook,
   onDeleteBook,
-  onAddToCollection,
+  onAddToShelf,
   onManageTags,
   searchQuery = "",
   onSearchChange = () => {},
@@ -425,7 +425,7 @@ export function LibraryGrid({
                           onViewDetails={onViewDetails}
                           onEdit={handleEditBook}
                           onDelete={handleDeleteBook}
-                          onAddToCollection={onAddToCollection}
+                          onAddToShelf={onAddToShelf}
                           onManageTags={onManageTags}
 
                           onFavorite={handleFavorite}

@@ -141,7 +141,12 @@ impl<'a> MigrationManager<'a> {
         if current_version < 39 {
             self.run_in_savepoint("v39", |mgr| mgr.migrate_to_v39())?;
         }
-
+        if current_version < 40 {
+            self.run_in_savepoint("v40", |mgr| mgr.migrate_to_v40())?;
+        }
+        if current_version < 41 {
+            self.run_in_savepoint("v41", |mgr| mgr.migrate_to_v41())?;
+        }
 
         // Always ensure the FTS table has the correct schema.
         // Previous buggy code in initialize_schema would drop and recreate
@@ -2212,7 +2217,50 @@ impl<'a> MigrationManager<'a> {
         Ok(())
     }
 
+    /// Migration v40: Rename collections to shelves
+    fn migrate_to_v40(&self) -> Result<()> {
+        log::info!("[Migration] Applying v40: Rename collections to shelves");
 
+        // Rename table collections -> shelves
+        if self.table_exists("collections")? && !self.table_exists("shelves")? {
+            self.conn.execute("ALTER TABLE collections RENAME TO shelves", [])?;
+        }
+
+        // Rename table collections_books -> shelf_books
+        if self.table_exists("collections_books")? && !self.table_exists("shelf_books")? {
+            self.conn.execute("ALTER TABLE collections_books RENAME TO shelf_books", [])?;
+        }
+
+        // Rename column collections.collection_type -> shelves.shelf_type (or collections_type to shelf_type)
+        if self.table_exists("shelves")? && self.column_exists("shelves", "collection_type")? {
+            self.conn.execute("ALTER TABLE shelves RENAME COLUMN collection_type TO shelf_type", [])?;
+        }
+
+        // Rename column collections_books.collection_id -> shelf_books.shelf_id
+        if self.table_exists("shelf_books")? && self.column_exists("shelf_books", "collection_id")? {
+            self.conn.execute("ALTER TABLE shelf_books RENAME COLUMN collection_id TO shelf_id", [])?;
+        }
+
+        let hash = Self::calculate_checksum("v40_rename_collections_to_shelves");
+        self.record_migration(40, "rename_collections_to_shelves", &hash)?;
+        Ok(())
+    }
+
+    /// Migration v41: Add shelf_type to shelves
+    fn migrate_to_v41(&self) -> Result<()> {
+        log::info!("[Migration] Applying v41: Add shelf_type to shelves");
+
+        if self.table_exists("shelves")? && !self.column_exists("shelves", "shelf_type")? {
+            self.conn.execute(
+                "ALTER TABLE shelves ADD COLUMN shelf_type TEXT NOT NULL DEFAULT 'regular'",
+                [],
+            )?;
+        }
+
+        let hash = Self::calculate_checksum("v41_add_shelf_type_to_shelves");
+        self.record_migration(41, "add_shelf_type_to_shelves", &hash)?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]

@@ -1482,7 +1482,7 @@ const AdvancedSettings = ({
       await api.exportLibrary({
         format: 'json',
         include_metadata: true,
-        include_collections: true,
+        include_shelves: true,
         include_reading_progress: true,
         file_path: rustSavePath,
       })
@@ -1595,7 +1595,7 @@ const AdvancedSettings = ({
     setRestoreSuccess(false)
 
     const confirmed = confirm(
-      'Restoring a backup will REPLACE all current data (books, annotations, settings, collections). This cannot be undone.\n\nContinue?'
+      'Restoring a backup will REPLACE all current data (books, annotations, settings, shelves). This cannot be undone.\n\nContinue?'
     )
     if (!confirmed) return
 
@@ -1625,7 +1625,7 @@ const AdvancedSettings = ({
       setRestoreSuccess(true)
       toast.success(
         'Restore completed',
-        `Restored ${result.books_restored} books, ${result.annotations_restored} annotations, ${result.collections_restored} collections, ${result.covers_restored} covers.`
+        `Restored ${result.books_restored} books, ${result.annotations_restored} annotations, ${result.shelves_restored} shelves, ${result.covers_restored} covers.`
       )
       setTimeout(() => window.location.reload(), 2000)
     } catch (err) {
@@ -1835,7 +1835,7 @@ const AdvancedSettings = ({
                   <span className="text-sm font-medium">Backup created successfully</span>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {backupResult.book_count} books, {backupResult.annotation_count} annotations, {backupResult.collection_count} collections &mdash; {formatBytes(backupResult.total_size_bytes)}
+                  {backupResult.book_count} books, {backupResult.annotation_count} annotations, {backupResult.shelf_count} shelves &mdash; {formatBytes(backupResult.total_size_bytes)}
                 </p>
               </div>
             )}
@@ -1845,7 +1845,7 @@ const AdvancedSettings = ({
                 <div className="flex items-start gap-2">
                   <AlertTriangle className="w-4 h-4 text-yellow-600 dark:text-yellow-400 mt-0.5 shrink-0" />
                   <p className="text-xs text-yellow-700 dark:text-yellow-300">
-                    Restoring a backup will replace ALL current data including books, annotations, collections, and settings.
+                    Restoring a backup will replace ALL current data including books, annotations, shelves, and settings.
                   </p>
                 </div>
               </div>

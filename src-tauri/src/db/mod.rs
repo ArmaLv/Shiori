@@ -305,9 +305,9 @@ impl Database {
             [],
         )?;
 
-        // Collections table
+        // Shelves table
         conn.execute(
-            "CREATE TABLE IF NOT EXISTS collections (
+            "CREATE TABLE IF NOT EXISTS shelves (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
                 description TEXT,
@@ -316,45 +316,46 @@ impl Database {
                 smart_rules TEXT,
                 icon TEXT,
                 color TEXT,
+                shelf_type TEXT NOT NULL DEFAULT 'regular',
                 sort_order INTEGER DEFAULT 0,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (parent_id) REFERENCES collections(id) ON DELETE CASCADE
+                FOREIGN KEY (parent_id) REFERENCES shelves(id) ON DELETE CASCADE
             )",
             [],
         )?;
 
         conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_collections_parent ON collections(parent_id)",
+            "CREATE INDEX IF NOT EXISTS idx_shelves_parent ON shelves(parent_id)",
             [],
         )?;
 
         conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_collections_smart ON collections(is_smart)",
+            "CREATE INDEX IF NOT EXISTS idx_shelves_smart ON shelves(is_smart)",
             [],
         )?;
 
-        // Collection-Book junction (only for manual collections)
+        // Shelf-Book junction (only for manual shelves)
         conn.execute(
-            "CREATE TABLE IF NOT EXISTS collections_books (
-                collection_id INTEGER NOT NULL,
+            "CREATE TABLE IF NOT EXISTS shelf_books (
+                shelf_id INTEGER NOT NULL,
                 book_id INTEGER NOT NULL,
                 added_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 sort_order INTEGER DEFAULT 0,
-                FOREIGN KEY (collection_id) REFERENCES collections(id) ON DELETE CASCADE,
+                FOREIGN KEY (shelf_id) REFERENCES shelves(id) ON DELETE CASCADE,
                 FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE,
-                PRIMARY KEY (collection_id, book_id)
+                PRIMARY KEY (shelf_id, book_id)
             )",
             [],
         )?;
 
         conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_collections_books_collection ON collections_books(collection_id)",
+            "CREATE INDEX IF NOT EXISTS idx_shelf_books_shelf ON shelf_books(shelf_id)",
             [],
         )?;
 
         conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_collections_books_book ON collections_books(book_id)",
+            "CREATE INDEX IF NOT EXISTS idx_shelf_books_book ON shelf_books(book_id)",
             [],
         )?;
 

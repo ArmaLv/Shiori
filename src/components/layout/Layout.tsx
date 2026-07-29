@@ -25,6 +25,7 @@ import { BottomNav } from './BottomNav'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { DuplicateFinderDialog } from '../library/DuplicateFinderDialog'
 import { ImportDialog } from '../library/ImportDialog'
+import { CreateShelfDialog } from '../shelves/CreateShelfDialog'
 import { cn } from '@/lib/utils'
 import { api, type Book } from '@/lib/tauri'
 import { useLibraryStore } from '@/store/libraryStore'
@@ -137,6 +138,7 @@ export function Layout({
   const [duplicateFinderOpen, setDuplicateFinderOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [importDialogOpen, setImportDialogOpen] = useState(false)
+  const [createShelfOpen, setCreateShelfOpen] = useState(false)
   const [importDialogFilePaths, setImportDialogFilePaths] = useState<string[]>([])
   const [autoTriggerMode, setAutoTriggerMode] = useState<'files' | 'folder' | null>(null)
   const [isDragActive, setIsDragActive] = useState(false)
@@ -441,6 +443,7 @@ export function Layout({
           searchPlaceholder={searchPlaceholder}
           onOpenSettings={onOpenSettings}
           onOpenShortcuts={onOpenShortcuts}
+          onCreateShelf={() => setCreateShelfOpen(true)}
           onOpenAdvancedFilter={onOpenAdvancedFilter}
           onToggleSidebar={() => setSidebarOpen((o) => !o)}
           onGoHome={onGoHome}
@@ -466,10 +469,13 @@ export function Layout({
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        <NavigationRail
-          currentView={currentView}
-          onNavigateToView={onNavigateToView}
-        />
+        <div className="z-40">
+          <NavigationRail
+            currentView={currentView}
+            onNavigateToView={onNavigateToView}
+            onCreateShelf={() => setCreateShelfOpen(true)}
+          />
+        </div>
 
         {/* Sidebar — hidden on homepage */}
         {currentView !== 'home' && currentView !== 'online-manga-reader' && sidebarOpen && (
@@ -596,6 +602,11 @@ export function Layout({
       <DuplicateFinderDialog
         open={duplicateFinderOpen}
         onOpenChange={setDuplicateFinderOpen}
+      />
+
+      <CreateShelfDialog
+        open={createShelfOpen}
+        onOpenChange={setCreateShelfOpen}
       />
 
       {/* ── Scroll to Top FAB ── */}

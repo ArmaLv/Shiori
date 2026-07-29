@@ -802,7 +802,7 @@ export const MetadataSearchDialog = ({
                               {result.title_english && result.title_romaji && <p className="text-sm text-muted-foreground mb-2 truncate">{result.title_romaji}</p>}
                               {result.description && <p className="text-sm text-muted-foreground line-clamp-2 md:line-clamp-3 mb-2">{result.description.substring(0, 200)}...</p>}
                               <div className="flex flex-wrap gap-2 mb-2">
-                                {result.genres.slice(0, 4).map((genre) => <span key={genre} className="px-2 py-0.5 bg-primary/10 text-primary text-xs rounded truncate max-w-full">{genre}</span>)}
+                                {result.genres && result.genres.slice(0, 4).map((genre) => <span key={genre} className="px-2 py-0.5 bg-primary/10 text-primary text-xs rounded truncate max-w-full">{genre}</span>)}
                               </div>
                               <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                                 {result.average_score && <span>⭐ {result.average_score}%</span>}
@@ -832,10 +832,10 @@ export const MetadataSearchDialog = ({
                             <div className="flex-1 min-w-0">
                               <h3 className="font-semibold text-foreground mb-1 truncate">{bookResult.title}</h3>
                               {bookResult.subtitle && <p className="text-sm text-muted-foreground mb-2 truncate">{bookResult.subtitle}</p>}
-                              {bookResult.authors.length > 0 && <p className="text-sm text-muted-foreground mb-2 truncate">by {bookResult.authors.map(a => a.name).join(', ')}</p>}
+                              {bookResult.authors && bookResult.authors.length > 0 && <p className="text-sm text-muted-foreground mb-2 truncate">by {bookResult.authors.map(a => a.name).join(', ')}</p>}
                               {bookResult.description && <p className="text-sm text-muted-foreground line-clamp-2 md:line-clamp-3 mb-2">{bookResult.description.substring(0, 200)}...</p>}
                               <div className="flex flex-wrap gap-2 mb-2">
-                                {bookResult.subjects.slice(0, 3).map((subject, idx) => <span key={idx} className="px-2 py-0.5 bg-primary/10 text-primary text-xs rounded truncate max-w-full">{subject}</span>)}
+                                {bookResult.subjects && bookResult.subjects.slice(0, 3).map((subject, idx) => <span key={idx} className="px-2 py-0.5 bg-primary/10 text-primary text-xs rounded truncate max-w-full">{subject}</span>)}
                               </div>
                             </div>
                           </div>

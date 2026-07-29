@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import type { SmartRule } from '../../lib/tauri';
 
-interface SmartCollectionEditorProps {
+interface SmartShelfEditorProps {
   rules: SmartRule[];
   onChange: (rules: SmartRule[]) => void;
 }
@@ -93,7 +94,7 @@ const READING_STATUS_OPTIONS = [
   { value: 'dropped', label: 'Dropped' },
 ];
 
-export const SmartCollectionEditor = ({ rules, onChange }: SmartCollectionEditorProps) => {
+export const SmartShelfEditor = ({ rules, onChange }: SmartShelfEditorProps) => {
   const [matchType, setMatchType] = useState<MatchType>('all');
 
   const addRule = () => {
@@ -140,11 +141,14 @@ export const SmartCollectionEditor = ({ rules, onChange }: SmartCollectionEditor
   const renderValueInput = (rule: SmartRule, index: number) => {
     const field = rule.field as RuleField;
     const operator = rule.operator as RuleOperator;
+    
+    const inputClasses = "flex-1 px-4 py-2 border border-white/10 rounded-xl bg-white/5 text-sm text-white/90 placeholder:text-white/30 focus:outline-none focus:ring-1 focus:ring-white/20 focus:border-white/20 hover:border-white/20 transition-all";
+    const selectClasses = "flex-1 appearance-none px-4 py-2 border border-white/10 rounded-xl bg-white/5 text-sm text-white/90 focus:outline-none focus:ring-1 focus:ring-white/20 focus:border-white/20 hover:border-white/20 transition-all";
 
     // Don't show value input for operators that don't need it
     if (['is_empty', 'is_not_empty'].includes(operator)) {
       return (
-        <div className="flex-1 px-3 py-2 text-sm text-gray-500 dark:text-gray-400 italic">
+        <div className="flex-1 px-4 py-2 text-sm text-white/40 italic">
           No value needed
         </div>
       );
@@ -156,11 +160,11 @@ export const SmartCollectionEditor = ({ rules, onChange }: SmartCollectionEditor
           <select
             value={rule.value}
             onChange={(e) => updateRule(index, { value: e.target.value })}
-            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 outline-none"
+            className={selectClasses}
           >
-            <option value="">Select format...</option>
+            <option value="" className="bg-[#1a1a1a] text-white">Select format...</option>
             {FORMAT_OPTIONS.map((fmt) => (
-              <option key={fmt} value={fmt}>
+              <option key={fmt} value={fmt} className="bg-[#1a1a1a] text-white">
                 {fmt.toUpperCase()}
               </option>
             ))}
@@ -172,9 +176,9 @@ export const SmartCollectionEditor = ({ rules, onChange }: SmartCollectionEditor
           // Multi-select for reading status
           const selectedStatuses = rule.value ? rule.value.split(',') : [];
           return (
-            <div className="flex-1 flex flex-wrap gap-2 px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
+            <div className="flex-1 flex flex-wrap gap-3 px-4 py-3 border border-white/10 rounded-xl bg-white/5">
               {READING_STATUS_OPTIONS.map((status) => (
-                <label key={status.value} className="flex items-center gap-1 text-sm cursor-pointer">
+                <label key={status.value} className="flex items-center gap-2 text-sm cursor-pointer text-white/80 hover:text-white transition-colors">
                   <input
                     type="checkbox"
                     checked={selectedStatuses.includes(status.value)}
@@ -184,7 +188,7 @@ export const SmartCollectionEditor = ({ rules, onChange }: SmartCollectionEditor
                         : selectedStatuses.filter(s => s !== status.value);
                       updateRule(index, { value: newStatuses.join(',') });
                     }}
-                    className="rounded border-gray-300 dark:border-gray-600"
+                    className="rounded border-white/20 bg-white/10 text-white focus:ring-0 focus:ring-offset-0"
                   />
                   <span>{status.label}</span>
                 </label>
@@ -196,11 +200,11 @@ export const SmartCollectionEditor = ({ rules, onChange }: SmartCollectionEditor
             <select
               value={rule.value}
               onChange={(e) => updateRule(index, { value: e.target.value })}
-              className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 outline-none"
+              className={selectClasses}
             >
-              <option value="">Select status...</option>
+              <option value="" className="bg-[#1a1a1a] text-white">Select status...</option>
               {READING_STATUS_OPTIONS.map((status) => (
-                <option key={status.value} value={status.value}>
+                <option key={status.value} value={status.value} className="bg-[#1a1a1a] text-white">
                   {status.label}
                 </option>
               ))}
@@ -213,11 +217,11 @@ export const SmartCollectionEditor = ({ rules, onChange }: SmartCollectionEditor
           <select
             value={rule.value}
             onChange={(e) => updateRule(index, { value: e.target.value })}
-            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 outline-none"
+            className={selectClasses}
           >
-            <option value="">Select...</option>
-            <option value="true">Yes (Favorite)</option>
-            <option value="false">No (Not Favorite)</option>
+            <option value="" className="bg-[#1a1a1a] text-white">Select...</option>
+            <option value="true" className="bg-[#1a1a1a] text-white">Yes (Favorite)</option>
+            <option value="false" className="bg-[#1a1a1a] text-white">No (Not Favorite)</option>
           </select>
         );
 
@@ -231,7 +235,7 @@ export const SmartCollectionEditor = ({ rules, onChange }: SmartCollectionEditor
             value={rule.value}
             onChange={(e) => updateRule(index, { value: e.target.value })}
             placeholder="0-5"
-            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 outline-none"
+            className={inputClasses}
           />
         );
 
@@ -242,7 +246,7 @@ export const SmartCollectionEditor = ({ rules, onChange }: SmartCollectionEditor
             value={rule.value}
             onChange={(e) => updateRule(index, { value: e.target.value })}
             placeholder="e.g., en, es, fr"
-            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 outline-none"
+            className={inputClasses}
           />
         );
 
@@ -254,7 +258,7 @@ export const SmartCollectionEditor = ({ rules, onChange }: SmartCollectionEditor
             value={rule.value}
             onChange={(e) => updateRule(index, { value: e.target.value })}
             placeholder="Number of days"
-            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 outline-none"
+            className={inputClasses}
           />
         );
 
@@ -265,39 +269,41 @@ export const SmartCollectionEditor = ({ rules, onChange }: SmartCollectionEditor
             value={rule.value}
             onChange={(e) => updateRule(index, { value: e.target.value })}
             placeholder="Enter value..."
-            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 outline-none"
+            className={inputClasses}
           />
         );
     }
   };
 
+  const selectClasses = "appearance-none px-4 py-2 border border-white/10 rounded-xl bg-white/5 text-sm text-white/90 focus:outline-none focus:ring-1 focus:ring-white/20 focus:border-white/20 hover:border-white/20 transition-all";
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-6 p-4">
       {/* Match Type Selector */}
-      <div className="flex items-center gap-2 text-sm">
-        <span className="text-gray-600 dark:text-gray-400">Match</span>
+      <div className="flex items-center gap-3 text-sm text-white/70">
+        <span>Match</span>
         <select
           value={matchType}
           onChange={(e) => handleMatchTypeChange(e.target.value as MatchType)}
-          className="px-2 py-1 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 outline-none"
+          className="appearance-none px-3 py-1.5 border border-white/10 rounded-lg bg-white/5 text-white focus:outline-none focus:border-white/30 cursor-pointer hover:bg-white/10 transition-colors"
         >
-          <option value="all">ALL</option>
-          <option value="any">ANY</option>
+          <option value="all" className="bg-[#1a1a1a] text-white">ALL</option>
+          <option value="any" className="bg-[#1a1a1a] text-white">ANY</option>
         </select>
-        <span className="text-gray-600 dark:text-gray-400">of the following rules:</span>
+        <span>of the following rules:</span>
       </div>
 
       {/* Rules List */}
       <div className="space-y-3">
         {rules.length === 0 ? (
-          <div className="text-center py-8 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg">
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+          <div className="text-center py-10 border border-dashed border-white/10 rounded-2xl bg-white/5">
+            <p className="text-sm text-white/50 mb-3">
               No rules added yet
             </p>
             <button
               type="button"
               onClick={addRule}
-              className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+              className="text-sm text-white/70 hover:text-white border-b border-white/30 hover:border-white transition-colors"
             >
               Add your first rule
             </button>
@@ -308,15 +314,15 @@ export const SmartCollectionEditor = ({ rules, onChange }: SmartCollectionEditor
             const operators = OPERATOR_MAP[field];
 
             return (
-              <div key={index} className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+              <div key={index} className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 bg-white/5 border border-white/5 rounded-2xl relative">
                 {/* Field Selector */}
                 <select
                   value={rule.field}
                   onChange={(e) => updateRule(index, { field: e.target.value as RuleField })}
-                  className="w-32 px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 outline-none"
+                  className={cn(selectClasses, "w-full sm:w-32")}
                 >
                   {FIELD_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
+                    <option key={opt.value} value={opt.value} className="bg-[#1a1a1a] text-white">
                       {opt.label}
                     </option>
                   ))}
@@ -326,23 +332,25 @@ export const SmartCollectionEditor = ({ rules, onChange }: SmartCollectionEditor
                 <select
                   value={rule.operator}
                   onChange={(e) => updateRule(index, { operator: e.target.value as RuleOperator })}
-                  className="w-40 px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 outline-none"
+                  className={cn(selectClasses, "w-full sm:w-40")}
                 >
                   {operators.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
+                    <option key={opt.value} value={opt.value} className="bg-[#1a1a1a] text-white">
                       {opt.label}
                     </option>
                   ))}
                 </select>
 
                 {/* Value Input */}
-                {renderValueInput(rule, index)}
+                <div className="flex-1 w-full flex">
+                  {renderValueInput(rule, index)}
+                </div>
 
                 {/* Remove Button */}
                 <button
                   type="button"
                   onClick={() => removeRule(index)}
-                  className="p-2 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg transition-colors"
+                  className="p-2 hover:bg-white/10 text-white/40 hover:text-white rounded-xl transition-colors absolute top-2 right-2 sm:relative sm:top-0 sm:right-0"
                   title="Remove rule"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -358,7 +366,7 @@ export const SmartCollectionEditor = ({ rules, onChange }: SmartCollectionEditor
         <button
           type="button"
           onClick={addRule}
-          className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium border border-white/10 rounded-xl bg-white/5 text-white/80 hover:text-white hover:bg-white/10 transition-colors"
         >
           <Plus className="w-4 h-4" />
           Add Rule
@@ -367,8 +375,8 @@ export const SmartCollectionEditor = ({ rules, onChange }: SmartCollectionEditor
 
       {/* Preview Info */}
       {rules.length > 0 && (
-        <div className="text-xs text-gray-500 dark:text-gray-400 italic">
-          Books will be automatically added to this collection when they match {matchType === 'all' ? 'all' : 'any'} of the rules above.
+        <div className="text-xs text-white/40 italic mt-2 pl-1">
+          Books will be automatically added to this shelf when they match {matchType === 'all' ? 'all' : 'any'} of the rules above.
         </div>
       )}
     </div>

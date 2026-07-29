@@ -16,7 +16,7 @@ type ExportStatus = 'idle' | 'exporting' | 'completed' | 'error';
 export const ExportDialog = ({ open, onOpenChange }: ExportDialogProps) => {
   const [format, setFormat] = useState<ExportFormat>('csv');
   const [includeMetadata, setIncludeMetadata] = useState(true);
-  const [includeCollections, setIncludeCollections] = useState(true);
+  const [includeShelfs, setIncludeShelfs] = useState(true);
   const [includeReadingProgress, setIncludeReadingProgress] = useState(true);
   const [status, setStatus] = useState<ExportStatus>('idle');
   const [exportedPath, setExportedPath] = useState<string>('');
@@ -49,7 +49,7 @@ export const ExportDialog = ({ open, onOpenChange }: ExportDialogProps) => {
       const options: ExportOptions = {
         format,
         include_metadata: includeMetadata,
-        include_collections: includeCollections,
+        include_shelves: includeShelfs,
         include_reading_progress: includeReadingProgress,
         file_path: filePath,
       };
@@ -143,13 +143,13 @@ export const ExportDialog = ({ open, onOpenChange }: ExportDialogProps) => {
                     <label className="flex items-center gap-3 cursor-pointer">
                       <input
                         type="checkbox"
-                        checked={includeCollections}
-                        onChange={(e) => setIncludeCollections(e.target.checked)}
+                        checked={includeShelfs}
+                        onChange={(e) => setIncludeShelfs(e.target.checked)}
                         className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-2 focus:ring-blue-500"
                       />
                       <div className="flex-1">
-                        <div className="text-sm font-medium">Collections</div>
-                        <div className="text-xs text-gray-500">Which collections each book belongs to</div>
+                        <div className="text-sm font-medium">Shelfs</div>
+                        <div className="text-xs text-gray-500">Which shelves each book belongs to</div>
                       </div>
                     </label>
                     
@@ -177,7 +177,7 @@ export const ExportDialog = ({ open, onOpenChange }: ExportDialogProps) => {
                       <li>• File paths and formats</li>
                       <li>• Series information and ratings</li>
                       {includeMetadata && <li>• Publisher, ISBN, and publication dates</li>}
-                      {includeCollections && <li>• Collection memberships</li>}
+                      {includeShelfs && <li>• Shelf memberships</li>}
                       {includeReadingProgress && <li>• Reading progress and last read dates</li>}
                     </ul>
                   </div>

@@ -99,7 +99,7 @@ export function FinishStep({
 
         <div className="onb-fade-up onb-delay-200 flex-1 flex flex-col items-center justify-center text-center pb-8">
           <p className="max-w-md text-sm leading-relaxed text-muted-foreground md:text-base">
-            Your personalized reading environment is ready. Discover books, organize your collection, and enjoy a seamless reading experience.
+            Your personalized reading environment is ready. Discover books, organize your shelf, and enjoy a seamless reading experience.
           </p>
         </div>
 

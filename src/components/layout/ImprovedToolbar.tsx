@@ -26,7 +26,7 @@ import {
   IconX,
   IconSidebarToggle,
 } from '@/components/icons/ShioriIcons'
-import { Layers, Filter, HelpCircle, BarChart2, Globe, Rss } from 'lucide-react'
+import { Layers, Filter, HelpCircle, BarChart2, Globe, Rss, FolderPlus } from 'lucide-react'
 import { usePreferencesStore } from '@/store/preferencesStore'
 import type { CurrentView } from '@/store/uiStore'
 import {
@@ -56,6 +56,7 @@ interface PremiumTopbarProps {
   onGoHome?: () => void
   onAutoGroupManga?: () => void
   onOpenShortcuts?: () => void
+  onCreateShelf?: () => void
   currentView?: CurrentView
   onNavigateToView?: (view: CurrentView) => void
   activeFilterCount?: number
@@ -233,6 +234,7 @@ export function PremiumTopbar({
   onGoHome,
   onAutoGroupManga,
   onOpenShortcuts,
+  onCreateShelf,
   currentView,
   onNavigateToView,
   activeFilterCount = 0,
@@ -328,6 +330,16 @@ export function PremiumTopbar({
           </div>
         )}
 
+        {/* ── Create Shelf ── */}
+        <div className="max-md:hidden mr-1">
+          <TBtn
+            icon={<FolderPlus size={16} />}
+            label="Create Shelf"
+            showLabel={false}
+            onClick={onCreateShelf}
+          />
+        </div>
+
         {/* ── Import zone ── */}
         <div className="max-md:hidden">
           <DropdownMenu>
@@ -335,14 +347,14 @@ export function PremiumTopbar({
             <button
               type="button"
               className={cn(
-                'flex items-center gap-2 h-9 rounded-md px-3 shrink-0',
+                'flex items-center justify-center gap-2 w-9 h-9 rounded-md shrink-0',
                 'text-sm font-medium',
                 'transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]',
                 'bg-background hover:bg-accent hover:text-accent-foreground text-foreground border border-border shadow-sm'
               )}
+              title="Import"
             >
               <IconImportBook size={16} />
-              <span>Import</span>
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-64 rounded-xl border-border shadow-xl bg-background/95 backdrop-blur-xl p-2">
@@ -375,7 +387,7 @@ export function PremiumTopbar({
                 <FeatureHint
                   featureId="auto-group-manga"
                   title="Auto-group Manga Volumes"
-                  description="Automatically detect and group manga volumes by series name from filenames. Perfect for organizing your manga collection!"
+                  description="Automatically detect and group manga volumes by series name from filenames. Perfect for organizing your manga shelf!"
                   position="left"
                 >
                   <DropdownMenuItem onClick={onAutoGroupManga} className="gap-3 p-2 cursor-pointer rounded-lg flex items-start">

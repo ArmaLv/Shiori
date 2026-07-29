@@ -4,71 +4,72 @@ import { X, Loader2, CheckCircle, FolderPlus } from 'lucide-react';
 import { api } from '../../lib/tauri';
 import { logger } from '@/lib/logger';
 import { useToast } from '../../store/toastStore';
-import { useCollectionStore } from '../../store/collectionStore';
-import type { CollectionSuggestion } from '../../lib/collectionSuggestions';
+import { useShelfStore } from '../../store/shelfStore';
+import type { ShelfSuggestion } from '../../lib/shelfSuggestions';
 
-interface SmartCollectionSuggestionDialogProps {
+interface SmartShelfSuggestionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  suggestions: CollectionSuggestion[];
+  suggestions: ShelfSuggestion[];
   successfulPaths: string[];
   onComplete?: () => void;
 }
 
 type CreationState = 'idle' | 'creating' | 'completed' | 'error';
 
-export const SmartCollectionSuggestionDialog = ({
+export const SmartShelfSuggestionDialog = ({
   open,
   onOpenChange,
   suggestions,
   successfulPaths,
   onComplete,
-}: SmartCollectionSuggestionDialogProps) => {
+}: SmartShelfSuggestionDialogProps) => {
   const [state, setState] = useState<CreationState>('idle');
-  const [selectedCollections, setSelectedCollections] = useState<Set<string>>(
+  const [selectedShelfs, setSelectedShelfs] = useState<Set<string>>(
     new Set(suggestions.map(s => s.name))
   );
   const toast = useToast();
-  const { addCollection } = useCollectionStore();
+  const { addShelf } = useShelfStore();
 
-  const handleToggleCollection = (name: string) => {
-    const newSelected = new Set(selectedCollections);
+  const handleToggleShelf = (name: string) => {
+    const newSelected = new Set(selectedShelfs);
     if (newSelected.has(name)) {
       newSelected.delete(name);
     } else {
       newSelected.add(name);
     }
-    setSelectedCollections(newSelected);
+    setSelectedShelfs(newSelected);
   };
 
   const handleSelectAll = () => {
-    setSelectedCollections(new Set(suggestions.map(s => s.name)));
+    setSelectedShelfs(new Set(suggestions.map(s => s.name)));
   };
 
   const handleClearAll = () => {
-    setSelectedCollections(new Set());
+    setSelectedShelfs(new Set());
   };
 
-  const handleCreateCollections = async () => {
+  const handleCreateShelfs = async () => {
     setState('creating');
 
     try {
       const selectedSuggestions = suggestions.filter(s =>
-        selectedCollections.has(s.name)
+        selectedShelfs.has(s.name)
       );
 
       for (const suggestion of selectedSuggestions) {
-        const collection = await api.createCollection({
+        const shelf = await api.createShelf({
           name: suggestion.name,
           description: `Auto-created from folder structure during import`,
-          collection_type: 'regular',
+          shelf_type: 'regular',
         });
 
-        if (collection.id) {
-          addCollection(collection);
+        if (shelf.id) {
+          addShelf(shelf);
 
-          const booksForCollection = await api.getBooks();
-          const bookIdsToAdd = booksForCollection
+          // Get the actual books that were imported to add their IDs to the shelf
+          const booksForShelf = await api.getBooksByPaths(successfulPaths);
+          const bookIdsToAdd = booksForShelf
             .filter(book =>
               suggestion.filePaths.some(
                 path => book.file_path === path || book.file_path.endsWith(path)
@@ -78,9 +79,9 @@ export const SmartCollectionSuggestionDialog = ({
             .filter((id): id is number => id !== undefined);
 
           if (bookIdsToAdd.length > 0) {
-            await api.addBooksToCollection(collection.id, bookIdsToAdd);
+            await api.addBooksToShelf(shelf.id, bookIdsToAdd);
             logger.info(
-              `[Collections] Added ${bookIdsToAdd.length} books to collection "${suggestion.name}"`
+              `[Shelfs] Added ${bookIdsToAdd.length} books to shelf "${suggestion.name}"`
             );
           }
         }
@@ -88,8 +89,8 @@ export const SmartCollectionSuggestionDialog = ({
 
       setState('completed');
       toast.success(
-        `Created ${selectedSuggestions.length} collection${selectedSuggestions.length !== 1 ? 's' : ''}`,
-        'Books automatically organized into new collections'
+        `Created ${selectedSuggestions.length} shelf${selectedSuggestions.length !== 1 ? 's' : ''}`,
+        'Books automatically organized into new shelves'
       );
 
       setTimeout(() => {
@@ -97,18 +98,18 @@ export const SmartCollectionSuggestionDialog = ({
         onComplete?.();
       }, 1500);
     } catch (error) {
-      logger.error('Failed to create collections:', error);
+      logger.error('Failed to create shelves:', error);
       setState('error');
       toast.error(
-        'Failed to create collections',
-        'An error occurred while creating collections'
+        'Failed to create shelves',
+        'An error occurred while creating shelves'
       );
     }
   };
 
   const handleClose = () => {
     setState('idle');
-    setSelectedCollections(new Set());
+    setSelectedShelfs(new Set());
     onOpenChange(false);
   };
 
@@ -120,16 +121,16 @@ export const SmartCollectionSuggestionDialog = ({
     <Dialog.Root open={open} onOpenChange={handleClose}>
       <Dialog.Portal>
         <Dialog.Overlay className="dialog-overlay fixed inset-0 bg-background/80 backdrop-blur-sm z-50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
-        <Dialog.Content aria-describedby="collection-suggestion-description" className="dialog-content fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-background/80 backdrop-blur-3xl border border-border rounded-[1.5rem] shadow-2xl w-[calc(100vw-2rem)] max-w-[600px] max-h-[90vh] overflow-y-auto z-50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 duration-300 custom-scrollbar outline-none">
-          <Dialog.Description id="collection-suggestion-description" className="sr-only">
-            Suggestions for creating collections based on your imported books.
+        <Dialog.Content aria-describedby="shelf-suggestion-description" className="dialog-content fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-background/80 backdrop-blur-3xl border border-border rounded-[1.5rem] shadow-2xl w-[calc(100vw-2rem)] max-w-[600px] max-h-[90vh] overflow-y-auto z-50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 duration-300 custom-scrollbar outline-none">
+          <Dialog.Description id="shelf-suggestion-description" className="sr-only">
+            Suggestions for creating shelves based on your imported books.
           </Dialog.Description>
           <div className="sticky top-0 bg-transparent backdrop-blur-xl border-b border-border px-6 py-5 z-10">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <FolderPlus className="w-6 h-6 text-primary" />
                 <Dialog.Title className="text-xl font-bold tracking-tight text-foreground">
-                  Smart Collection Suggestions
+                  Smart Shelf Suggestions
                 </Dialog.Title>
               </div>
               <Dialog.Close asChild>
@@ -149,7 +150,7 @@ export const SmartCollectionSuggestionDialog = ({
                 <div className="bg-secondary/20 border border-border rounded-xl p-4">
                   <p className="text-sm text-foreground/80">
                     We detected folder patterns in your imported books. Create
-                    collections to auto-organize them?
+                    shelves to auto-organize them?
                   </p>
                 </div>
 
@@ -161,9 +162,9 @@ export const SmartCollectionSuggestionDialog = ({
                     >
                       <input
                         type="checkbox"
-                        checked={selectedCollections.has(suggestion.name)}
+                        checked={selectedShelfs.has(suggestion.name)}
                         onChange={() =>
-                          handleToggleCollection(suggestion.name)
+                          handleToggleShelf(suggestion.name)
                         }
                         className="w-4 h-4 rounded border-border bg-secondary text-primary focus:ring-primary/50"
                       />
@@ -203,13 +204,13 @@ export const SmartCollectionSuggestionDialog = ({
                     Skip
                   </button>
                   <button
-                    onClick={handleCreateCollections}
-                    disabled={selectedCollections.size === 0}
+                    onClick={handleCreateShelfs}
+                    disabled={selectedShelfs.size === 0}
                     className="flex-1 px-6 py-2.5 bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-primary-foreground rounded-xl shadow-sm transition-all duration-200 flex items-center justify-center gap-2 font-semibold"
                   >
                     <FolderPlus className="w-4 h-4" />
-                    Create {selectedCollections.size} Collection
-                    {selectedCollections.size !== 1 ? 's' : ''}
+                    Create {selectedShelfs.size} Shelf
+                    {selectedShelfs.size !== 1 ? 's' : ''}
                   </button>
                 </div>
               </>
@@ -221,7 +222,7 @@ export const SmartCollectionSuggestionDialog = ({
                   <Loader2 className="w-12 h-12 text-primary animate-spin" />
                 </div>
                 <div className="text-xl font-bold tracking-tight text-foreground">
-                  Creating collections...
+                  Creating shelves...
                 </div>
                 <div className="text-sm text-muted-foreground mt-2">
                   Organizing your books
@@ -234,10 +235,10 @@ export const SmartCollectionSuggestionDialog = ({
                 <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-[2rem] shadow-inner shadow-emerald-500/10 mb-6">
                   <CheckCircle className="w-12 h-12 text-emerald-500" />
                 </div>
-                <div className="text-xl font-bold tracking-tight text-foreground">Collections Created!</div>
+                <div className="text-xl font-bold tracking-tight text-foreground">Shelfs Created!</div>
                 <div className="text-sm text-muted-foreground mt-2">
-                  {selectedCollections.size} collection
-                  {selectedCollections.size !== 1 ? 's' : ''} ready to use
+                  {selectedShelfs.size} shelf
+                  {selectedShelfs.size !== 1 ? 's' : ''} ready to use
                 </div>
               </div>
             )}
@@ -245,7 +246,7 @@ export const SmartCollectionSuggestionDialog = ({
             {state === 'error' && (
               <div className="flex flex-col items-center justify-center py-12">
                 <div className="text-xl font-bold tracking-tight text-destructive">
-                  Failed to create collections
+                  Failed to create shelves
                 </div>
                 <button
                   onClick={() => setState('idle')}

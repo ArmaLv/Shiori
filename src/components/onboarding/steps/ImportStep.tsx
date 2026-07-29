@@ -82,7 +82,7 @@ export function ImportStep({ libraryPath, onSelectPath, onBack, onNext }: Import
           <div className="onb-icon-badge flex h-11 w-11 items-center justify-center rounded-xl border border-border/40 bg-primary/5 text-foreground">
             <FolderPlus className="onb-icon-inner h-5 w-5" />
           </div>
-          <h2 className="text-2xl font-bold tracking-tight text-foreground md:text-4xl">Import Your Collection</h2>
+          <h2 className="text-2xl font-bold tracking-tight text-foreground md:text-4xl">Import Your Shelf</h2>
         </div>
 
         <div className="mt-4 flex min-h-0 flex-1 flex-col overflow-hidden">

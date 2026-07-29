@@ -5,30 +5,28 @@ import { usePreferencesStore } from "../../store/preferencesStore"
 import { cn } from "../../lib/utils"
 import { Button } from "../ui/button"
 import { motion } from "framer-motion"
-import { CollectionSidebar } from "../collections/CollectionSidebar"
-import { CreateCollectionDialog } from "../collections/CreateCollectionDialog"
-import { useState } from "react"
-import { Collection } from "../../lib/tauri"
+import { ShelfSidebar } from "../shelves/ShelfSidebar"
+
+import { Shelf } from "../../lib/tauri"
 
 interface SidebarProps {
   onOpenSettings?: () => void
+  onCreateShelf?: (parentId?: number) => void
+  onEditShelf?: (shelf: Shelf) => void
 }
 
-export function Sidebar({ onOpenSettings }: SidebarProps) {
+export function Sidebar({ onOpenSettings, onCreateShelf, onEditShelf }: SidebarProps) {
   const sidebarCollapsed = useUIStore(state => state.sidebarCollapsed)
   const toggleSidebar = useUIStore(state => state.toggleSidebar)
   const currentView = useUIStore(state => state.currentView)
   const setCurrentView = useUIStore(state => state.setCurrentView)
-  const [showCollections, setShowCollections] = useState(true)
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [editCollection, setEditCollection] = useState<Collection | null>(null)
-  const [parentId, setParentId] = useState<number | undefined>(undefined)
 
   const preferredContentType = usePreferencesStore(state => state.preferences?.preferredContentType ?? 'both')
   const enableRecycleBin = usePreferencesStore(state => state.preferences?.enableRecycleBin ?? false)
 
   const navItems = [
     { icon: Library, label: "Library", action: () => setCurrentView("library") },
+    { icon: FolderOpen, label: "Shelves", action: () => setCurrentView("shelves") },
     { icon: Globe, label: "Online Books", action: () => setCurrentView("online-books") },
     { icon: BookOpen, label: "Online Manga", action: () => setCurrentView("online-manga") },
     { icon: Highlighter, label: "Annotations", action: () => setCurrentView("annotations") },
@@ -51,18 +49,6 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
       label: "Recycle Bin",
       action: () => setCurrentView("recycle-bin" as any)
     });
-  }
-
-  const handleCreateCollection = (parentCollectionId?: number) => {
-    setEditCollection(null)
-    setParentId(parentCollectionId)
-    setDialogOpen(true)
-  }
-
-  const handleEditCollection = (collection: Collection) => {
-    setEditCollection(collection)
-    setParentId(undefined)
-    setDialogOpen(true)
   }
 
   return (
@@ -88,6 +74,7 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
           {navItems.map((item) => {
             const isActive = 
               (item.label === "Library" && currentView === "library") ||
+              (item.label === "Shelves" && currentView === "shelves") ||
               (item.label === "Online Books" && currentView === "online-books") ||
               (item.label === "Online Manga" && currentView === "online-manga") ||
               (item.label === "Recycle Bin" && currentView === "recycle-bin" as any) ||
@@ -119,40 +106,18 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
               </button>
             )
           })}
-
-          {/* Collections Section */}
-          {!sidebarCollapsed && (
-            <div className="pt-4">
-              <button
-                onClick={() => setShowCollections(!showCollections)}
-                className={cn(
-                  "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                  "hover:bg-accent hover:text-accent-foreground",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                )}
-              >
-                <FolderOpen className="h-5 w-5 flex-shrink-0" />
-                <span>Collections</span>
-              </button>
-              
-              {showCollections && (
-                <div className="mt-2">
-                  <CollectionSidebar
-                    onCreateCollection={handleCreateCollection}
-                    onEditCollection={handleEditCollection}
-                  />
-                </div>
-              )}
-            </div>
-          )}
         </nav>
 
-        <CreateCollectionDialog
-          open={dialogOpen}
-          onOpenChange={setDialogOpen}
-          editCollection={editCollection}
-          parentId={parentId}
-        />
+        {!sidebarCollapsed && (
+          <div className="flex-1 overflow-hidden border-t border-border/50">
+            <div className="h-full scale-95 origin-top w-[105%] -ml-1">
+              <ShelfSidebar 
+                onCreateShelf={onCreateShelf || (() => {})} 
+                onEditShelf={onEditShelf || (() => {})} 
+              />
+            </div>
+          </div>
+        )}
 
         {/* Collapse toggle */}
         <div className="border-t border-border p-2">

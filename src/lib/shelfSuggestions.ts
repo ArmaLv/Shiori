@@ -1,6 +1,6 @@
 /**
- * Collection Suggestion Utility
- * Extracts folder names from file paths and suggests creating collections
+ * Shelf Suggestion Utility
+ * Extracts folder names from file paths and suggests creating shelves
  */
 
 // Generic folder names to skip (too common, not meaningful)
@@ -26,7 +26,7 @@ const GENERIC_NAMES = new Set([
   'various',
 ]);
 
-export interface CollectionSuggestion {
+export interface ShelfSuggestion {
   name: string;
   bookCount: number;
   filePaths: string[];
@@ -61,18 +61,33 @@ function extractFolderName(filePath: string): string | null {
 }
 
 /**
- * Generate collection suggestions from imported file paths
- * Groups books by folder name and suggests creating collections
+ * Generate shelf suggestions from imported file paths
+ * Groups books by folder name and suggests creating shelves
  */
-export function generateCollectionSuggestions(
-  filePaths: string[]
-): CollectionSuggestion[] {
+import { Book } from './tauri';
+
+export function generateShelfSuggestions(
+  books: Book[]
+): ShelfSuggestion[] {
   const suggestionsMap = new Map<string, string[]>();
   
-  // Group file paths by folder name
-  for (const path of filePaths) {
-    const folderName = extractFolderName(path);
+  // Group by folder name AND series
+  for (const book of books) {
+    const path = book.file_path;
     
+    // 1. Group by Series (if available)
+    if (book.series) {
+      const normalizedSeries = book.series.trim();
+      if (normalizedSeries.length > 0) {
+        if (!suggestionsMap.has(normalizedSeries)) {
+          suggestionsMap.set(normalizedSeries, []);
+        }
+        suggestionsMap.get(normalizedSeries)!.push(path);
+      }
+    }
+    
+    // 2. Group by Folder Name
+    const folderName = extractFolderName(path);
     if (folderName) {
       // Normalize folder name (Title Case)
       const normalizedName = folderName
@@ -80,16 +95,24 @@ export function generateCollectionSuggestions(
         .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
         .join(' ');
       
+      // If we already grouped this book by a series that matches the folder name, skip to avoid duplicates
+      if (book.series && book.series.trim().toLowerCase() === normalizedName.toLowerCase()) {
+         continue;
+      }
+
       if (!suggestionsMap.has(normalizedName)) {
         suggestionsMap.set(normalizedName, []);
       }
-      suggestionsMap.get(normalizedName)!.push(path);
+      // Only push if not already in this folder suggestion
+      if (!suggestionsMap.get(normalizedName)!.includes(path)) {
+        suggestionsMap.get(normalizedName)!.push(path);
+      }
     }
   }
   
   // Convert to array and filter out single-book suggestions
-  // (only suggest if 2+ books in same folder)
-  const suggestions: CollectionSuggestion[] = Array.from(
+  // (only suggest if 2+ books in same folder/series)
+  const suggestions: ShelfSuggestion[] = Array.from(
     suggestionsMap.entries()
   )
     .filter(([_, paths]) => paths.length > 1)
@@ -104,14 +127,14 @@ export function generateCollectionSuggestions(
 }
 
 /**
- * Get book IDs from file paths (used to add books to newly created collections)
+ * Get book IDs from file paths (used to add books to newly created shelves)
  * This is used after we know which books were successfully imported
  * The books returned from ImportResult.success are file paths
  */
-export function filterPathsForCollection(
+export function filterPathsForShelf(
   allPaths: string[],
-  collectionPaths: string[]
+  shelfPaths: string[]
 ): string[] {
-  const pathSet = new Set(collectionPaths);
+  const pathSet = new Set(shelfPaths);
   return allPaths.filter(p => pathSet.has(p));
 }

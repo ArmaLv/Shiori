@@ -126,7 +126,7 @@ pub struct BookMetadata {
     pub tags: Vec<String>,
     pub series: Option<String>,
     pub series_index: Option<f32>,
-    pub rating: Option<i32>,
+    pub rating: Option<f64>,
     pub file_format: String,
     pub file_size: u64,
     pub page_count: Option<u32>,

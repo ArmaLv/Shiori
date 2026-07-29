@@ -118,14 +118,14 @@ export function ActivityHeatmap({ data, currentStreak = 0 }: ActivityHeatmapProp
   }
 
   return (
-    <div className="w-full overflow-x-auto pb-4">
+    <div className="w-full overflow-x-auto pb-4 custom-scrollbar">
       <TooltipProvider delayDuration={100}>
-        <div className="flex gap-1 min-w-max">
+        <div className="flex gap-[2px] md:gap-[3px] min-w-[600px] w-full">
           {weeks.map((week, wIdx) => (
-            <div key={wIdx} className="flex flex-col gap-1">
+            <div key={wIdx} className="flex flex-col gap-[2px] md:gap-[3px] flex-1 max-w-[14px]">
               {week.map((day, dIdx) => {
                 if (day.getTime() === 0) {
-                  return <div key={dIdx} className="w-3.5 h-3.5 rounded-sm opacity-0" />;
+                  return <div key={dIdx} className="w-full aspect-square rounded-[2px] opacity-0" />;
                 }
                 const dateStr = formatDate(day);
                 const seconds = dataMap.get(dateStr) || 0;
@@ -137,9 +137,9 @@ export function ActivityHeatmap({ data, currentStreak = 0 }: ActivityHeatmapProp
                     <TooltipTrigger asChild>
                       <div
                         className={cn(
-                          "w-3.5 h-3.5 rounded-sm transition-all cursor-pointer relative",
+                          "w-full aspect-square rounded-[2px] transition-all cursor-pointer relative",
                           getIntensityClass(level),
-                          isStreak ? "ring-1 ring-orange-500/80 shadow-[0_0_8px_rgba(249,115,22,0.4)] z-10" : "hover:ring-2 ring-ring ring-offset-1 ring-offset-background"
+                          isStreak ? "ring-1 ring-orange-500/80 shadow-[0_0_8px_rgba(249,115,22,0.4)] z-10" : "hover:ring-1 ring-ring ring-offset-1 ring-offset-background"
                         )}
                       />
                     </TooltipTrigger>

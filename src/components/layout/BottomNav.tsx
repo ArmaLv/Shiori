@@ -1,4 +1,4 @@
-import { Home, Library, Compass, Cloud, Settings, Highlighter, Tv, Menu, BarChart2, Rss, Trash2, History } from 'lucide-react'
+import { Home, Library, Compass, Cloud, Settings, Highlighter, Tv, Menu, BarChart2, Rss, Trash2, History, FolderOpen } from 'lucide-react'
 import { AniListIcon, TorboxIcon } from '@/components/icons'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
@@ -91,6 +91,17 @@ export function BottomNav({
             animate="visible"
             className="w-56 rounded-2xl border-border/50 shadow-2xl bg-background/90 backdrop-blur-2xl p-2 mb-2"
           >
+            <DropdownMenuItem asChild onClick={() => onNavigateToView('shelves')}>
+              <motion.div variants={itemVariants} className="gap-3 p-3 cursor-pointer rounded-xl flex items-center transition-all duration-200">
+                <div className="p-2 bg-secondary/50 rounded-lg shrink-0 text-muted-foreground">
+                  <FolderOpen size={18} />
+                </div>
+                <span className="text-base font-medium">Shelves</span>
+              </motion.div>
+            </DropdownMenuItem>
+
+            <DropdownMenuSeparator className="my-1 bg-border/50" />
+
             <DropdownMenuItem asChild onClick={() => onNavigateToView('statistics')}>
               <motion.div variants={itemVariants} className="gap-3 p-3 cursor-pointer rounded-xl flex items-center transition-all duration-200">
                 <div className="p-2 bg-secondary/50 rounded-lg shrink-0 text-muted-foreground">

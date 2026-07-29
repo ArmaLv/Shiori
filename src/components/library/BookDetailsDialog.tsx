@@ -1,12 +1,7 @@
 import { useState, useEffect } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import { X, BookOpen, Calendar, FileText, Tag, Star, Globe, Hash, Download, Loader2, BookmarkCheck } from 'lucide-react';
+import { X, BookOpen, Calendar, FileText, Tag, Star, Globe, Hash, Download, Loader2, BookmarkCheck, Search, Pencil, Trash2, RefreshCw, Info, LayoutTemplate } from 'lucide-react';
 import { convertFileSrc } from '@tauri-apps/api/core';
-
-function resolveCoverSrc(path: string): string {
-  if (path.startsWith('http://') || path.startsWith('https://')) return path;
-  return convertFileSrc(path.replace(/\\/g, '/'));
-}
 import { listen } from '@tauri-apps/api/event';
 import { api, type Book } from '../../lib/tauri';
 import { logger } from '@/lib/logger';
@@ -14,7 +9,12 @@ import { useToast } from '../../store/toastStore';
 import { Button } from '../ui/button';
 import { MetadataSearchDialog } from './MetadataSearchDialog';
 import { FeatureHint } from '../ui/FeatureHint';
+import { cn } from '@/lib/utils';
 
+function resolveCoverSrc(path: string): string {
+  if (path.startsWith('http://') || path.startsWith('https://')) return path;
+  return convertFileSrc(path.replace(/\\/g, '/'));
+}
 
 interface BookDetailsDialogProps {
   open: boolean;
@@ -77,16 +77,12 @@ export const BookDetailsDialog = ({
     return () => {
       if (unlisten) unlisten();
     };
-    // loadBook is defined below and recreated each render - would cause infinite loop if added
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, bookId, toast]);
 
   useEffect(() => {
     if (open && bookId) {
       loadBook();
     }
-    // loadBook is defined below and recreated each render - would cause infinite loop if added
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, bookId]);
 
   const loadBook = async () => {
@@ -102,12 +98,9 @@ export const BookDetailsDialog = ({
   };
 
   const coverSrc = book?.cover_path ? resolveCoverSrc(book.cover_path) : null;
-
   const isManga = book?.file_format.toLowerCase() === 'cbz' || book?.file_format.toLowerCase() === 'cbr';
 
-
   const handleMetadataFetched = async () => {
-    // Reload book data after metadata update
     await loadBook();
   };
 
@@ -121,18 +114,16 @@ export const BookDetailsDialog = ({
 
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return 'Unknown';
-    return new Date(dateStr).toLocaleDateString();
+    return new Date(dateStr).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
   };
 
   if (loading || !book) {
     return (
       <Dialog.Root open={open} onOpenChange={onOpenChange}>
         <Dialog.Portal>
-          <Dialog.Overlay className="dialog-overlay fixed inset-0 bg-black/50 backdrop-blur-sm z-50" />
-          <Dialog.Content aria-describedby={undefined} className="dialog-content fixed left-[50%] top-[50%] translate-x-[-50%] translate-y-[-50%] bg-background border border-border shadow-2xl rounded-xl w-[90vw] md:w-[90vw] max-w-xl max-h-[85vh] md:max-h-[90vh] md:max-h-[90vh] overflow-y-auto overflow-x-hidden z-50 flex flex-col data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 duration-300">
-            <div className="flex items-center justify-center flex-1 py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-            </div>
+          <Dialog.Overlay className="dialog-overlay fixed inset-0 bg-background/80 backdrop-blur-sm z-50" />
+          <Dialog.Content aria-describedby={undefined} className="dialog-content fixed left-[50%] top-[50%] translate-x-[-50%] translate-y-[-50%] bg-transparent outline-none border-none shadow-none z-50 flex items-center justify-center">
+             <Loader2 className="w-12 h-12 animate-spin text-primary" />
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
@@ -142,74 +133,137 @@ export const BookDetailsDialog = ({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="dialog-overlay fixed inset-0 bg-black/50 backdrop-blur-sm z-50" />
-        <Dialog.Content aria-describedby={undefined} className="dialog-content fixed left-[50%] top-[50%] translate-x-[-50%] translate-y-[-50%] bg-background border border-border shadow-2xl rounded-xl w-[90vw] md:w-[90vw] max-w-2xl max-h-[85vh] md:max-h-[90vh] md:max-h-[90vh] overflow-y-auto overflow-x-hidden z-50 flex flex-col data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 duration-300">
-          {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-border sticky top-0 bg-background/80 backdrop-blur-md z-10">
-            <Dialog.Title className="text-xl font-semibold text-foreground tracking-tight">
-              Book Details
-            </Dialog.Title>
+        <Dialog.Overlay className="fixed inset-0 bg-background/80 backdrop-blur-md z-50 transition-all duration-300 data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=open]:animate-in data-[state=open]:fade-in" />
+        <Dialog.Content 
+          aria-describedby={undefined} 
+          className="fixed left-1/2 top-1/2 z-50 w-full max-w-3xl -translate-x-1/2 -translate-y-1/2 h-[90vh] sm:h-auto sm:max-h-[85vh] bg-card/85 sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-border/50 backdrop-blur-3xl transition-all duration-300 data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in data-[state=open]:zoom-in-95 sm:data-[state=closed]:slide-out-to-top-[48%] sm:data-[state=open]:slide-in-from-top-[48%] duration-300"
+        >
+          
+          {/* Blurred Background Header Art (Mobile Only) */}
+          <div className="absolute top-0 left-0 right-0 h-72 overflow-hidden pointer-events-none select-none -z-10 bg-background sm:hidden">
+            {coverSrc && (
+              <img src={coverSrc} className="w-full h-full object-cover blur-[60px] opacity-40 scale-125 saturate-150 transform-gpu" alt="" />
+            )}
+            <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-card/60 to-card" />
+          </div>
+
+          {/* Floating Close Button */}
+          <div className="absolute top-4 right-4 z-50">
              <Dialog.Close asChild>
-               <button className="text-muted-foreground hover:bg-muted p-2 rounded-full transition-colors" title="Close">
+               <button className="bg-black/40 hover:bg-black/60 backdrop-blur-xl border border-white/10 text-white p-2.5 rounded-full transition-all duration-200 shadow-lg hover:scale-105 active:scale-95" title="Close">
                  <X className="h-5 w-5" />
                </button>
              </Dialog.Close>
           </div>
 
-          {/* Content */}
-          <div className="flex-1 p-6 overflow-y-auto">
-            <div className="grid grid-cols-1 md:grid-cols-[250px_1fr] gap-8">
-              {/* Cover Image */}
-              <div className="w-full shrink-0">
-                <div className="aspect-[2/3] w-[200px] md:w-full mx-auto bg-muted rounded-xl overflow-hidden border border-border/50 shadow-lg sticky top-6">
+          {/* Scrollable Content Area */}
+          <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar">
+            <div className="flex flex-col sm:flex-row gap-8 sm:gap-12 p-6 sm:p-10 min-h-full">
+              
+              {/* Left Column: Cover & Primary Action */}
+              <div className="w-full sm:w-[260px] shrink-0 flex flex-col items-center gap-6 mt-6 sm:mt-0">
+                <div className="relative group w-[200px] sm:w-full aspect-[2/3] rounded-xl overflow-hidden shadow-2xl ring-1 ring-border/30 bg-muted/20">
                    {coverSrc ? (
                      <img
                        src={coverSrc}
                        alt={book.title}
                        loading="lazy"
                        decoding="async"
-                        className="w-full h-full object-cover"
+                       className="w-full h-full object-cover transition-transform duration-500 sm:group-hover:scale-105"
                      />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <BookOpen className="w-20 h-20 text-muted-foreground/30" />
+                    <div className="w-full h-full flex flex-col items-center justify-center gap-4 text-muted-foreground/30">
+                      <BookOpen className="w-16 h-16" />
+                      <span className="text-sm font-medium tracking-widest uppercase">No Cover</span>
                     </div>
                   )}
+                  {/* Subtle glass reflection overlay */}
+                  <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-white/10 pointer-events-none" />
                 </div>
+                
+                {/* Primary Action Button (Read) */}
+                {onRead && (
+                  <Button 
+                    size="lg" 
+                    className="w-full sm:w-full rounded-full text-lg font-bold h-14 shadow-xl shadow-primary/25 hover:shadow-primary/40 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]" 
+                    onClick={() => { onOpenChange(false); onRead(); }}
+                  >
+                    <BookOpen className="w-5 h-5 mr-2.5" /> 
+                    Read Now
+                  </Button>
+                )}
               </div>
 
-              {/* Book Information */}
-              <div className="flex-1 space-y-8">
-                {/* Title and Authors */}
-                <div className="space-y-2">
-                  <h2 className="text-3xl font-bold text-foreground leading-tight tracking-tight">{book.title}</h2>
+              {/* Right Column: Book Info */}
+              <div className="flex-1 flex flex-col pt-2 sm:pt-4">
+                
+                {/* Header Info */}
+                <div className="space-y-3 text-center sm:text-left">
+                  <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-foreground leading-tight tracking-tight drop-shadow-sm [text-wrap:balance]">
+                    {book.title}
+                  </h2>
                   {book.authors && book.authors.length > 0 && (
-                    <p className="text-lg text-muted-foreground">
-                      by {book.authors.map(a => a.name).join(', ')}
+                    <p className="text-lg sm:text-xl text-muted-foreground/80 font-medium tracking-wide">
+                      {book.authors.map(a => a.name).join(', ')}
                     </p>
                   )}
-                  {book.metadata_source && (
-                    <div className="mt-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-primary/10 text-primary border border-primary/20">
-                      <Globe className="w-3 h-3 mr-1" />
-                      Metadata from {book.metadata_source}
-                    </div>
+                  
+                  {/* Badges */}
+                  <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-2">
+                    {book.metadata_source && (
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary border border-primary/20 backdrop-blur-md">
+                        <Globe className="w-3 h-3 mr-1.5" />
+                        Source: {book.metadata_source}
+                      </span>
+                    )}
+                    {book.rating && book.rating > 0 && (
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 backdrop-blur-md">
+                        <Star className="w-3.5 h-3.5 fill-current mr-1" />
+                        {book.rating} / 5
+                      </span>
+                    )}
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-secondary text-secondary-foreground border border-border backdrop-blur-md uppercase tracking-wider">
+                      {book.file_format}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Quick Actions Row */}
+                <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center sm:justify-start gap-3 mt-8 sm:mt-10">
+                  <FeatureHint featureId="metadata-search" title="Find Metadata" description="Search online for covers and details.">
+                    <Button variant="secondary" size="sm" className="w-full sm:w-auto rounded-full bg-secondary/50 hover:bg-secondary border border-border/50 shadow-sm" onClick={() => setMetadataDialogOpen(true)}>
+                      <Search className="w-4 h-4 mr-2"/> Find Match
+                    </Button>
+                  </FeatureHint>
+                  
+                  <Button variant="secondary" size="sm" className="w-full sm:w-auto rounded-full bg-secondary/50 hover:bg-secondary border border-border/50 shadow-sm" disabled={autoEnrichLoading} onClick={() => api.enrichBookMetadata(bookId)}>
+                    {autoEnrichLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin"/> : <RefreshCw className="w-4 h-4 mr-2"/>}
+                    Auto-Enrich
+                  </Button>
+                  
+                  {onEdit && (
+                    <Button variant="secondary" size="sm" className="w-full sm:w-auto rounded-full bg-secondary/50 hover:bg-secondary border border-border/50 shadow-sm" onClick={() => { onOpenChange(false); onEdit(); }}>
+                      <Pencil className="w-4 h-4 mr-2"/> Edit
+                    </Button>
+                  )}
+                  
+                  {onDelete && (
+                    <Button variant="ghost" size="sm" className="w-full sm:w-auto rounded-full text-destructive hover:text-destructive hover:bg-destructive/10 transition-colors" onClick={() => { onOpenChange(false); onDelete(); }}>
+                      <Trash2 className="w-4 h-4 mr-2 sm:mr-0"/> <span className="sm:hidden">Delete</span>
+                    </Button>
                   )}
                 </div>
 
-                {/* Rating */}
-                {book.rating && book.rating > 0 && (
-                  <div className="flex items-center gap-2">
-                    <Star className="w-5 h-5 fill-yellow-400 text-yellow-400" />
-                    <span className="text-lg font-semibold">{book.rating}</span>
-                    <span className="text-muted-foreground">/ 5</span>
-                  </div>
-                )}
+                <div className="my-8 h-px w-full bg-gradient-to-r from-transparent via-border to-transparent opacity-50" />
 
-                {/* Reading Status */}
-                <div className="flex items-center gap-3">
-                  <BookmarkCheck className="w-5 h-5 text-muted-foreground" />
-                  <div className="flex-1">
-                    <div className="text-xs text-muted-foreground mb-1">Reading Status</div>
+                {/* Details Grid */}
+                <div className="grid grid-cols-2 lg:grid-cols-3 gap-y-6 gap-x-4 mb-8">
+                  {/* Reading Status Selector */}
+                  <div className="col-span-2 lg:col-span-3 bg-muted/30 rounded-xl p-4 border border-border/50 flex flex-col sm:flex-row sm:items-center gap-4">
+                    <div className="flex items-center gap-3 text-foreground font-medium">
+                      <BookmarkCheck className="w-5 h-5 text-primary" />
+                      Status
+                    </div>
                     <select
                       value={readingStatus}
                       onChange={async (e) => {
@@ -223,7 +277,7 @@ export const BookDetailsDialog = ({
                           setReadingStatus(book?.reading_status || 'planning')
                         }
                       }}
-                      className="w-full px-3 py-1.5 text-sm bg-muted border border-border rounded-md text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 dark:[color-scheme:dark] [&>option]:bg-popover [&>option]:text-popover-foreground"
+                      className="flex-1 px-4 py-2 text-sm font-semibold bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 appearance-none shadow-sm cursor-pointer"
                     >
                       <option value="planning">Planning to Read</option>
                       <option value="reading">Currently Reading</option>
@@ -232,98 +286,72 @@ export const BookDetailsDialog = ({
                       <option value="dropped">Dropped</option>
                     </select>
                   </div>
-                </div>
-
-                {/* Metadata Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {book.publisher && (
-                    <div className="flex items-start gap-2">
-                      <FileText className="w-4 h-4 text-muted-foreground mt-0.5" />
-                      <div>
-                        <div className="text-xs text-muted-foreground">Publisher</div>
-                        <div className="text-sm font-medium">{book.publisher}</div>
-                      </div>
-                    </div>
-                  )}
-
-                  {book.pubdate && (
-                    <div className="flex items-start gap-2">
-                      <Calendar className="w-4 h-4 text-muted-foreground mt-0.5" />
-                      <div>
-                        <div className="text-xs text-muted-foreground">Published</div>
-                        <div className="text-sm font-medium">{book.pubdate}</div>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="flex items-start gap-2">
-                    <Globe className="w-4 h-4 text-muted-foreground mt-0.5" />
-                    <div>
-                      <div className="text-xs text-muted-foreground">Language</div>
-                      <div className="text-sm font-medium">{book.language || 'Unknown'}</div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-2">
-                    <FileText className="w-4 h-4 text-muted-foreground mt-0.5" />
-                    <div>
-                      <div className="text-xs text-muted-foreground">Format</div>
-                      <div className="text-sm font-medium">{book.file_format.toUpperCase()}</div>
-                    </div>
-                  </div>
-
-                  {book.file_size && (
-                    <div className="flex items-start gap-2">
-                      <Hash className="w-4 h-4 text-muted-foreground mt-0.5" />
-                      <div>
-                        <div className="text-xs text-muted-foreground">File Size</div>
-                        <div className="text-sm font-medium">{formatFileSize(book.file_size)}</div>
-                      </div>
-                    </div>
-                  )}
-
-                  {book.page_count && (
-                    <div className="flex items-start gap-2">
-                      <BookOpen className="w-4 h-4 text-muted-foreground mt-0.5" />
-                      <div>
-                        <div className="text-xs text-muted-foreground">Pages</div>
-                        <div className="text-sm font-medium">{book.page_count}</div>
-                      </div>
-                    </div>
-                  )}
 
                   {book.series && (
-                    <div className="flex items-start gap-2 col-span-2">
-                      <Tag className="w-4 h-4 text-muted-foreground mt-0.5" />
+                    <div className="col-span-2 lg:col-span-3 flex items-start gap-3 bg-primary/5 rounded-xl p-4 border border-primary/10">
+                      <LayoutTemplate className="w-5 h-5 text-primary mt-0.5" />
                       <div>
-                        <div className="text-xs text-muted-foreground">Series</div>
-                        <div className="text-sm font-medium">
-                          {book.series}{book.series_index ? ` #${book.series_index}` : ''}
+                        <div className="text-xs font-semibold text-primary/80 uppercase tracking-wider mb-1">Series</div>
+                        <div className="text-base font-bold text-foreground">
+                          {book.series} {book.series_index ? <span className="text-primary opacity-80">#{book.series_index}</span> : ''}
                         </div>
                       </div>
                     </div>
                   )}
 
+                  {book.publisher && (
+                    <div className="flex flex-col gap-1">
+                      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Publisher</div>
+                      <div className="text-sm font-medium">{book.publisher}</div>
+                    </div>
+                  )}
+
+                  {book.pubdate && (
+                    <div className="flex flex-col gap-1">
+                      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Published</div>
+                      <div className="text-sm font-medium">{formatDate(book.pubdate)}</div>
+                    </div>
+                  )}
+
+                  <div className="flex flex-col gap-1">
+                    <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Language</div>
+                    <div className="text-sm font-medium">{book.language || 'Unknown'}</div>
+                  </div>
+
+                  {book.file_size && (
+                    <div className="flex flex-col gap-1">
+                      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Size</div>
+                      <div className="text-sm font-medium">{formatFileSize(book.file_size)}</div>
+                    </div>
+                  )}
+
+                  {book.page_count && (
+                    <div className="flex flex-col gap-1">
+                      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Pages</div>
+                      <div className="text-sm font-medium">{book.page_count}</div>
+                    </div>
+                  )}
+
                   {book.isbn && (
-                    <div className="flex items-start gap-2 col-span-2">
-                      <Hash className="w-4 h-4 text-muted-foreground mt-0.5" />
-                      <div>
-                        <div className="text-xs text-muted-foreground">ISBN</div>
-                        <div className="text-sm font-medium font-mono">{book.isbn}</div>
-                      </div>
+                    <div className="flex flex-col gap-1">
+                      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">ISBN</div>
+                      <div className="text-sm font-medium font-mono bg-muted px-2 py-0.5 rounded w-fit">{book.isbn}</div>
                     </div>
                   )}
                 </div>
 
                 {/* Tags */}
                 {book.tags && book.tags.length > 0 && (
-                  <div>
-                    <div className="text-xs text-muted-foreground mb-2">Tags</div>
+                  <div className="mb-8">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Tag className="w-4 h-4 text-muted-foreground" />
+                      <div className="text-sm font-bold text-foreground">Tags</div>
+                    </div>
                     <div className="flex flex-wrap gap-2">
                       {book.tags.map((tag, idx) => (
                         <span
                           key={idx}
-                          className="px-2 py-1 text-xs bg-muted text-muted-foreground rounded"
+                          className="px-3 py-1 text-xs font-medium bg-secondary/40 border border-border text-secondary-foreground rounded-full"
                         >
                           {tag.name}
                         </span>
@@ -334,96 +362,23 @@ export const BookDetailsDialog = ({
 
                 {/* Notes */}
                 {book.notes && (
-                  <div>
-                    <div className="text-xs text-muted-foreground mb-2">Notes</div>
-                    <div className="text-sm text-foreground whitespace-pre-wrap bg-muted p-3 rounded-lg">
+                  <div className="mb-8">
+                    <div className="flex items-center gap-2 mb-3">
+                      <FileText className="w-4 h-4 text-muted-foreground" />
+                      <div className="text-sm font-bold text-foreground">Notes & Summary</div>
+                    </div>
+                    <div className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap bg-muted/20 border border-border/50 p-4 rounded-xl">
                       {book.notes}
                     </div>
                   </div>
                 )}
 
                 {/* Added Date */}
-                <div className="text-xs text-muted-foreground pt-4 border-t border-border">
-                  Added {formatDate(book.added_date)}
-                  {book.last_opened && ` • Last opened ${formatDate(book.last_opened)}`}
+                <div className="mt-auto text-xs text-muted-foreground/60 text-center sm:text-left pt-6 pb-2">
+                  Added to library {formatDate(book.added_date)}
+                  {book.last_opened && ` • Last read ${formatDate(book.last_opened)}`}
                 </div>
               </div>
-            </div>
-          </div>
-
-          {/* Footer Actions */}
-          <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 p-4 md:p-6 border-t border-border bg-background sticky bottom-0 z-10">
-            <div className="grid grid-cols-2 md:flex md:items-center gap-2 w-full md:w-auto">
-
-              <FeatureHint
-                featureId="metadata-search"
-                title="Find Book Metadata"
-                description="Search online databases to automatically populate your book's metadata including cover, description, and more."
-                position="top"
-              >
-                <Button
-                  variant="outline"
-                  onClick={() => setMetadataDialogOpen(true)}
-                  className="w-full"
-                >
-                  <Download className="w-4 h-4 md:mr-2" />
-                  <span className="hidden md:inline">Find Metadata</span>
-                  <span className="md:hidden ml-2">Find</span>
-                </Button>
-              </FeatureHint>
-              <Button
-                variant="secondary"
-                className="w-full"
-                disabled={autoEnrichLoading}
-                onClick={async () => {
-                  try {
-                    setAutoEnrichLoading(true);
-                    await api.enrichBookMetadata(bookId);
-                   } catch (e) {
-                     setAutoEnrichLoading(false);
-                     logger.error("Auto enrich failed:", e);
-                    toast.error("Dispatch Failed", "Could not start the enrichment process");
-                  }
-                }}
-              >
-                {autoEnrichLoading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 md:mr-2 animate-spin" />
-                    <span className="hidden md:inline">Enriching...</span>
-                  </>
-                ) : (
-                  "Auto-Enrich"
-                )}
-              </Button>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:flex md:items-center gap-2 w-full md:w-auto">
-              {onDelete && (
-                <Button variant="outline" className="w-full" onClick={() => {
-                  onOpenChange(false);
-                  onDelete();
-                }}>
-                  Delete
-                </Button>
-              )}
-              {onEdit && (
-                <Button variant="outline" className="w-full" onClick={() => {
-                  onOpenChange(false);
-                  onEdit();
-                }}>
-                  <span className="hidden md:inline">Edit Metadata</span>
-                  <span className="md:hidden">Edit</span>
-                </Button>
-              )}
-              {onRead && (
-                <Button className="w-full col-span-2 sm:col-span-1" onClick={() => {
-                  onOpenChange(false);
-                  onRead();
-                }}>
-                  <BookOpen className="w-4 h-4 mr-2" />
-                  Read
-                </Button>
-              )}
             </div>
           </div>
         </Dialog.Content>

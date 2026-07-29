@@ -25,9 +25,9 @@ import {
 } from '@/components/icons/ShioriIcons'
 import { useLibraryStore } from '@/store/libraryStore'
 import { useCoverImage } from '../common/hooks/useCoverImage'
-import * as ContextMenu from '@radix-ui/react-context-menu'
+import { LibraryContextMenu, type LibraryMenuItem } from '@/components/ui/LibraryContextMenu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { Edit2, Trash2, Layers, Globe, FolderPlus, Tag as TagIcon } from 'lucide-react'
+import { Edit2, Pencil, Trash2, Layers, Globe, FolderPlus, Tag as TagIcon, BookOpen } from 'lucide-react'
 import { SeriesAssignmentDialog } from './SeriesAssignmentDialog'
 
 // ─── Format Badge ─────────────────────────────
@@ -111,9 +111,9 @@ interface OverlayProps {
 const HoverOverlay = ({ onOpen, onViewDetails, onEdit, onDelete, isManga }: OverlayProps) => {
   const btnCls = cn(
     'flex items-center justify-center w-8 h-8 rounded-full',
-    'bg-white/10 text-white hover:bg-white/30 hover:scale-110',
+    'bg-zinc-800/80 text-white hover:bg-zinc-700/90 hover:scale-110',
     'transition-all duration-200 backdrop-blur-md',
-    'border border-white/20',
+    'border border-white/10',
     'shadow-sm'
   )
 
@@ -137,6 +137,7 @@ const HoverOverlay = ({ onOpen, onViewDetails, onEdit, onDelete, isManga }: Over
           'opacity-0 group-hover:opacity-100',
           'transition-all duration-300 ease-out',
           'rounded-[inherit]',
+          'hidden md:flex'
         )}
       >
         <ActionTooltip content={isManga ? 'Read manga' : 'Open book'}>
@@ -159,7 +160,7 @@ const HoverOverlay = ({ onOpen, onViewDetails, onEdit, onDelete, isManga }: Over
           
           <ActionTooltip content="Edit metadata">
             <button onClick={(e) => { e.stopPropagation(); onEdit() }} className={btnCls}>
-              <IconEditMeta size={15} className="opacity-80" />
+              <Pencil size={15} className="opacity-80" />
             </button>
           </ActionTooltip>
           
@@ -197,7 +198,7 @@ interface BookCardProps {
   onViewDetails?: (id: number) => void
   onEdit: (id: number) => void
   onDelete: (id: number) => void
-  onAddToCollection?: (id: number) => void
+  onAddToShelf?: (id: number) => void
   onManageTags?: (id: number) => void
   isFavorited?: boolean
   onFavorite?: (id: number) => void
@@ -215,7 +216,7 @@ export const PremiumBookCard = memo(function PremiumBookCard({
   onViewDetails,
   onEdit,
   onDelete,
-  onAddToCollection,
+  onAddToShelf,
   onManageTags,
   isFavorited: propIsFavorited,
   onFavorite,
@@ -264,10 +265,22 @@ export const PremiumBookCard = memo(function PremiumBookCard({
 
   const authorStr = book.authors?.map((a) => a.name).join(', ') || 'Unknown Author'
 
+  const menuItems: LibraryMenuItem[] = [
+    { label: 'Open', icon: BookOpen, onClick: () => onOpen(book.id!) },
+    ...(onViewDetails ? [{ label: 'View Details', icon: Info, onClick: () => onViewDetails(book.id!) }] : []),
+    { label: 'Edit Metadata', icon: Pencil, onClick: () => onEdit(book.id!) },
+    ...(onAddToShelf ? [{ label: 'Add to Shelf...', icon: FolderPlus, onClick: () => onAddToShelf(book.id!) }] : []),
+    ...(isManga ? [
+      { isSeparator: true as const },
+      { label: 'Assign to Series...', icon: Layers, onClick: () => setAssignOpen(true) }
+    ] : []),
+    { isSeparator: true as const },
+    { label: 'Delete', icon: Trash2, onClick: () => onDelete(book.id!), destructive: true },
+  ];
+
   return (
         <>
-      <ContextMenu.Root>
-        <ContextMenu.Trigger asChild>
+      <LibraryContextMenu items={menuItems}>
           <motion.div
             ref={cardRef}
       data-cover-size={coverSize}
@@ -375,7 +388,7 @@ export const PremiumBookCard = memo(function PremiumBookCard({
 
         {/* Format badge */}
         <div className="absolute top-2.5 left-2.5 z-10 flex flex-col gap-1.5">
-          <FormatPill format={book.file_format} filePath={book.file_path} />
+          <FormatPill format={book.file_format} filePath={book.file_path} bookId={book.id} />
           {isRss && (
             <span className="flex items-center gap-1 px-2 py-[3px] text-[10px] font-bold rounded-full tracking-wide shadow-md backdrop-blur-md bg-orange-500/90 text-white border border-white/20">
               <Rss size={10} />
@@ -422,79 +435,7 @@ export const PremiumBookCard = memo(function PremiumBookCard({
         </div>
       </div>
           </motion.div>
-        </ContextMenu.Trigger>
-        <ContextMenu.Portal>
-          <ContextMenu.Content className="min-w-[160px] bg-background border border-border rounded-md shadow-md p-1 z-50 text-sm">
-            <ContextMenu.Item 
-              className="flex items-center px-2 py-1.5 rounded cursor-pointer hover:bg-muted outline-none"
-              onClick={() => onOpen(book.id!)}
-            >
-              <IconBookOpen className="w-4 h-4 mr-2" />
-              Open
-            </ContextMenu.Item>
-            
-            {onViewDetails && (
-              <ContextMenu.Item 
-                className="flex items-center px-2 py-1.5 rounded cursor-pointer hover:bg-muted outline-none"
-                onClick={() => onViewDetails(book.id!)}
-              >
-                <Info className="w-4 h-4 mr-2" />
-                View Details
-              </ContextMenu.Item>
-            )}
-
-            <ContextMenu.Item 
-              className="flex items-center px-2 py-1.5 rounded cursor-pointer hover:bg-muted outline-none"
-              onClick={() => onEdit(book.id!)}
-            >
-              <Edit2 className="w-4 h-4 mr-2" />
-              Edit Metadata
-            </ContextMenu.Item>
-
-            {onAddToCollection && (
-              <ContextMenu.Item 
-                className="flex items-center px-2 py-1.5 rounded cursor-pointer hover:bg-muted outline-none"
-                onClick={() => onAddToCollection(book.id!)}
-              >
-                <FolderPlus className="w-4 h-4 mr-2" />
-                Add to Collection...
-              </ContextMenu.Item>
-            )}
-
-            {onManageTags && (
-              <ContextMenu.Item 
-                className="flex items-center px-2 py-1.5 rounded cursor-pointer hover:bg-muted outline-none"
-                onClick={() => onManageTags(book.id!)}
-              >
-                <TagIcon className="w-4 h-4 mr-2" />
-                Manage Tags...
-              </ContextMenu.Item>
-            )}
-
-            {isManga && (
-              <>
-                <ContextMenu.Separator className="h-px bg-border my-1" />
-                <ContextMenu.Item 
-                  className="flex items-center px-2 py-1.5 rounded cursor-pointer hover:bg-muted outline-none"
-                  onClick={() => setAssignOpen(true)}
-                >
-                  <Layers className="w-4 h-4 mr-2" />
-                  Assign to Series...
-                </ContextMenu.Item>
-              </>
-            )}
-
-            <ContextMenu.Separator className="h-px bg-border my-1" />
-            <ContextMenu.Item 
-              className="flex items-center px-2 py-1.5 rounded cursor-pointer hover:bg-destructive/10 text-destructive outline-none"
-              onClick={() => onDelete(book.id!)}
-            >
-              <Trash2 className="w-4 h-4 mr-2" />
-              Delete
-            </ContextMenu.Item>
-          </ContextMenu.Content>
-        </ContextMenu.Portal>
-      </ContextMenu.Root>
+      </LibraryContextMenu>
 
       {isManga && (
         <SeriesAssignmentDialog

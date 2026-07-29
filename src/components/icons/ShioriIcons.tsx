@@ -348,7 +348,7 @@ export function IconShare({ size = 16, className, ...props }: IconProps) {
 // ──────────────────────────────────────────────
 // COLLECTION
 // ──────────────────────────────────────────────
-export function IconCollection({ size = 16, className, ...props }: IconProps) {
+export function IconShelf({ size = 16, className, ...props }: IconProps) {
     return (
         <svg {...baseProps(size)} className={cn(className)} {...props}>
             <rect x="3" y="3" width="18" height="4" rx="1" />

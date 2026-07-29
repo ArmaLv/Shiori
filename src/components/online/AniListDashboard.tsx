@@ -3,9 +3,9 @@ import { useUIStore } from '@/store/uiStore';
 import { useOnlineSearchStore } from '@/store/onlineSearchStore';
 import {
   getViewer,
-  getMediaListCollection,
+  getMediaListShelf,
   AnilistUser,
-  AnilistMediaListCollection,
+  AnilistMediaListShelf,
   AnilistMediaList,
   AnilistMedia,
   searchMedia,
@@ -49,7 +49,7 @@ export function AniListDashboard({ onOpenSettings }: AniListDashboardProps = {})
   const { error: showErrorToast } = useToast();
 
   const [user, setUser] = useState<AnilistUser | null>(null);
-  const [collection, setCollection] = useState<AnilistMediaListCollection | null>(null);
+  const [shelf, setShelf] = useState<AnilistMediaListShelf | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>('Reading');
@@ -79,8 +79,8 @@ export function AniListDashboard({ onOpenSettings }: AniListDashboardProps = {})
         const viewer = await getViewer(anilistToken);
         setUser(viewer);
 
-        const lists = await getMediaListCollection(viewer.id, anilistToken);
-        setCollection(lists);
+        const lists = await getMediaListShelf(viewer.id, anilistToken);
+        setShelf(lists);
         
         try {
           const top = await getTopManga(anilistToken);
@@ -122,8 +122,8 @@ export function AniListDashboard({ onOpenSettings }: AniListDashboardProps = {})
 
   const handleOpenMediaId = (id: number) => {
     let foundEntry: AnilistMediaList | null = null;
-    if (collection) {
-      for (const list of collection.lists) {
+    if (shelf) {
+      for (const list of shelf.lists) {
         const found = list.entries.find(e => e.media.id === id);
         if (found) {
           foundEntry = found;
@@ -163,8 +163,8 @@ export function AniListDashboard({ onOpenSettings }: AniListDashboardProps = {})
     try {
       const viewer = user || await getViewer(anilistToken);
       if (!user) setUser(viewer);
-      const lists = await getMediaListCollection(viewer.id, anilistToken);
-      setCollection(lists);
+      const lists = await getMediaListShelf(viewer.id, anilistToken);
+      setShelf(lists);
     } catch (err) {
       showErrorToast('Update Failed', String(err));
     }
@@ -235,9 +235,9 @@ export function AniListDashboard({ onOpenSettings }: AniListDashboardProps = {})
   };
 
   const tabs = useMemo(() => {
-    if (!collection) return [];
+    if (!shelf) return [];
     const defaultTabs = ['Reading', 'Completed', 'Planning', 'Dropped'];
-    const availableLists = collection.lists.filter(list => !list.isCustomList).map(l => l.name);
+    const availableLists = shelf.lists.filter(list => !list.isCustomList).map(l => l.name);
     const allTabs = defaultTabs.filter(t => availableLists.includes(t)).concat(availableLists.filter(t => !defaultTabs.includes(t)));
     if (topManga.length > 0) {
       allTabs.unshift('Top Manga');
@@ -246,7 +246,7 @@ export function AniListDashboard({ onOpenSettings }: AniListDashboardProps = {})
       allTabs.unshift('Search Results');
     }
     return allTabs;
-  }, [collection, searchResults, topManga]);
+  }, [shelf, searchResults, topManga]);
   
   useEffect(() => {
       if (tabs.length > 0 && !tabs.includes(activeTab)) {
@@ -309,7 +309,7 @@ export function AniListDashboard({ onOpenSettings }: AniListDashboardProps = {})
     );
   }
 
-  const currentListGroup = collection?.lists.find(l => l.name === activeTab);
+  const currentListGroup = shelf?.lists.find(l => l.name === activeTab);
   
   // Calculate Stats
   let totalChaptersRead = 0;
@@ -317,8 +317,8 @@ export function AniListDashboard({ onOpenSettings }: AniListDashboardProps = {})
   let scoredCount = 0;
   let completedCount = 0;
   
-  if (collection) {
-    collection.lists.forEach(list => {
+  if (shelf) {
+    shelf.lists.forEach(list => {
       if (list.name === 'Completed' || list.name === 'COMPLETED') completedCount += list.entries.length;
       
       list.entries.forEach(entry => {
@@ -335,8 +335,8 @@ export function AniListDashboard({ onOpenSettings }: AniListDashboardProps = {})
 
   // Derive Hero Banner Image
   let heroImage = user?.bannerImage;
-  if (!heroImage && collection) {
-    const readingList = collection.lists.find(l => l.name === 'Reading' || l.name === 'CURRENT');
+  if (!heroImage && shelf) {
+    const readingList = shelf.lists.find(l => l.name === 'Reading' || l.name === 'CURRENT');
     if (readingList && readingList.entries.length > 0) {
         const media = readingList.entries[0].media;
         heroImage = media.bannerImage || media.coverImage.extraLarge || media.coverImage.large;
@@ -466,7 +466,7 @@ export function AniListDashboard({ onOpenSettings }: AniListDashboardProps = {})
                 let count = 0;
                 if (tab === 'Search Results') count = searchResults.length;
                 else if (tab === 'Top Manga') count = topManga.length;
-                else count = collection?.lists.find(l => l.name === tab)?.entries.length || 0;
+                else count = shelf?.lists.find(l => l.name === tab)?.entries.length || 0;
                 
                 return (
                   <button
@@ -598,14 +598,14 @@ export function AniListDashboard({ onOpenSettings }: AniListDashboardProps = {})
       {/* Profile Details Dialog/Overlay */}
       <AnimatePresence>
         {showProfileView && user && (
-          <AniListUserProfileView onClose={() => setShowProfileView(false)} user={user} collection={collection} />
+          <AniListUserProfileView onClose={() => setShowProfileView(false)} user={user} shelf={shelf} />
         )}
       </AnimatePresence>
 
       <AniListImportDialog
         isOpen={showImportDialog}
         onClose={() => setShowImportDialog(false)}
-        collection={collection}
+        shelf={shelf}
         anilistToken={anilistToken}
       />
     </div>

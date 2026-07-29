@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { BookOpen } from 'lucide-react';
-import { getMediaListCollection, AnilistMediaListCollection } from '@/lib/anilist';
+import { getMediaListShelf, AnilistMediaListShelf } from '@/lib/anilist';
 import { useAniListAccessToken } from '@/auth/useAniListAccessToken';
 import { Skeleton } from '@/components/ui/skeleton';
 import { motion } from 'framer-motion';
@@ -20,7 +20,7 @@ const itemVariants = {
 
 export function AniListUserMangaView({ userId }: { userId: number }) {
   const { token: anilistToken } = useAniListAccessToken();
-  const [collection, setCollection] = useState<AnilistMediaListCollection | null>(null);
+  const [shelf, setShelf] = useState<AnilistMediaListShelf | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -28,8 +28,8 @@ export function AniListUserMangaView({ userId }: { userId: number }) {
       if (!anilistToken) return;
       try {
         setLoading(true);
-        const data = await getMediaListCollection(userId, anilistToken);
-        setCollection(data);
+        const data = await getMediaListShelf(userId, anilistToken);
+        setShelf(data);
       } catch (err) {
         console.error("Failed to load manga lists:", err);
       } finally {
@@ -59,7 +59,7 @@ export function AniListUserMangaView({ userId }: { userId: number }) {
     );
   }
 
-  if (!collection || collection.lists.length === 0) {
+  if (!shelf || shelf.lists.length === 0) {
     return (
       <motion.div initial="hidden" animate="show" variants={itemVariants} className="text-center py-12 bg-secondary/10 rounded-xl border border-border/20">
         <BookOpen className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
@@ -70,7 +70,7 @@ export function AniListUserMangaView({ userId }: { userId: number }) {
 
   return (
     <motion.div variants={containerVariants} initial="hidden" animate="show" className="flex flex-col gap-8 pb-12">
-      {collection.lists.map(list => (
+      {shelf.lists.map(list => (
         <div key={list.name} className="space-y-4">
           <motion.div variants={itemVariants} className="flex items-center gap-3">
             <h3 className="font-bold text-lg">{list.name}</h3>

@@ -240,6 +240,35 @@ pub fn get_book_by_id(db: &Database, id: i64) -> Result<Book> {
     Ok(book)
 }
 
+pub fn get_books_by_paths(db: &Database, paths: Vec<String>) -> Result<Vec<Book>> {
+    let conn = db.get_connection()?;
+    let mut books = Vec::new();
+    
+    for path in paths {
+        let sql = format!("SELECT {} FROM books b WHERE b.file_path = ?1", BOOK_COLUMNS);
+        if let Ok(mut book) = conn.query_row(&sql, params![path], book_from_row) {
+            let book_id = book.id.unwrap_or(0);
+            book.authors = get_authors_for_book(&conn, book_id).unwrap_or_default();
+            book.tags = get_tags_for_book(&conn, book_id).unwrap_or_default();
+            
+            // If it's a manga and has no series string, try fetching it from manga_series
+            if book.domain.as_deref() == Some("manga_comics") && book.series.is_none() {
+                if let Ok(Some(series_title)) = conn.query_row(
+                    "SELECT ms.title FROM manga_series ms JOIN books b ON b.manga_series_id = ms.id WHERE b.id = ?1",
+                    params![book_id],
+                    |row| row.get::<_, Option<String>>(0)
+                ) {
+                    book.series = Some(series_title);
+                }
+            }
+            
+            books.push(book);
+        }
+    }
+    
+    Ok(books)
+}
+
 pub fn add_book(db: &Database, mut book: Book) -> Result<i64> {
     let mut conn = db.get_connection()?;
 
@@ -1576,7 +1605,7 @@ mod tests {
             pubdate: Some("2023-01-01".to_string()),
             series: Some("Test Series".to_string()),
             series_index: Some(1.0),
-            rating: Some(4),
+            rating: Some(4.0),
             tags: vec![
                 Tag {
                     id: None,

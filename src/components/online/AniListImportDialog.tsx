@@ -3,7 +3,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { X, DownloadCloud, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { AnilistMediaListCollection, AnilistMediaList } from '@/lib/anilist';
+import { AnilistMediaListShelf, AnilistMediaList } from '@/lib/anilist';
 import { invoke } from '@tauri-apps/api/core';
 import { api } from '@/lib/tauri';
 import { pluginApi } from '@/lib/pluginSources';
@@ -12,11 +12,11 @@ import { toast } from '@/store/toastStore';
 interface AniListImportDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  collection: AnilistMediaListCollection | null;
+  shelf: AnilistMediaListShelf | null;
   anilistToken: string | null;
 }
 
-export function AniListImportDialog({ isOpen, onClose, collection, anilistToken }: AniListImportDialogProps) {
+export function AniListImportDialog({ isOpen, onClose, shelf, anilistToken }: AniListImportDialogProps) {
   const [isImporting, setIsImporting] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0, successes: 0, failures: 0 });
   const [statusText, setStatusText] = useState('');
@@ -30,11 +30,11 @@ export function AniListImportDialog({ isOpen, onClose, collection, anilistToken 
   }, [isOpen]);
 
   const eligibleEntries = useMemo(() => {
-    if (!collection) return [];
+    if (!shelf) return [];
     
     let entries: { entry: AnilistMediaList, status: string }[] = [];
     
-    for (const list of collection.lists) {
+    for (const list of shelf.lists) {
       if (list.name === 'Reading' || list.name === 'Planning') {
         const shioriStatus = list.name === 'Reading' ? 'reading' : 'planning';
         const listEntries = list.entries.map(e => ({ entry: e, status: shioriStatus }));
@@ -47,7 +47,7 @@ export function AniListImportDialog({ isOpen, onClose, collection, anilistToken 
       const titleB = b.entry.media.title.romaji || b.entry.media.title.english || '';
       return titleA.localeCompare(titleB);
     });
-  }, [collection]);
+  }, [shelf]);
 
   const handleStartImport = async () => {
     if (eligibleEntries.length === 0) return;

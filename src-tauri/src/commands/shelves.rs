@@ -1,27 +1,27 @@
 use crate::error::Result;
-use crate::models::{Book, Collection};
-use crate::services::collection_service::CollectionService;
+use crate::models::{Book, Shelf};
+use crate::services::shelf_service::ShelfService;
 use crate::utils::validate;
 use crate::AppState;
 use tauri::State;
 
-// ==================== Collection CRUD Commands ====================
+// ==================== Shelf CRUD Commands ====================
 
 #[tauri::command]
-pub fn get_collections(state: State<AppState>) -> Result<Vec<Collection>> {
+pub fn get_shelves(state: State<AppState>) -> Result<Vec<Shelf>> {
     let conn = state.db.get_connection()?;
-    CollectionService::get_collections(&conn)
+    ShelfService::get_shelves(&conn)
 }
 
 #[tauri::command]
-pub fn get_collection(id: i64, state: State<AppState>) -> Result<Collection> {
+pub fn get_shelf(id: i64, state: State<AppState>) -> Result<Shelf> {
     validate::require_positive_id(id, "id")?;
     let conn = state.db.get_connection()?;
-    CollectionService::get_collection(&conn, id)
+    ShelfService::get_shelf(&conn, id)
 }
 
 #[tauri::command]
-pub fn create_collection(
+pub fn create_shelf(
     name: String,
     description: Option<String>,
     parent_id: Option<i64>,
@@ -29,9 +29,9 @@ pub fn create_collection(
     smart_rules: Option<String>,
     icon: Option<String>,
     color: Option<String>,
-    collection_type: Option<String>,
+    shelf_type: Option<String>,
     state: State<AppState>,
-) -> Result<Collection> {
+) -> Result<Shelf> {
     validate::require_non_empty(&name, "name")?;
     validate::require_max_length(&name, 500, "name")?;
     if let Some(ref desc) = description {
@@ -41,7 +41,7 @@ pub fn create_collection(
         validate::require_positive_id(pid, "parent_id")?;
     }
     let conn = state.db.get_connection()?;
-    CollectionService::create_collection(
+    ShelfService::create_shelf(
         &conn,
         &name,
         description.as_deref(),
@@ -50,12 +50,12 @@ pub fn create_collection(
         smart_rules.as_deref(),
         icon.as_deref(),
         color.as_deref(),
-        collection_type.as_deref(),
+        shelf_type.as_deref(),
     )
 }
 
 #[tauri::command]
-pub fn update_collection(
+pub fn update_shelf(
     id: i64,
     name: String,
     description: Option<String>,
@@ -75,7 +75,7 @@ pub fn update_collection(
         validate::require_positive_id(pid, "parent_id")?;
     }
     let conn = state.db.get_connection()?;
-    CollectionService::update_collection(
+    ShelfService::update_shelf(
         &conn,
         id,
         &name,
@@ -88,94 +88,94 @@ pub fn update_collection(
 }
 
 #[tauri::command]
-pub fn delete_collection(id: i64, state: State<AppState>) -> Result<()> {
+pub fn delete_shelf(id: i64, state: State<AppState>) -> Result<()> {
     validate::require_positive_id(id, "id")?;
     let conn = state.db.get_connection()?;
-    CollectionService::delete_collection(&conn, id)
+    ShelfService::delete_shelf(&conn, id)
 }
 
 // ==================== Book Management Commands ====================
 
 #[tauri::command]
-pub fn add_book_to_collection(
-    collection_id: i64,
+pub fn add_book_to_shelf(
+    shelf_id: i64,
     book_id: i64,
     state: State<AppState>,
 ) -> Result<()> {
-    validate::require_positive_id(collection_id, "collection_id")?;
+    validate::require_positive_id(shelf_id, "shelf_id")?;
     validate::require_positive_id(book_id, "book_id")?;
     let conn = state.db.get_connection()?;
-    CollectionService::add_book_to_collection(&conn, collection_id, book_id)
+    ShelfService::add_book_to_shelf(&conn, shelf_id, book_id)
 }
 
 #[tauri::command]
-pub fn remove_book_from_collection(
-    collection_id: i64,
+pub fn remove_book_from_shelf(
+    shelf_id: i64,
     book_id: i64,
     state: State<AppState>,
 ) -> Result<()> {
-    validate::require_positive_id(collection_id, "collection_id")?;
+    validate::require_positive_id(shelf_id, "shelf_id")?;
     validate::require_positive_id(book_id, "book_id")?;
     let conn = state.db.get_connection()?;
-    CollectionService::remove_book_from_collection(&conn, collection_id, book_id)
+    ShelfService::remove_book_from_shelf(&conn, shelf_id, book_id)
 }
 
 #[tauri::command]
-pub fn add_books_to_collection(
-    collection_id: i64,
+pub fn add_books_to_shelf(
+    shelf_id: i64,
     book_ids: Vec<i64>,
     state: State<AppState>,
 ) -> Result<()> {
-    validate::require_positive_id(collection_id, "collection_id")?;
+    validate::require_positive_id(shelf_id, "shelf_id")?;
     validate::require_non_empty_vec(&book_ids, "book_ids")?;
     let conn = state.db.get_connection()?;
-    CollectionService::add_books_to_collection(&conn, collection_id, book_ids)
+    ShelfService::add_books_to_shelf(&conn, shelf_id, book_ids)
 }
 
 #[tauri::command]
-pub fn get_collection_books(collection_id: i64, state: State<AppState>) -> Result<Vec<Book>> {
-    validate::require_positive_id(collection_id, "collection_id")?;
+pub fn get_shelf_books(shelf_id: i64, state: State<AppState>) -> Result<Vec<Book>> {
+    validate::require_positive_id(shelf_id, "shelf_id")?;
     let conn = state.db.get_connection()?;
-    CollectionService::get_collection_books(&conn, collection_id)
+    ShelfService::get_shelf_books(&conn, shelf_id)
 }
 
 #[tauri::command]
-pub fn get_book_collection_ids(book_id: i64, state: State<AppState>) -> Result<Vec<i64>> {
+pub fn get_book_shelf_ids(book_id: i64, state: State<AppState>) -> Result<Vec<i64>> {
     validate::require_positive_id(book_id, "book_id")?;
     let conn = state.db.get_connection()?;
-    CollectionService::get_book_collection_ids(&conn, book_id)
+    ShelfService::get_book_shelf_ids(&conn, book_id)
 }
 
 #[tauri::command]
-pub fn get_nested_collections(state: State<AppState>) -> Result<Vec<Collection>> {
+pub fn get_nested_shelves(state: State<AppState>) -> Result<Vec<Shelf>> {
     let conn = state.db.get_connection()?;
-    CollectionService::get_nested_collections(&conn)
+    ShelfService::get_nested_shelves(&conn)
 }
 
 #[tauri::command]
 pub fn toggle_book_favorite(book_id: i64, state: State<AppState>) -> Result<bool> {
     validate::require_positive_id(book_id, "book_id")?;
     let conn = state.db.get_connection()?;
-    CollectionService::toggle_book_favorite(&conn, book_id)
+    ShelfService::toggle_book_favorite(&conn, book_id)
 }
 
 #[tauri::command]
 pub fn get_favorite_book_ids(state: State<AppState>) -> Result<Vec<i64>> {
     let conn = state.db.get_connection()?;
-    CollectionService::get_favorite_book_ids(&conn)
+    ShelfService::get_favorite_book_ids(&conn)
 }
 
 #[tauri::command]
-pub fn get_collections_by_type(
-    collection_type: String,
+pub fn get_shelves_by_type(
+    shelf_type: String,
     state: State<AppState>,
-) -> Result<Vec<Collection>> {
+) -> Result<Vec<Shelf>> {
     let conn = state.db.get_connection()?;
-    CollectionService::get_collections_by_type(&conn, &collection_type)
+    ShelfService::get_shelves_by_type(&conn, &shelf_type)
 }
 
 #[tauri::command]
-pub fn preview_smart_collection(smart_rules: String, state: State<AppState>) -> Result<i64> {
+pub fn preview_smart_shelf(smart_rules: String, state: State<AppState>) -> Result<i64> {
     let conn = state.db.get_connection()?;
-    CollectionService::preview_smart_collection(&conn, &smart_rules)
+    ShelfService::preview_smart_shelf(&conn, &smart_rules)
 }

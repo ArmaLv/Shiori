@@ -77,7 +77,7 @@ export interface AnilistMediaListGroup {
   entries: AnilistMediaList[];
 }
 
-export interface AnilistMediaListCollection {
+export interface AnilistMediaListShelf {
   lists: AnilistMediaListGroup[];
   user: {
     id: number;
@@ -221,10 +221,10 @@ export async function getViewer(token: string): Promise<AnilistUser> {
   return data.Viewer;
 }
 
-export async function getMediaListCollection(userId: number, token: string): Promise<AnilistMediaListCollection> {
+export async function getMediaListShelf(userId: number, token: string): Promise<AnilistMediaListShelf> {
   const query = `
     query ($userId: Int) {
-      MediaListCollection(userId: $userId, type: MANGA) {
+      MediaListShelf(userId: $userId, type: MANGA) {
         user {
           id
           name
@@ -279,7 +279,7 @@ export async function getMediaListCollection(userId: number, token: string): Pro
   `;
 
   const data = await fetchAnilistAPI(query, { userId }, token);
-  return data.MediaListCollection;
+  return data.MediaListShelf;
 }
 
 let cachedScoreFormat: string | null = null;

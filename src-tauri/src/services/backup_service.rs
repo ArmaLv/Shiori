@@ -21,7 +21,7 @@ pub struct BackupInfo {
     pub app_version: String,
     pub book_count: usize,
     pub annotation_count: usize,
-    pub collection_count: usize,
+    pub shelf_count: usize,
     pub includes_books: bool,
     pub total_size_bytes: u64,
 }
@@ -30,7 +30,7 @@ pub struct BackupInfo {
 pub struct RestoreInfo {
     pub books_restored: usize,
     pub annotations_restored: usize,
-    pub collections_restored: usize,
+    pub shelves_restored: usize,
     pub covers_restored: usize,
     pub settings_restored: bool,
     pub frontend_settings: Option<String>,
@@ -59,8 +59,8 @@ pub fn create_backup(
     let book_count: usize = conn.query_row("SELECT COUNT(*) FROM books", [], |row| row.get(0))?;
     let annotation_count: usize =
         conn.query_row("SELECT COUNT(*) FROM annotations", [], |row| row.get(0))?;
-    let collection_count: usize =
-        conn.query_row("SELECT COUNT(*) FROM collections", [], |row| row.get(0))?;
+    let shelf_count: usize =
+        conn.query_row("SELECT COUNT(*) FROM shelves", [], |row| row.get(0))?;
 
     // Step 3: Create ZIP archive
     let zip_file = File::create(backup_path)?;
@@ -128,7 +128,7 @@ pub fn create_backup(
         app_version: APP_VERSION.to_string(),
         book_count,
         annotation_count,
-        collection_count,
+        shelf_count,
         includes_books: include_books,
         total_size_bytes: total_size,
     };
@@ -210,8 +210,8 @@ pub fn restore_backup(
         "metadata_cache",
         "doodles",
         "tts_preferences",
-        "collections",
-        "collection_books",
+        "shelves",
+        "shelf_books",
     ];
 
     // Restore each table
@@ -246,8 +246,8 @@ pub fn restore_backup(
         conn.query_row("SELECT COUNT(*) FROM books", [], |row| row.get(0))?;
     let annotations_restored: usize =
         conn.query_row("SELECT COUNT(*) FROM annotations", [], |row| row.get(0))?;
-    let collections_restored: usize =
-        conn.query_row("SELECT COUNT(*) FROM collections", [], |row| row.get(0))?;
+    let shelves_restored: usize =
+        conn.query_row("SELECT COUNT(*) FROM shelves", [], |row| row.get(0))?;
 
     conn.execute_batch("DETACH DATABASE backup_db")?;
 
@@ -308,7 +308,7 @@ pub fn restore_backup(
     Ok(RestoreInfo {
         books_restored,
         annotations_restored,
-        collections_restored,
+        shelves_restored,
         covers_restored,
         settings_restored: frontend_settings.is_some(),
         frontend_settings,

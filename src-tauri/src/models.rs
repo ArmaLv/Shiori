@@ -22,7 +22,7 @@ pub struct Book {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub series_index: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub rating: Option<i32>,
+    pub rating: Option<f64>,
     pub file_path: String,
     pub file_format: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -144,8 +144,8 @@ pub struct SearchQuery {
     pub series_list: Option<Vec<String>>,
     pub isbns: Option<Vec<String>>,
     pub isbn13s: Option<Vec<String>>,
-    pub min_rating: Option<i32>,
-    pub max_rating: Option<i32>,
+    pub min_rating: Option<f64>,
+    pub max_rating: Option<f64>,
     pub date_from: Option<String>,
     pub date_to: Option<String>,
     pub in_trash: Option<bool>,
@@ -256,7 +256,8 @@ pub struct ReaderSettings {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Collection {
+#[serde(rename_all = "camelCase")]
+pub struct Shelf {
     pub id: Option<i64>,
     pub name: String,
     pub description: Option<String>,
@@ -265,12 +266,12 @@ pub struct Collection {
     pub smart_rules: Option<String>, // JSON string of SmartRule[]
     pub icon: Option<String>,
     pub color: Option<String>,
-    pub collection_type: String, // "regular", "shelf", "favorites"
+    pub shelf_type: String, // "regular", "books", "manga", "mixed", "favorites"
     pub sort_order: i32,
     pub created_at: String,
     pub updated_at: String,
     pub book_count: Option<i64>,   // Not in DB, calculated
-    pub children: Vec<Collection>, // Not in DB, for nested collections
+    pub children: Vec<Shelf>, // Not in DB, for nested shelves
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -283,8 +284,8 @@ pub struct SmartRule {
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CollectionWithBooks {
-    pub collection: Collection,
+pub struct ShelfWithBooks {
+    pub shelf: Shelf,
     pub books: Vec<Book>,
 }
 
@@ -304,7 +305,7 @@ pub struct Doodle {
 pub struct ExportOptions {
     pub format: String, // "csv", "json", "markdown"
     pub include_metadata: bool,
-    pub include_collections: bool,
+    pub include_shelves: bool,
     pub include_reading_progress: bool,
     pub file_path: String,
 }

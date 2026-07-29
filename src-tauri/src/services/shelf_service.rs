@@ -1,70 +1,70 @@
 use crate::error::Result;
-use crate::models::{Book, Collection, SmartRule};
+use crate::models::{Book, Shelf, SmartRule};
 use chrono::Utc;
 use rusqlite::{params, Connection, Row};
 use serde_json;
 
-pub struct CollectionService;
+pub struct ShelfService;
 
-impl CollectionService {
-    // ==================== Collection CRUD ====================
+impl ShelfService {
+    // ==================== Shelf CRUD ====================
 
-    pub fn get_collections(conn: &Connection) -> Result<Vec<Collection>> {
+    pub fn get_shelves(conn: &Connection) -> Result<Vec<Shelf>> {
         let mut stmt = conn.prepare(
             "SELECT c.id, c.name, c.description, c.parent_id, c.is_smart, c.smart_rules, c.icon, c.color, 
-                    c.collection_type, c.sort_order, c.created_at, c.updated_at,
+                    c.shelf_type, c.sort_order, c.created_at, c.updated_at,
                     CASE 
                         WHEN c.is_smart = 0 THEN (
-                            SELECT COUNT(*) FROM collections_books WHERE collection_id = c.id
+                            SELECT COUNT(*) FROM shelf_books WHERE shelf_id = c.id
                         )
                         ELSE NULL
                     END as book_count
-             FROM collections c
+             FROM shelves c
              ORDER BY c.sort_order ASC, c.name ASC",
         )?;
 
-        let mut collections = stmt
-            .query_map([], |row| Self::collection_from_row_with_count(row))?
+        let mut shelves = stmt
+            .query_map([], |row| Self::shelf_from_row_with_count(row))?
             .collect::<std::result::Result<Vec<_>, _>>()?;
 
-        // For smart collections, calculate book count separately (unavoidable due to complex rule evaluation)
-        for collection in &mut collections {
-            if collection.is_smart && collection.book_count.is_none() {
-                collection.book_count = Some(Self::get_smart_collection_book_count(
+        // For smart shelves, calculate book count separately (unavoidable due to complex rule evaluation)
+        for shelf in &mut shelves {
+            if shelf.is_smart && shelf.book_count.is_none() {
+                shelf.book_count = Some(Self::get_smart_shelf_book_count(
                     conn,
-                    collection.id.unwrap(),
+                    shelf.id.unwrap(),
                 )?);
             }
         }
 
-        Ok(collections)
+        Ok(shelves)
     }
 
-    pub fn get_collection(conn: &Connection, id: i64) -> Result<Collection> {
+    pub fn get_shelf(conn: &Connection, id: i64) -> Result<Shelf> {
         let mut stmt = conn.prepare(
             "SELECT c.id, c.name, c.description, c.parent_id, c.is_smart, c.smart_rules, c.icon, c.color,
-                    c.collection_type, c.sort_order, c.created_at, c.updated_at,
+                    c.shelf_type, c.sort_order, c.created_at, c.updated_at,
                     CASE 
                         WHEN c.is_smart = 0 THEN (
-                            SELECT COUNT(*) FROM collections_books WHERE collection_id = c.id
+                            SELECT COUNT(*) FROM shelf_books WHERE shelf_id = c.id
                         )
                         ELSE NULL
                     END as book_count
-             FROM collections c
+             FROM shelves c
              WHERE c.id = ?1",
         )?;
 
-        let mut collection =
-            stmt.query_row(params![id], |row| Self::collection_from_row_with_count(row))?;
+        let mut shelf =
+            stmt.query_row(params![id], |row| Self::shelf_from_row_with_count(row))?;
 
-        if collection.is_smart && collection.book_count.is_none() {
-            collection.book_count = Some(Self::get_smart_collection_book_count(conn, id)?);
+        if shelf.is_smart && shelf.book_count.is_none() {
+            shelf.book_count = Some(Self::get_smart_shelf_book_count(conn, id)?);
         }
 
-        Ok(collection)
+        Ok(shelf)
     }
 
-    pub fn create_collection(
+    pub fn create_shelf(
         conn: &Connection,
         name: &str,
         description: Option<&str>,
@@ -73,22 +73,22 @@ impl CollectionService {
         smart_rules: Option<&str>,
         icon: Option<&str>,
         color: Option<&str>,
-        collection_type: Option<&str>,
-    ) -> Result<Collection> {
+        shelf_type: Option<&str>,
+    ) -> Result<Shelf> {
         let now = Utc::now().to_rfc3339();
-        let coll_type = collection_type.unwrap_or("regular");
+        let coll_type = shelf_type.unwrap_or("regular");
 
         conn.execute(
-            "INSERT INTO collections (name, description, parent_id, is_smart, smart_rules, icon, color, collection_type, created_at, updated_at)
+            "INSERT INTO shelves (name, description, parent_id, is_smart, smart_rules, icon, color, shelf_type, created_at, updated_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![name, description, parent_id, is_smart, smart_rules, icon, color, coll_type, now, now],
         )?;
 
         let id = conn.last_insert_rowid();
-        Self::get_collection(conn, id)
+        Self::get_shelf(conn, id)
     }
 
-    pub fn update_collection(
+    pub fn update_shelf(
         conn: &Connection,
         id: i64,
         name: &str,
@@ -101,7 +101,7 @@ impl CollectionService {
         let now = Utc::now().to_rfc3339();
 
         conn.execute(
-            "UPDATE collections 
+            "UPDATE shelves 
              SET name = ?1, description = ?2, parent_id = ?3, smart_rules = ?4, 
                  icon = ?5, color = ?6, updated_at = ?7
              WHERE id = ?8",
@@ -120,58 +120,58 @@ impl CollectionService {
         Ok(())
     }
 
-    pub fn delete_collection(conn: &Connection, id: i64) -> Result<()> {
-        conn.execute("DELETE FROM collections WHERE id = ?1", params![id])?;
+    pub fn delete_shelf(conn: &Connection, id: i64) -> Result<()> {
+        conn.execute("DELETE FROM shelves WHERE id = ?1", params![id])?;
         Ok(())
     }
 
     // ==================== Book Management ====================
 
-    pub fn add_book_to_collection(
+    pub fn add_book_to_shelf(
         conn: &Connection,
-        collection_id: i64,
+        shelf_id: i64,
         book_id: i64,
     ) -> Result<()> {
         let now = Utc::now().to_rfc3339();
 
-        // Check if collection is smart
+        // Check if shelf is smart
         let is_smart: i64 = conn.query_row(
-            "SELECT is_smart FROM collections WHERE id = ?1",
-            params![collection_id],
+            "SELECT is_smart FROM shelves WHERE id = ?1",
+            params![shelf_id],
             |row| row.get(0),
         )?;
 
         if is_smart == 1 {
             return Err(crate::error::ShioriError::InvalidOperation(
-                "Cannot manually add books to smart collections".to_string(),
+                "Cannot manually add books to smart shelves".to_string(),
             ));
         }
 
         conn.execute(
-            "INSERT OR IGNORE INTO collections_books (collection_id, book_id, added_at)
+            "INSERT OR IGNORE INTO shelf_books (shelf_id, book_id, added_at)
              VALUES (?1, ?2, ?3)",
-            params![collection_id, book_id, now],
+            params![shelf_id, book_id, now],
         )?;
 
         Ok(())
     }
 
-    pub fn remove_book_from_collection(
+    pub fn remove_book_from_shelf(
         conn: &Connection,
-        collection_id: i64,
+        shelf_id: i64,
         book_id: i64,
     ) -> Result<()> {
         conn.execute(
-            "DELETE FROM collections_books WHERE collection_id = ?1 AND book_id = ?2",
-            params![collection_id, book_id],
+            "DELETE FROM shelf_books WHERE shelf_id = ?1 AND book_id = ?2",
+            params![shelf_id, book_id],
         )?;
 
         Ok(())
     }
 
-    pub fn add_books_to_collection(
+    pub fn add_books_to_shelf(
         conn: &Connection,
-        collection_id: i64,
+        shelf_id: i64,
         book_ids: Vec<i64>,
     ) -> Result<()> {
         let now = Utc::now().to_rfc3339();
@@ -180,9 +180,9 @@ impl CollectionService {
 
         for book_id in book_ids {
             tx.execute(
-                "INSERT OR IGNORE INTO collections_books (collection_id, book_id, added_at)
+                "INSERT OR IGNORE INTO shelf_books (shelf_id, book_id, added_at)
                  VALUES (?1, ?2, ?3)",
-                params![collection_id, book_id, now],
+                params![shelf_id, book_id, now],
             )?;
         }
 
@@ -190,24 +190,24 @@ impl CollectionService {
         Ok(())
     }
 
-    pub fn get_collection_books(conn: &Connection, collection_id: i64) -> Result<Vec<Book>> {
-        // Check if smart collection
-        let collection = Self::get_collection(conn, collection_id)?;
+    pub fn get_shelf_books(conn: &Connection, shelf_id: i64) -> Result<Vec<Book>> {
+        // Check if smart shelf
+        let shelf = Self::get_shelf(conn, shelf_id)?;
 
-        if collection.is_smart {
+        if shelf.is_smart {
             // Parse smart rules and build query
-            if let Some(rules_json) = &collection.smart_rules {
+            if let Some(rules_json) = &shelf.smart_rules {
                 Self::get_books_by_smart_rules(conn, rules_json)
             } else {
                 Ok(Vec::new())
             }
         } else {
             // Get books from junction table
-            Self::get_books_from_junction(conn, collection_id)
+            Self::get_books_from_junction(conn, shelf_id)
         }
     }
 
-    fn get_books_from_junction(conn: &Connection, collection_id: i64) -> Result<Vec<Book>> {
+    fn get_books_from_junction(conn: &Connection, shelf_id: i64) -> Result<Vec<Book>> {
         let mut stmt = conn.prepare(
             "SELECT b.id, b.uuid, b.title, b.sort_title, b.isbn, b.isbn13, b.publisher, 
                     b.pubdate, b.series, b.series_index, b.rating, b.file_path, b.file_format,
@@ -216,13 +216,13 @@ impl CollectionService {
                     b.online_metadata_fetched, b.metadata_source, b.metadata_last_sync, b.anilist_id,
                     b.is_favorite, b.reading_status, b.domain, b.is_wishlist, b.in_trash, b.deleted_at
              FROM books b
-             JOIN collections_books cb ON b.id = cb.book_id
-             WHERE cb.collection_id = ?1
+             JOIN shelf_books cb ON b.id = cb.book_id
+             WHERE cb.shelf_id = ?1
              ORDER BY cb.sort_order ASC, b.title ASC",
         )?;
 
         let books = stmt
-            .query_map(params![collection_id], |row| {
+            .query_map(params![shelf_id], |row| {
                 Ok(Book {
                     id: row.get(0)?,
                     uuid: row.get(1)?,
@@ -499,8 +499,8 @@ impl CollectionService {
 
     // ==================== Helpers ====================
 
-    fn collection_from_row(row: &Row) -> rusqlite::Result<Collection> {
-        Ok(Collection {
+    fn shelf_from_row(row: &Row) -> rusqlite::Result<Shelf> {
+        Ok(Shelf {
             id: row.get(0)?,
             name: row.get(1)?,
             description: row.get(2)?,
@@ -509,7 +509,7 @@ impl CollectionService {
             smart_rules: row.get(5)?,
             icon: row.get(6)?,
             color: row.get(7)?,
-            collection_type: row.get(8)?,
+            shelf_type: row.get(8)?,
             sort_order: row.get(9)?,
             created_at: row.get(10)?,
             updated_at: row.get(11)?,
@@ -518,8 +518,8 @@ impl CollectionService {
         })
     }
 
-    fn collection_from_row_with_count(row: &Row) -> rusqlite::Result<Collection> {
-        Ok(Collection {
+    fn shelf_from_row_with_count(row: &Row) -> rusqlite::Result<Shelf> {
+        Ok(Shelf {
             id: row.get(0)?,
             name: row.get(1)?,
             description: row.get(2)?,
@@ -528,7 +528,7 @@ impl CollectionService {
             smart_rules: row.get(5)?,
             icon: row.get(6)?,
             color: row.get(7)?,
-            collection_type: row.get(8)?,
+            shelf_type: row.get(8)?,
             sort_order: row.get(9)?,
             created_at: row.get(10)?,
             updated_at: row.get(11)?,
@@ -537,10 +537,10 @@ impl CollectionService {
         })
     }
 
-    fn get_smart_collection_book_count(conn: &Connection, collection_id: i64) -> Result<i64> {
+    fn get_smart_shelf_book_count(conn: &Connection, shelf_id: i64) -> Result<i64> {
         let smart_rules: Option<String> = conn.query_row(
-            "SELECT smart_rules FROM collections WHERE id = ?1 AND is_smart = 1",
-            params![collection_id],
+            "SELECT smart_rules FROM shelves WHERE id = ?1 AND is_smart = 1",
+            params![shelf_id],
             |row| row.get(0),
         )?;
 
@@ -552,15 +552,15 @@ impl CollectionService {
         }
     }
 
-    fn get_book_count(conn: &Connection, collection_id: i64) -> Result<i64> {
-        let collection = conn.query_row(
-            "SELECT is_smart, smart_rules FROM collections WHERE id = ?1",
-            params![collection_id],
+    fn get_book_count(conn: &Connection, shelf_id: i64) -> Result<i64> {
+        let shelf = conn.query_row(
+            "SELECT is_smart, smart_rules FROM shelves WHERE id = ?1",
+            params![shelf_id],
             |row| Ok((row.get::<_, i64>(0)? == 1, row.get::<_, Option<String>>(1)?)),
         )?;
 
-        if collection.0 {
-            if let Some(rules) = collection.1 {
+        if shelf.0 {
+            if let Some(rules) = shelf.1 {
                 let books = Self::get_books_by_smart_rules(conn, &rules)?;
                 Ok(books.len() as i64)
             } else {
@@ -568,16 +568,16 @@ impl CollectionService {
             }
         } else {
             let count: i64 = conn.query_row(
-                "SELECT COUNT(*) FROM collections_books WHERE collection_id = ?1",
-                params![collection_id],
+                "SELECT COUNT(*) FROM shelf_books WHERE shelf_id = ?1",
+                params![shelf_id],
                 |row| row.get(0),
             )?;
             Ok(count)
         }
     }
 
-    pub fn get_book_collection_ids(conn: &Connection, book_id: i64) -> Result<Vec<i64>> {
-        let mut stmt = conn.prepare("SELECT collection_id FROM collections_books WHERE book_id = ?1")?;
+    pub fn get_book_shelf_ids(conn: &Connection, book_id: i64) -> Result<Vec<i64>> {
+        let mut stmt = conn.prepare("SELECT shelf_id FROM shelf_books WHERE book_id = ?1")?;
         let rows = stmt.query_map(params![book_id], |row| row.get(0))?;
         
         let mut ids = Vec::new();
@@ -587,96 +587,96 @@ impl CollectionService {
         Ok(ids)
     }
 
-    pub fn get_nested_collections(conn: &Connection) -> Result<Vec<Collection>> {
-        // Get all collections
-        let all_collections = Self::get_collections(conn)?;
+    pub fn get_nested_shelves(conn: &Connection) -> Result<Vec<Shelf>> {
+        // Get all shelves
+        let all_shelves = Self::get_shelves(conn)?;
 
         // Build tree structure
-        let mut root_collections = Vec::new();
-        let mut collection_map: std::collections::HashMap<i64, Collection> = all_collections
+        let mut root_shelves = Vec::new();
+        let mut shelf_map: std::collections::HashMap<i64, Shelf> = all_shelves
             .into_iter()
             .map(|c| (c.id.unwrap(), c))
             .collect();
 
-        let ids: Vec<i64> = collection_map.keys().cloned().collect();
+        let ids: Vec<i64> = shelf_map.keys().cloned().collect();
 
         for id in ids {
-            let collection = collection_map.remove(&id).unwrap();
-            if let Some(parent_id) = collection.parent_id {
-                if let Some(parent) = collection_map.get_mut(&parent_id) {
-                    parent.children.push(collection);
+            let shelf = shelf_map.remove(&id).unwrap();
+            if let Some(parent_id) = shelf.parent_id {
+                if let Some(parent) = shelf_map.get_mut(&parent_id) {
+                    parent.children.push(shelf);
                 } else {
-                    root_collections.push(collection);
+                    root_shelves.push(shelf);
                 }
             } else {
-                root_collections.push(collection);
+                root_shelves.push(shelf);
             }
         }
 
-        Ok(root_collections)
+        Ok(root_shelves)
     }
 
-    pub fn get_collections_by_type(
+    pub fn get_shelves_by_type(
         conn: &Connection,
-        collection_type: &str,
-    ) -> Result<Vec<Collection>> {
+        shelf_type: &str,
+    ) -> Result<Vec<Shelf>> {
         let mut stmt = conn.prepare(
             "SELECT c.id, c.name, c.description, c.parent_id, c.is_smart, c.smart_rules, c.icon, c.color,
-                    c.collection_type, c.sort_order, c.created_at, c.updated_at,
+                    c.shelf_type, c.sort_order, c.created_at, c.updated_at,
                     CASE 
                         WHEN c.is_smart = 0 THEN (
-                            SELECT COUNT(*) FROM collections_books WHERE collection_id = c.id
+                            SELECT COUNT(*) FROM shelf_books WHERE shelf_id = c.id
                         )
                         ELSE NULL
                     END as book_count
-             FROM collections c
-             WHERE c.collection_type = ?1
+             FROM shelves c
+             WHERE c.shelf_type = ?1
              ORDER BY c.sort_order ASC, c.name ASC",
         )?;
 
-        let mut collections = stmt
-            .query_map(params![collection_type], |row| {
-                Self::collection_from_row_with_count(row)
+        let mut shelves = stmt
+            .query_map(params![shelf_type], |row| {
+                Self::shelf_from_row_with_count(row)
             })?
             .collect::<std::result::Result<Vec<_>, _>>()?;
 
-        for collection in &mut collections {
-            if collection.is_smart && collection.book_count.is_none() {
-                collection.book_count = Some(Self::get_smart_collection_book_count(
+        for shelf in &mut shelves {
+            if shelf.is_smart && shelf.book_count.is_none() {
+                shelf.book_count = Some(Self::get_smart_shelf_book_count(
                     conn,
-                    collection.id.unwrap(),
+                    shelf.id.unwrap(),
                 )?);
             }
         }
 
-        Ok(collections)
+        Ok(shelves)
     }
 
-    pub fn get_favorites_collection(conn: &Connection) -> Result<Collection> {
+    pub fn get_favorites_shelf(conn: &Connection) -> Result<Shelf> {
         let result = conn.query_row(
             "SELECT id, name, description, parent_id, is_smart, smart_rules, icon, color,
-                    collection_type, sort_order, created_at, updated_at
-             FROM collections
-             WHERE collection_type = 'favorites'
+                    shelf_type, sort_order, created_at, updated_at
+             FROM shelves
+             WHERE shelf_type = 'favorites'
              LIMIT 1",
             [],
-            |row| Self::collection_from_row(row),
+            |row| Self::shelf_from_row(row),
         );
 
         match result {
-            Ok(mut collection) => {
-                collection.book_count = Some(Self::get_book_count(conn, collection.id.unwrap())?);
-                Ok(collection)
+            Ok(mut shelf) => {
+                shelf.book_count = Some(Self::get_book_count(conn, shelf.id.unwrap())?);
+                Ok(shelf)
             }
             Err(_) => {
                 let now = Utc::now().to_rfc3339();
                 conn.execute(
-                    "INSERT INTO collections (name, description, is_smart, collection_type, icon, sort_order, created_at, updated_at)
+                    "INSERT INTO shelves (name, description, is_smart, shelf_type, icon, sort_order, created_at, updated_at)
                      VALUES ('Favorites', 'Your favorite books', 0, 'favorites', '❤️', -1, ?1, ?2)",
                     params![now, now],
                 )?;
                 let id = conn.last_insert_rowid();
-                Self::get_collection(conn, id)
+                Self::get_shelf(conn, id)
             }
         }
     }
@@ -694,16 +694,16 @@ impl CollectionService {
             params![if new_state { 1 } else { 0 }, book_id],
         )?;
 
-        let favorites = Self::get_favorites_collection(conn)?;
+        let favorites = Self::get_favorites_shelf(conn)?;
         let fav_id = favorites.id.unwrap();
         if new_state {
             conn.execute(
-                "INSERT OR IGNORE INTO collections_books (collection_id, book_id, added_at) VALUES (?1, ?2, ?3)",
+                "INSERT OR IGNORE INTO shelf_books (shelf_id, book_id, added_at) VALUES (?1, ?2, ?3)",
                 params![fav_id, book_id, Utc::now().to_rfc3339()],
             )?;
         } else {
             conn.execute(
-                "DELETE FROM collections_books WHERE collection_id = ?1 AND book_id = ?2",
+                "DELETE FROM shelf_books WHERE shelf_id = ?1 AND book_id = ?2",
                 params![fav_id, book_id],
             )?;
         }
@@ -719,7 +719,7 @@ impl CollectionService {
         Ok(ids)
     }
 
-    pub fn preview_smart_collection(conn: &Connection, smart_rules: &str) -> Result<i64> {
+    pub fn preview_smart_shelf(conn: &Connection, smart_rules: &str) -> Result<i64> {
         let books = Self::get_books_by_smart_rules(conn, smart_rules)?;
         Ok(books.len() as i64)
     }

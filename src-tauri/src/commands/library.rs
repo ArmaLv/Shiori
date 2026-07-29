@@ -90,6 +90,12 @@ pub fn get_books(state: State<AppState>, limit: u32, offset: u32) -> Result<Vec<
 }
 
 #[tauri::command]
+pub fn get_books_by_paths(state: State<AppState>, paths: Vec<String>) -> Result<Vec<Book>> {
+    let db = &state.db;
+    library_service::get_books_by_paths(db, paths)
+}
+
+#[tauri::command]
 pub fn get_total_books(state: State<AppState>) -> Result<i64> {
     let db = &state.db;
     library_service::get_total_books(db)
@@ -848,8 +854,22 @@ pub async fn download_libgen_epub(
         .replace(".", "")
         .to_lowercase();
     let file_name = format!("{}.{}", safe_title.trim(), ext);
-    let temp_dir = std::env::temp_dir();
-    let file_path = temp_dir.join(file_name);
+    
+    let state = app_handle.state::<AppState>();
+    let prefs = crate::commands::preferences::get_user_preferences(state.clone()).await?;
+    let downloads_dir = if !prefs.default_import_path.is_empty() {
+        std::path::PathBuf::from(&prefs.default_import_path).join("Online Books")
+    } else {
+        app_handle
+            .path()
+            .app_data_dir()
+            .map_err(|e| crate::error::ShioriError::Other(format!("Failed to get app dir: {}", e)))?
+            .join("downloads")
+    };
+    std::fs::create_dir_all(&downloads_dir)
+        .map_err(|e| crate::error::ShioriError::Other(e.to_string()))?;
+
+    let file_path = downloads_dir.join(file_name);
 
     let mut file = std::fs::File::create(&file_path)
         .map_err(|e| crate::error::ShioriError::Other(e.to_string()))?;

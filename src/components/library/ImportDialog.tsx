@@ -6,9 +6,9 @@ import { api, ImportResult, isAndroid } from '../../lib/tauri';
 import { logger } from '@/lib/logger';
 import { useToast } from '../../store/toastStore';
 import { useLibraryStore } from '../../store/libraryStore';
-import { generateCollectionSuggestions } from '../../lib/collectionSuggestions';
-import { SmartCollectionSuggestionDialog } from './SmartCollectionSuggestionDialog';
-import type { CollectionSuggestion } from '../../lib/collectionSuggestions';
+import { generateShelfSuggestions } from '../../lib/shelfSuggestions';
+import { SmartShelfSuggestionDialog } from './SmartShelfSuggestionDialog';
+import type { ShelfSuggestion } from '../../lib/shelfSuggestions';
 import { Button } from '../ui/button';
 
 function isPermissionDeniedError(error: unknown) {
@@ -41,7 +41,7 @@ export const ImportDialog = ({ open, onOpenChange, initialFilePaths, autoTrigger
     initialFilePaths && initialFilePaths.length > 0 ? `${initialFilePaths.length} file(s) selected` : ''
   );
   const [selectedFilePaths, setSelectedFilePaths] = useState<string[]>(initialFilePaths || []);
-  const [suggestions, setSuggestions] = useState<CollectionSuggestion[]>([]);
+  const [suggestions, setSuggestions] = useState<ShelfSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const toast = useToast();
   const loadInitialBooks = useLibraryStore(state => state.loadInitialBooks);
@@ -250,13 +250,15 @@ export const ImportDialog = ({ open, onOpenChange, initialFilePaths, autoTrigger
         );
 
         await loadInitialBooks();
-
-        const collectionSuggestions = generateCollectionSuggestions(
-          importResult.success
-        );
         
-        if (collectionSuggestions.length > 0) {
-          setSuggestions(collectionSuggestions);
+        // Fetch the full book metadata for newly imported paths
+        // This allows generating shelf suggestions based on series metadata
+        const importedBooks = await api.getBooksByPaths(importResult.success);
+
+        const shelfSuggestions = generateShelfSuggestions(importedBooks);
+        
+        if (shelfSuggestions.length > 0) {
+          setSuggestions(shelfSuggestions);
           setShowSuggestions(true);
         }
       } else {
@@ -536,7 +538,7 @@ export const ImportDialog = ({ open, onOpenChange, initialFilePaths, autoTrigger
       </Dialog.Root>
 
       {result && (
-        <SmartCollectionSuggestionDialog
+        <SmartShelfSuggestionDialog
           open={showSuggestions}
           onOpenChange={setShowSuggestions}
           suggestions={suggestions}

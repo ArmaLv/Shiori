@@ -8,6 +8,7 @@ import {
   Library,
   Trash2,
   History,
+  FolderOpen,
 } from "lucide-react"
 import { AniListIcon, TorboxIcon } from "@/components/icons"
 
@@ -30,6 +31,12 @@ const NAV_ITEMS: NavItem[] = [
     targetView: "library",
     isActive: (view) => view === "library",
     icon: Library,
+  },
+  {
+    label: "Shelves",
+    targetView: "shelves",
+    isActive: (view) => view === "shelves",
+    icon: FolderOpen,
   },
   {
     label: "Online Books",

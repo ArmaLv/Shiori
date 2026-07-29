@@ -122,7 +122,7 @@ export function HistoryView({
               onViewDetails={onViewDetails}
               onEditBook={onEditBook}
               onDeleteBook={onDeleteBook}
-              onAddToCollection={dialogs.openCollectionSelectDialog}
+              onAddToShelf={dialogs.openShelfSelectDialog}
               onManageTags={dialogs.openTagSelectDialog}
               hasMoreOverride={hasMore}
               isLoadingOverride={loading}

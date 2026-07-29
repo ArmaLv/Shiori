@@ -1,18 +1,18 @@
 import { useState, useEffect } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { X, FolderOpen } from 'lucide-react';
-import { api, type Collection } from '@/lib/tauri';
+import { api, type Shelf } from '@/lib/tauri';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/store/toastStore';
 
-interface CollectionSelectDialogProps {
+interface ShelfSelectDialogProps {
   bookId: number;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-export function CollectionSelectDialog({ bookId, open, onOpenChange }: CollectionSelectDialogProps) {
-  const [collections, setCollections] = useState<Collection[]>([]);
+export function ShelfSelectDialog({ bookId, open, onOpenChange }: ShelfSelectDialogProps) {
+  const [shelves, setShelfs] = useState<Shelf[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -27,14 +27,14 @@ export function CollectionSelectDialog({ bookId, open, onOpenChange }: Collectio
   const loadData = async () => {
     setLoading(true);
     try {
-      const [allCollections, bookCollectionIds] = await Promise.all([
-        api.getCollections(),
-        api.getBookCollectionIds(bookId)
+      const [allShelfs, bookShelfIds] = await Promise.all([
+        api.getShelfs(),
+        api.getBookShelfIds(bookId)
       ]);
-      setCollections(allCollections.filter(c => c.collectionType !== 'favorites'));
-      setSelectedIds(new Set(bookCollectionIds));
+      setShelfs(allShelfs.filter(c => c.shelfType !== 'favorites'));
+      setSelectedIds(new Set(bookShelfIds));
     } catch (error) {
-      toast.error('Failed to load collections', 'An error occurred while loading collections');
+      toast.error('Failed to load shelves', 'An error occurred while loading shelves');
     } finally {
       setLoading(false);
     }
@@ -53,22 +53,22 @@ export function CollectionSelectDialog({ bookId, open, onOpenChange }: Collectio
   const handleSave = async () => {
     setSaving(true);
     try {
-      const currentIds = await api.getBookCollectionIds(bookId);
+      const currentIds = await api.getBookShelfIds(bookId);
       const currentSet = new Set(currentIds);
       
       const toAdd = [...selectedIds].filter(id => !currentSet.has(id));
       const toRemove = [...currentSet].filter(id => !selectedIds.has(id));
 
       await Promise.all([
-        ...toAdd.map(id => api.addBookToCollection(id, bookId)),
-        ...toRemove.map(id => api.removeBookFromCollection(id, bookId))
+        ...toAdd.map(id => api.addBookToShelf(id, bookId)),
+        ...toRemove.map(id => api.removeBookFromShelf(id, bookId))
       ]);
 
-      toast.success('Collection Added', `Collections updated successfully`);
+      toast.success('Shelf Added', `Shelfs updated successfully`);
       onOpenChange(false);
     } catch (error) {
-      console.error('Failed to update collections', error);
-      toast.error('Failed to update collections', 'An error occurred');
+      console.error('Failed to update shelves', error);
+      toast.error('Failed to update shelves', 'An error occurred');
     } finally {
       setSaving(false);
     }
@@ -83,7 +83,7 @@ export function CollectionSelectDialog({ bookId, open, onOpenChange }: Collectio
             <div className="flex items-center justify-between">
               <Dialog.Title className="text-lg font-semibold leading-none tracking-tight flex items-center gap-2">
                 <FolderOpen className="h-5 w-5" />
-                Add to Collection
+                Add to Shelf
               </Dialog.Title>
               <Dialog.Close className="rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
                 <X className="h-4 w-4" />
@@ -97,25 +97,25 @@ export function CollectionSelectDialog({ bookId, open, onOpenChange }: Collectio
               <div className="flex items-center justify-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
               </div>
-            ) : collections.length === 0 ? (
+            ) : shelves.length === 0 ? (
               <div className="text-center text-muted-foreground py-8">
-                No collections found. Create one from the sidebar.
+                No shelves found. Create one from the sidebar.
               </div>
             ) : (
               <div className="space-y-2">
-                {collections.map(collection => (
+                {shelves.map(shelf => (
                   <label
-                    key={collection.id}
+                    key={shelf.id}
                     className="flex items-center space-x-3 p-3 rounded-md hover:bg-accent cursor-pointer transition-colors border border-transparent hover:border-border"
                   >
                     <input
                       type="checkbox"
-                      checked={collection.id !== undefined && selectedIds.has(collection.id)}
-                      onChange={() => collection.id !== undefined && handleToggle(collection.id)}
+                      checked={shelf.id !== undefined && selectedIds.has(shelf.id)}
+                      onChange={() => shelf.id !== undefined && handleToggle(shelf.id)}
                       className="h-4 w-4 rounded border-primary text-primary focus:ring-primary bg-background accent-primary"
                     />
                     <span className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                      {collection.name}
+                      {shelf.name}
                     </span>
                   </label>
                 ))}

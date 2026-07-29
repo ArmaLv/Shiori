@@ -5,6 +5,7 @@ import { NavigationRailDesktop } from "./NavigationRailDesktop"
 interface NavigationRailProps {
   currentView: CurrentView
   onNavigateToView?: (view: CurrentView) => void
+  onCreateShelf?: () => void
 }
 
 export function NavigationRail(props: NavigationRailProps) {

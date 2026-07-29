@@ -9,7 +9,7 @@ use std::io::Write;
 pub struct ExportOptions {
     pub format: ExportFormat,
     pub include_metadata: bool,
-    pub include_collections: bool,
+    pub include_shelves: bool,
     pub include_reading_progress: bool,
     pub file_path: String,
 }
@@ -38,7 +38,7 @@ pub struct ExportedBook {
     pub tags: String,
     pub added_date: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub collections: Option<String>,
+    pub shelves: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reading_progress: Option<f64>,
 }
@@ -95,9 +95,9 @@ pub fn export_library(db: &Database, options: ExportOptions) -> Result<String> {
         // Get tags
         let tags = get_tags_string(&conn, book_id)?;
 
-        // Get collections if requested
-        let collections = if options.include_collections {
-            Some(get_collections_string(&conn, book_id)?)
+        // Get shelves if requested
+        let shelves = if options.include_shelves {
+            Some(get_shelves_string(&conn, book_id)?)
         } else {
             None
         };
@@ -123,7 +123,7 @@ pub fn export_library(db: &Database, options: ExportOptions) -> Result<String> {
             language,
             tags,
             added_date,
-            collections,
+            shelves,
             reading_progress,
         });
     }
@@ -168,19 +168,19 @@ fn get_tags_string(conn: &rusqlite::Connection, book_id: i64) -> Result<String> 
     Ok(tags.join(", "))
 }
 
-fn get_collections_string(conn: &rusqlite::Connection, book_id: i64) -> Result<String> {
+fn get_shelves_string(conn: &rusqlite::Connection, book_id: i64) -> Result<String> {
     let mut stmt = conn.prepare(
-        "SELECT c.name FROM collections c 
-         JOIN collections_books cb ON c.id = cb.collection_id 
+        "SELECT c.name FROM shelves c 
+         JOIN shelf_books cb ON c.id = cb.shelf_id 
          WHERE cb.book_id = ?1
          ORDER BY c.name",
     )?;
 
-    let collections: Vec<String> = stmt
+    let shelves: Vec<String> = stmt
         .query_map(params![book_id], |row| row.get(0))?
         .collect::<std::result::Result<Vec<_>, _>>()?;
 
-    Ok(collections.join(", "))
+    Ok(shelves.join(", "))
 }
 
 fn get_reading_progress(conn: &rusqlite::Connection, book_id: i64) -> Result<Option<f64>> {
@@ -213,7 +213,7 @@ fn export_as_csv(books: &[ExportedBook], file_path: &str) -> Result<()> {
         "Language",
         "Tags",
         "Added Date",
-        "Collections",
+        "Shelfs",
         "Reading Progress",
     ])?;
 
@@ -233,7 +233,7 @@ fn export_as_csv(books: &[ExportedBook], file_path: &str) -> Result<()> {
             &book.language,
             &book.tags,
             &book.added_date,
-            book.collections.as_deref().unwrap_or(""),
+            book.shelves.as_deref().unwrap_or(""),
             &book
                 .reading_progress
                 .map(|v| format!("{:.1}%", v))
@@ -288,9 +288,9 @@ fn export_as_markdown(books: &[ExportedBook], file_path: &str) -> Result<()> {
         content.push_str(&format!("**Language:** {}\n\n", book.language));
         content.push_str(&format!("**Added:** {}\n\n", book.added_date));
 
-        if let Some(ref collections) = book.collections {
-            if !collections.is_empty() {
-                content.push_str(&format!("**Collections:** {}\n\n", collections));
+        if let Some(ref shelves) = book.shelves {
+            if !shelves.is_empty() {
+                content.push_str(&format!("**Shelfs:** {}\n\n", shelves));
             }
         }
 

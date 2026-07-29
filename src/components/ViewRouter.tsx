@@ -17,6 +17,7 @@ const OnlineMangaReader = lazy(() => import("./online/OnlineMangaReader").then(m
 const TorboxControlCenter = lazy(() => import("./TorboxControlCenter"))
 const RecycleBinView = lazy(() => import("./RecycleBinView").then(m => ({ default: m.RecycleBinView })))
 const AniListDashboard = lazy(() => import("./online/AniListDashboard").then(m => ({ default: m.AniListDashboard })))
+const ShelfView = lazy(() => import("./shelves/ShelfView").then(m => ({ default: m.ShelfView })))
 
 const LoadingSpinner = ({ className = "h-screen" }: { className?: string }) => (
   <div className={`flex items-center justify-center ${className}`}>
@@ -116,7 +117,7 @@ export function ViewRouter({
               onViewDetails={handleViewDetails}
               onEditBook={handleEditBook}
               onDeleteBook={handleDeleteBook}
-              onAddToCollection={dialogs.openCollectionSelectDialog}
+              onAddToShelf={dialogs.openShelfSelectDialog}
               onManageTags={dialogs.openTagSelectDialog}
               searchQuery={searchQuery}
               onSearchChange={onSearchChange}
@@ -145,6 +146,12 @@ export function ViewRouter({
               onDeleteBook={handleDeleteBook}
               dialogs={dialogs}
             />
+          </Suspense>
+        )}
+
+        {currentView === 'shelves' && (
+          <Suspense fallback={<LoadingSpinner className="py-24" />}>
+            <ShelfView />
           </Suspense>
         )}
 

@@ -2,13 +2,15 @@ import type { CurrentView } from "@/store/uiStore"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { useNavigationRail } from "./hooks/useNavigationRail"
+import { ShelfSidebar } from "../shelves/ShelfSidebar"
 
 interface NavigationRailDesktopProps {
   currentView: CurrentView
   onNavigateToView?: (view: CurrentView) => void
+  onCreateShelf?: () => void
 }
 
-export function NavigationRailDesktop({ currentView, onNavigateToView }: NavigationRailDesktopProps) {
+export function NavigationRailDesktop({ currentView, onNavigateToView, onCreateShelf }: NavigationRailDesktopProps) {
   const { sidebarCollapsed, toggleSidebar, visibleNavItems } = useNavigationRail()
 
   return (
@@ -31,7 +33,7 @@ export function NavigationRailDesktop({ currentView, onNavigateToView }: Navigat
           </button>
         </div>
 
-        <div className={`flex flex-1 flex-col gap-2 ${sidebarCollapsed ? "items-center" : "items-stretch"}`}>
+        <div className={`flex flex-col gap-2 ${sidebarCollapsed ? "items-center flex-1" : "items-stretch shrink-0 mb-4"}`}>
           {visibleNavItems.map(({ label, targetView, isActive, icon: Icon }) => {
             const active = isActive(currentView)
             const navButton = (
@@ -68,6 +70,15 @@ export function NavigationRailDesktop({ currentView, onNavigateToView }: Navigat
             )
           })}
         </div>
+
+        {!sidebarCollapsed && (
+          <div className="flex-1 overflow-hidden border-t border-border/20 pt-4 -mx-1 px-1">
+            <ShelfSidebar 
+              onCreateShelf={onCreateShelf || (() => {})} 
+              onEditShelf={() => {}} 
+            />
+          </div>
+        )}
       </nav>
     </TooltipProvider>
   )

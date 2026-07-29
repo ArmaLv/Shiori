@@ -15,7 +15,7 @@ export function useDialogManager() {
   const [advancedFilterOpen, setAdvancedFilterOpen] = useState(false);
   const [batchMetadataDialogOpen, setBatchMetadataDialogOpen] = useState(false);
   const [seriesViewOpen, setSeriesViewOpen] = useState(false);
-  const [collectionSelectDialogOpen, setCollectionSelectDialogOpen] = useState(false);
+  const [shelfSelectDialogOpen, setShelfSelectDialogOpen] = useState(false);
   const [tagSelectDialogOpen, setTagSelectDialogOpen] = useState(false);
 
   // Shared dialog context
@@ -54,9 +54,9 @@ export function useDialogManager() {
     setDetailsDialogOpen(true);
   }, []);
 
-  const openCollectionSelectDialog = useCallback((bookId: number) => {
+  const openShelfSelectDialog = useCallback((bookId: number) => {
     setDialogBookId(bookId);
-    setCollectionSelectDialogOpen(true);
+    setShelfSelectDialogOpen(true);
   }, []);
 
   const openTagSelectDialog = useCallback((bookId: number) => {
@@ -89,7 +89,7 @@ export function useDialogManager() {
     advancedFilterOpen, setAdvancedFilterOpen,
     batchMetadataDialogOpen, setBatchMetadataDialogOpen,
     seriesViewOpen, setSeriesViewOpen,
-    collectionSelectDialogOpen, setCollectionSelectDialogOpen,
+    shelfSelectDialogOpen, setShelfSelectDialogOpen,
     tagSelectDialogOpen, setTagSelectDialogOpen,
 
     // Context data
@@ -104,7 +104,7 @@ export function useDialogManager() {
     openDeleteDialog,
     openDeleteMultipleDialog,
     openDetailsDialog,
-    openCollectionSelectDialog,
+    openShelfSelectDialog,
     openTagSelectDialog,
     openBatchMetadataDialog,
     openSeriesView,

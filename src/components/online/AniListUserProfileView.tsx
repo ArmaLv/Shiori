@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { useAniListAccessToken } from '@/auth/useAniListAccessToken';
-import { getViewer, AnilistUser, AnilistMediaListCollection } from '@/lib/anilist';
+import { getViewer, AnilistUser, AnilistMediaListShelf } from '@/lib/anilist';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -21,14 +21,14 @@ import { AniListUserMangaView } from './AniListUserMangaView';
 interface AniListUserProfileViewProps {
   onClose: () => void;
   user: AnilistUser;
-  collection: AnilistMediaListCollection | null;
+  shelf: AnilistMediaListShelf | null;
 }
 
-export function AniListUserProfileView({ onClose, user, collection }: AniListUserProfileViewProps) {
+export function AniListUserProfileView({ onClose, user, shelf }: AniListUserProfileViewProps) {
   const [activeTab, setActiveTab] = useState<'profile' | 'manga' | 'activities' | 'social' | 'favourites' | 'statistics' | 'reviews'>('profile');
 
   // If AniList returns 0 manga stats (which happens for some users due to API bugs or caching),
-  // we calculate accurate statistics directly from their local AniList collection.
+  // we calculate accurate statistics directly from their local AniList shelf.
   const calculatedStats = React.useMemo(() => {
     console.log("CalculatedStats useMemo running. User:", user);
     if (user.statistics?.manga?.count && user.statistics.manga.count > 0) {
@@ -36,8 +36,8 @@ export function AniListUserProfileView({ onClose, user, collection }: AniListUse
       return user.statistics.manga;
     }
     
-    console.log("Falling back to local calculation. Collection:", collection);
-    if (!collection) return null;
+    console.log("Falling back to local calculation. Shelf:", shelf);
+    if (!shelf) return null;
 
     let count = 0;
     let chaptersRead = 0;
@@ -48,7 +48,7 @@ export function AniListUserProfileView({ onClose, user, collection }: AniListUse
     const statusesMap: Record<string, number> = {};
     const countriesMap: Record<string, number> = {};
 
-    collection.lists.forEach(list => {
+    shelf.lists.forEach(list => {
       list.entries.forEach(entry => {
         count++;
         chaptersRead += entry.progress || 0;
@@ -77,7 +77,7 @@ export function AniListUserProfileView({ onClose, user, collection }: AniListUse
     // Variance calculation
     let varianceSum = 0;
     if (scoreEntries > 0) {
-      collection.lists.forEach(list => {
+      shelf.lists.forEach(list => {
         list.entries.forEach(entry => {
           if (entry.score > 0) {
             varianceSum += Math.pow(entry.score - meanScore, 2);
@@ -98,7 +98,7 @@ export function AniListUserProfileView({ onClose, user, collection }: AniListUse
       statuses: Object.entries(statusesMap).map(([status, c]) => ({ status, count: c })),
       countries: Object.entries(countriesMap).map(([country, c]) => ({ country, count: c })),
     };
-  }, [user, collection]);
+  }, [user, shelf]);
 
   // Render content in a portal for Android full-screen overlay, escaping z-index stacking context
   const content = (

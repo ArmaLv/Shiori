@@ -511,7 +511,7 @@ export function HomePage({ onOpenBook, onViewRSS, searchQuery = "", onSearchChan
       </div>
 
       {/* ── ROW 3: COLLECTIONS ── */}
-      <div className="bento-row collections-row hidden md:grid">
+      <div className="bento-row shelves-row hidden md:grid">
         
         {/* Online Discovery */}
         <div 
