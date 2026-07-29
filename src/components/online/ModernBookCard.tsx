@@ -90,7 +90,6 @@ export const ModernBookCard = memo(function ModernBookCard({
     });
 
     return () => { active = false; };
-  }, [visible, coverUrl, imgError, title, author, fallbackAttempted]);
   }, [coverUrl, imgError, title, author, fallbackAttempted]);
 
   const progressPercent = downloadState?.total_bytes && downloadState.total_bytes > 0 

@@ -162,14 +162,14 @@ export const CreateShelfDialog = ({
         <Dialog.Overlay className="fixed inset-0 bg-black/60 backdrop-blur-xl z-[200] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
         <Dialog.Content 
           aria-describedby={undefined} 
-          className="fixed left-[50%] top-[50%] z-[200] w-[95vw] max-w-[800px] translate-x-[-50%] translate-y-[-50%] bg-[#0a0a0a]/90 backdrop-blur-2xl p-6 md:p-10 shadow-2xl border border-white/10 rounded-3xl duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] max-h-[90vh] overflow-y-auto"
+          className="fixed left-[50%] top-[50%] z-[200] w-[95vw] max-w-[800px] translate-x-[-50%] translate-y-[-50%] bg-background/95 backdrop-blur-2xl p-6 md:p-10 shadow-2xl border border-border rounded-3xl duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] max-h-[90vh] overflow-y-auto"
         >
           <div className="flex items-center justify-between mb-8">
-            <Dialog.Title className="text-2xl font-bold tracking-tight text-white/90">
+            <Dialog.Title className="text-2xl font-bold tracking-tight text-foreground">
               {editShelf ? 'Edit Shelf' : 'Create Shelf'}
             </Dialog.Title>
             <Dialog.Close asChild>
-              <button className="rounded-full p-2 text-white/50 hover:bg-white/10 hover:text-white transition-colors">
+              <button className="rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
                 <X className="h-5 w-5" />
                 <span className="sr-only">Close</span>
               </button>
@@ -181,7 +181,7 @@ export const CreateShelfDialog = ({
               {/* Left Column: Text Inputs */}
               <div className="space-y-8">
                 <div className="space-y-3">
-                  <label className="text-sm font-semibold text-white/90 ml-1">Name</label>
+                  <label className="text-sm font-semibold text-foreground ml-1">Name</label>
                   <input
                     type="text"
                     value={name}
@@ -190,21 +190,21 @@ export const CreateShelfDialog = ({
                       setErrors(prev => ({ ...prev, name: undefined }));
                     }}
                     className={cn(
-                      "flex w-full rounded-2xl bg-white/5 border px-5 py-4 text-base text-white/90 placeholder:text-white/30 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-white/20",
-                      errors.name ? "border-rose-500/50 bg-rose-500/10" : "border-white/10 hover:border-white/20 hover:bg-white/10"
+                      "flex w-full rounded-2xl bg-muted/50 border px-5 py-4 text-base text-foreground placeholder:text-muted-foreground transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-primary/50",
+                      errors.name ? "border-destructive/50 bg-destructive/10" : "border-border hover:border-primary/50 hover:bg-muted"
                     )}
                     placeholder="e.g. Science Fiction"
                     required
                   />
-                  {errors.name && <p className="text-xs text-rose-500 ml-1">{errors.name}</p>}
+                  {errors.name && <p className="text-xs text-destructive ml-1">{errors.name}</p>}
                 </div>
 
                 <div className="space-y-3">
-                  <label className="text-sm font-semibold text-white/90 ml-1">Description (Optional)</label>
+                  <label className="text-sm font-semibold text-foreground ml-1">Description (Optional)</label>
                   <textarea
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    className="flex min-h-[140px] w-full rounded-2xl bg-white/5 border border-white/10 px-5 py-4 text-sm text-white/90 placeholder:text-white/30 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-white/20 hover:border-white/20 hover:bg-white/10 resize-none leading-relaxed"
+                    className="flex min-h-[140px] w-full rounded-2xl bg-muted/50 border border-border px-5 py-4 text-sm text-foreground placeholder:text-muted-foreground transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-primary/50 hover:border-primary/50 hover:bg-muted resize-none leading-relaxed"
                     placeholder="What's this shelf about?"
                   />
                 </div>
@@ -213,26 +213,26 @@ export const CreateShelfDialog = ({
               {/* Right Column: Selectors */}
               <div className="space-y-8">
                 <div className="space-y-3">
-                  <label className="text-sm font-semibold text-white/90 ml-1">Parent Shelf (Optional)</label>
+                  <label className="text-sm font-semibold text-foreground ml-1">Parent Shelf (Optional)</label>
                   <div className="relative">
                     <select
                       value={selectedParentId || ''}
                       onChange={(e) => setSelectedParentId(e.target.value ? Number(e.target.value) : null)}
-                      className="flex w-full appearance-none rounded-2xl bg-white/5 border border-white/10 px-5 py-4 text-sm text-white/90 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-white/20 hover:border-white/20 hover:bg-white/10 cursor-pointer"
+                      className="flex w-full appearance-none rounded-2xl bg-muted/50 border border-border px-5 py-4 text-sm text-foreground transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-primary/50 hover:border-primary/50 hover:bg-muted cursor-pointer"
                     >
-                      <option value="" className="bg-[#1a1a1a] text-white">None (Top Level)</option>
+                      <option value="" className="bg-background text-foreground">None (Top Level)</option>
                       {getAvailableParentShelfs().map((col) => (
-                        <option key={col.id} value={col.id} className="bg-[#1a1a1a] text-white">{col.name}</option>
+                        <option key={col.id} value={col.id} className="bg-background text-foreground">{col.name}</option>
                       ))}
                     </select>
-                    <div className="pointer-events-none absolute inset-y-0 right-5 flex items-center text-white/40">
+                    <div className="pointer-events-none absolute inset-y-0 right-5 flex items-center text-muted-foreground">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
                     </div>
                   </div>
                 </div>
 
                 <div className="space-y-3">
-                  <label className="text-sm font-semibold text-white/90 ml-1">Content Type</label>
+                  <label className="text-sm font-semibold text-foreground ml-1">Content Type</label>
                   <div className="grid grid-cols-3 gap-3">
                     {[
                       { id: 'mixed', label: 'Mixed', icon: FolderOpen },
@@ -249,11 +249,11 @@ export const CreateShelfDialog = ({
                           className={cn(
                             "flex flex-col items-center justify-center gap-2.5 py-4 rounded-2xl border text-xs font-medium transition-all duration-300",
                             isActive 
-                              ? "bg-white/10 border-white/30 text-white shadow-[0_0_15px_rgba(255,255,255,0.05)]" 
-                              : "bg-white/5 border-white/5 text-white/50 hover:bg-white/10 hover:text-white/90"
+                              ? "bg-primary text-primary-foreground border-primary shadow-md" 
+                              : "bg-muted/50 border-border text-muted-foreground hover:bg-muted hover:text-foreground"
                           )}
                         >
-                          <Icon className={cn("w-5 h-5 transition-transform duration-300", isActive ? "scale-110 text-white" : "")} />
+                          <Icon className={cn("w-5 h-5 transition-transform duration-300", isActive ? "scale-110" : "")} />
                           {type.label}
                         </button>
                       )
@@ -263,7 +263,7 @@ export const CreateShelfDialog = ({
 
                 {/* Theme Color */}
                 <div className="space-y-3">
-                  <label className="text-sm font-semibold text-white/90 ml-1">Color Theme</label>
+                  <label className="text-sm font-semibold text-foreground ml-1">Color Theme</label>
                   <div className="flex flex-wrap gap-3">
                     {PRESET_COLORS.map((presetColor) => (
                       <button
@@ -271,8 +271,8 @@ export const CreateShelfDialog = ({
                         type="button"
                         onClick={() => setColor(presetColor)}
                         className={cn(
-                          "w-9 h-9 rounded-full transition-all duration-300 outline-none",
-                          color === presetColor ? "ring-2 ring-white ring-offset-2 ring-offset-[#0a0a0a] scale-110 shadow-lg" : "opacity-40 hover:opacity-100 hover:scale-110 hover:ring-2 hover:ring-white/30 hover:ring-offset-2 hover:ring-offset-[#0a0a0a]"
+                          "w-9 h-9 rounded-full transition-all duration-300 outline-none ring-offset-background",
+                          color === presetColor ? "ring-2 ring-foreground ring-offset-2 scale-110 shadow-lg" : "opacity-40 hover:opacity-100 hover:scale-110 hover:ring-2 hover:ring-foreground/30 hover:ring-offset-2"
                         )}
                         style={{ backgroundColor: presetColor, boxShadow: color === presetColor ? `0 0 20px ${presetColor}60` : 'none' }}
                       />
@@ -282,14 +282,14 @@ export const CreateShelfDialog = ({
 
                 {/* SVG Icon Picker */}
                 <div className="space-y-3">
-                  <label className="text-sm font-semibold text-white/90 ml-1">Icon Symbol</label>
+                  <label className="text-sm font-semibold text-foreground ml-1">Icon Symbol</label>
                   <div className="flex flex-wrap gap-2.5">
                     <button
                       type="button"
                       onClick={() => setIcon('')}
                       className={cn(
                         "w-11 h-11 rounded-xl flex items-center justify-center transition-all duration-300 border",
-                        !icon ? "bg-white/15 border-white/30 text-white shadow-lg" : "bg-white/5 border-white/5 text-white/40 hover:bg-white/10 hover:text-white/90"
+                        !icon ? "bg-primary border-primary text-primary-foreground shadow-lg" : "bg-muted/50 border-border text-muted-foreground hover:bg-muted hover:text-foreground"
                       )}
                     >
                       <X className="w-5 h-5" />
@@ -303,7 +303,7 @@ export const CreateShelfDialog = ({
                           onClick={() => setIcon(preset.id)}
                           className={cn(
                             "w-11 h-11 rounded-xl flex items-center justify-center transition-all duration-300 border",
-                            icon === preset.id ? "bg-white/15 border-white/30 text-white shadow-lg" : "bg-white/5 border-white/5 text-white/40 hover:bg-white/10 hover:text-white/90"
+                            icon === preset.id ? "bg-primary border-primary text-primary-foreground shadow-lg" : "bg-muted/50 border-border text-muted-foreground hover:bg-muted hover:text-foreground"
                           )}
                         >
                           <IconComponent className="w-5 h-5" />
@@ -315,11 +315,11 @@ export const CreateShelfDialog = ({
               </div>
             </div>
 
-            <div className="flex justify-end pt-6 mt-4 border-t border-white/10">
+            <div className="flex justify-end pt-6 mt-4 border-t border-border/50">
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full md:w-auto px-8 py-3 text-sm font-semibold rounded-xl bg-white text-black hover:bg-white/90 transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50"
+                className="w-full md:w-auto px-8 py-3 text-sm font-semibold rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {loading && <Loader2 className="w-4 h-4 animate-spin" />}
                 {loading ? 'Saving...' : editShelf ? 'Update Shelf' : 'Create Shelf'}
