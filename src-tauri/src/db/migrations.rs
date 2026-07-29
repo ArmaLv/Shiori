@@ -1425,7 +1425,7 @@ impl<'a> MigrationManager<'a> {
         log::info!("[Migration] Applying v13: Collection types and book favorites");
 
         // Add collection_type column: 'regular', 'shelf', 'favorites'
-        if !self.column_exists("collections", "collection_type")? {
+        if self.table_exists("collections")? && !self.column_exists("collections", "collection_type")? {
             self.conn.execute(
                 "ALTER TABLE collections ADD COLUMN collection_type TEXT NOT NULL DEFAULT 'regular'",
                 [],
@@ -1858,7 +1858,7 @@ impl<'a> MigrationManager<'a> {
     fn migrate_to_v26(&self) -> Result<()> {
         log::info!("[Migration] Applying v26: Add smart_query to collections");
 
-        if !self.column_exists("collections", "smart_query")? {
+        if self.table_exists("collections")? && !self.column_exists("collections", "smart_query")? {
             self.conn
                 .execute("ALTER TABLE collections ADD COLUMN smart_query TEXT", [])?;
         }
