@@ -2238,6 +2238,7 @@ impl<'a> MigrationManager<'a> {
                     smart_rules TEXT,
                     icon TEXT,
                     color TEXT,
+                    shelf_type TEXT NOT NULL DEFAULT 'regular',
                     sort_order INTEGER DEFAULT 0,
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (parent_id) REFERENCES shelves(id) ON DELETE CASCADE
@@ -2246,8 +2247,8 @@ impl<'a> MigrationManager<'a> {
             )?;
 
             self.conn.execute(
-                "INSERT INTO shelves (id, name, description, parent_id, is_smart, smart_rules, icon, color, sort_order, created_at)
-                 SELECT id, name, description, parent_id, is_smart, smart_rules, icon, color, sort_order, created_at
+                "INSERT INTO shelves (id, name, description, parent_id, is_smart, smart_rules, icon, color, shelf_type, sort_order, created_at)
+                 SELECT id, name, description, parent_id, is_smart, smart_rules, icon, color, collection_type, sort_order, created_at
                  FROM collections",
                 [],
             )?;
