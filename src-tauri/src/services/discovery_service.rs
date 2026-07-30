@@ -9,13 +9,16 @@ use std::time::Duration;
 pub const MDNS_SERVICE_TYPE: &str = "_shiori._tcp.local.";
 
 pub struct DiscoveryService {
-    mdns: ServiceDaemon,
+    mdns: Option<ServiceDaemon>,
     registered_service: Arc<Mutex<Option<String>>>,
 }
 
 impl DiscoveryService {
     pub fn new() -> Result<Self> {
-        let mdns = ServiceDaemon::new().map_err(|e| anyhow!("Failed to create mDNS daemon: {}", e))?;
+        let mdns = ServiceDaemon::new().ok();
+        if mdns.is_none() {
+            log::warn!("Failed to create mDNS daemon (common on Android without multicast permissions).");
+        }
         Ok(Self {
             mdns,
             registered_service: Arc::new(Mutex::new(None)),
@@ -54,9 +57,13 @@ impl DiscoveryService {
             Some(properties),
         ).map_err(|e| anyhow!("Failed to create service info: {}", e))?;
 
-        self.mdns.register(service_info).map_err(|e| anyhow!("Failed to register mDNS service: {}", e))?;
-        *registered = Some(full_name);
-        info!("mDNS broadcast started for {}", instance_name);
+        if let Some(mdns) = &self.mdns {
+            mdns.register(service_info).map_err(|e| anyhow!("Failed to register mDNS service: {}", e))?;
+            *registered = Some(full_name);
+            info!("mDNS broadcast started for {}", instance_name);
+        } else {
+            log::warn!("mDNS daemon not available, skipping broadcast");
+        }
 
         Ok(())
     }
@@ -64,14 +71,20 @@ impl DiscoveryService {
     pub async fn stop_broadcast(&self) -> Result<()> {
         let mut registered = self.registered_service.lock().await;
         if let Some(full_name) = registered.take() {
-            self.mdns.unregister(&full_name).map_err(|e| anyhow!("Failed to unregister mDNS service: {}", e))?;
-            info!("mDNS broadcast stopped for {}", full_name);
+            if let Some(mdns) = &self.mdns {
+                mdns.unregister(&full_name).map_err(|e| anyhow!("Failed to unregister mDNS service: {}", e))?;
+                info!("mDNS broadcast stopped for {}", full_name);
+            }
         }
         Ok(())
     }
 
     pub async fn scan_companions(&self) -> Result<Vec<CompanionInstance>> {
-        let receiver = self.mdns.browse(MDNS_SERVICE_TYPE).map_err(|e| anyhow!("Failed to browse mDNS: {}", e))?;
+        let mdns = match &self.mdns {
+            Some(m) => m,
+            None => return Ok(Vec::new()),
+        };
+        let receiver = mdns.browse(MDNS_SERVICE_TYPE).map_err(|e| anyhow!("Failed to browse mDNS: {}", e))?;
         
         let mut instances = Vec::new();
         
@@ -105,7 +118,7 @@ impl DiscoveryService {
         }
 
         // We can stop browsing
-        let _ = self.mdns.stop_browse(MDNS_SERVICE_TYPE);
+        let _ = mdns.stop_browse(MDNS_SERVICE_TYPE);
 
         Ok(instances)
     }

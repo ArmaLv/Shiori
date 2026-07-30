@@ -2224,7 +2224,7 @@ impl<'a> MigrationManager<'a> {
     fn migrate_to_v40(&self) -> Result<()> {
         log::info!("[Migration] Applying v40: Rename collections to shelves safely");
 
-        let migrate_collections = self.table_exists("collections")? && !self.table_exists("shelves")?;
+        let migrate_collections = self.table_exists("collections")?;
         
         if migrate_collections {
             // Recreate shelves table to avoid ALTER TABLE RENAME TO constraints on old SQLite
@@ -2256,7 +2256,7 @@ impl<'a> MigrationManager<'a> {
 
         // To avoid RENAME COLUMN which is not supported on Android's older system SQLite,
         // we recreate shelf_books from collections_books.
-        if self.table_exists("collections_books")? && !self.table_exists("shelf_books")? {
+        if self.table_exists("collections_books")? {
             self.conn.execute(
                 "CREATE TABLE IF NOT EXISTS shelf_books (
                     shelf_id INTEGER NOT NULL,
