@@ -2288,15 +2288,6 @@ impl<'a> MigrationManager<'a> {
             }
         }
 
-        // Rename column collections.collection_type -> shelves.shelf_type (or collections_type to shelf_type)
-        if self.table_exists("shelves")? && self.column_exists("shelves", "collection_type")? {
-            self.conn.execute("ALTER TABLE shelves RENAME COLUMN collection_type TO shelf_type", [])?;
-        }
-
-        // Rename column collections_books.collection_id -> shelf_books.shelf_id
-        if self.table_exists("shelf_books")? && self.column_exists("shelf_books", "collection_id")? {
-            self.conn.execute("ALTER TABLE shelf_books RENAME COLUMN collection_id TO shelf_id", [])?;
-        }
 
         let hash = Self::calculate_checksum("v40_rename_collections_to_shelves");
         self.record_migration(40, "rename_collections_to_shelves", &hash)?;
