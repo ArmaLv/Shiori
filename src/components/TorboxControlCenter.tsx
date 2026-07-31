@@ -9,7 +9,6 @@ import * as Tabs from '@radix-ui/react-tabs'
 import {
   AlertCircle,
   Cloud,
-  DownloadCloud,
   Download,
   Link,
   Loader2,

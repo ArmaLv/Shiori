@@ -82,6 +82,8 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
+    // Playwright specs under tests/e2e are driven by the Playwright runner, not Vitest. Excluding them avoids "test.beforeEach() ... called here" errors.
+    exclude: ['**/node_modules/**', '**/dist/**', 'tests/e2e/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

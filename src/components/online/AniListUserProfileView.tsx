@@ -1,12 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  ChevronLeft, BookOpen, Activity, Users, Heart, BarChart3, MessageSquare, 
-  Loader2
+  ChevronLeft, BookOpen, Activity, Users, Heart, BarChart3, MessageSquare
 } from 'lucide-react';
 import { createPortal } from 'react-dom';
-import { useAniListAccessToken } from '@/auth/useAniListAccessToken';
-import { getViewer, AnilistUser, AnilistMediaListShelf } from '@/lib/anilist';
+import { AnilistUser, AnilistMediaListShelf } from '@/lib/anilist';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 

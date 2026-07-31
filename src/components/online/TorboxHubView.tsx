@@ -29,7 +29,6 @@ import { useOnlineSearchStore } from '@/store/onlineSearchStore';
 import { useSourceStore } from '@/store/sourceStore';
 import { usePreferencesStore } from '@/store/preferencesStore';
 import { parsePageUrl } from '@/lib/utils';
-import { isAndroid } from '@/lib/tauri';
 
 type TorboxTab = 'books' | 'manga' | 'search';
 type SearchKind = 'all' | 'books' | 'manga' | 'comics';

@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Shelf, api } from '../../lib/tauri';
 import * as ContextMenu from '@radix-ui/react-context-menu';
 import { 
-  Folder, 
   Sparkles, 
   Library, 
   Star, 
@@ -58,8 +57,8 @@ function CoverStack({ covers, color }: { covers: string[]; color: string }) {
         let offset = 0;
         let rotate = 0;
         let rotateY = 0;
-        let scale = 1 - revIdx * 0.06;
-        let opacity = 1 - revIdx * 0.1;
+        const scale = 1 - revIdx * 0.06;
+        const opacity = 1 - revIdx * 0.1;
         
         if (revIdx === 1) {
           offset = -20;

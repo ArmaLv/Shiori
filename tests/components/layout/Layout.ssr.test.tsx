@@ -17,9 +17,10 @@ vi.mock('@/store/uiStore', () => ({
     return selector(state);
   }),
 }));
-vi.mock('@/lib/tauri', () => ({
-  api: { getBooks: vi.fn().mockResolvedValue([]) },
-}));
+vi.mock('@/lib/tauri', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/tauri')>();
+  return { ...actual, api: { getBooks: vi.fn().mockResolvedValue([]) } };
+});
 
 describe('Layout Component (SSR/Initial Render)', () => {
   beforeEach(() => {

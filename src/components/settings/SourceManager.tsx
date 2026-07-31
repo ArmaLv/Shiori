@@ -1,5 +1,5 @@
 import { useSourceStore } from '@/store/sourceStore';
-import { ExternalLink, Database, Globe, Puzzle, Sparkles } from 'lucide-react';
+import { ExternalLink, Database, Globe, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
 import { motion, Variants } from 'framer-motion';

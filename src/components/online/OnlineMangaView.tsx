@@ -11,12 +11,8 @@ import {
 } from "@/hooks/useMangaDex";
 import { Button } from "@/components/ui/button";
 import { logger } from "@/lib/logger";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+
+
 import { useSourceStore } from "@/store/sourceStore";
 import { useOnlineSearchStore } from "@/store/onlineSearchStore";
 import { OnlineSearchHeader } from "./OnlineSearchHeader";
@@ -35,7 +31,6 @@ import {
 } from "./OnlineMangaDetailView";
 import { MangaBrowseNavBar } from "./MangaBrowseNavBar";
 import { MangaRankList } from "./MangaRankList";
-import { OnlineResultCard } from "./OnlineResultCard";
 import { ModernBookCard } from "./ModernBookCard";
 import { SkeletonGrid } from "./SkeletonLoaders";
 import { type CarouselItem } from "./ContentCarousel";

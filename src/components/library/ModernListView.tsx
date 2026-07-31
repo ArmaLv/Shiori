@@ -1,4 +1,4 @@
-import { BookOpen, Star, Download, Edit, Trash2, Calendar, FileType, FolderPlus, Tag as TagIcon } from 'lucide-react'
+import { BookOpen, Star, Download, Edit, Trash2, Calendar, FileType, FolderPlus } from 'lucide-react'
 import { LibraryContextMenu, type LibraryMenuItem } from '@/components/ui/LibraryContextMenu'
 import { cn, formatFileSize, formatDate } from '@/lib/utils'
 import type { Book } from '@/lib/tauri'

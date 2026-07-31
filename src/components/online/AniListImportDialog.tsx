@@ -1,10 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import { X, DownloadCloud, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { X, DownloadCloud, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 import { AnilistMediaListShelf, AnilistMediaList } from '@/lib/anilist';
-import { invoke } from '@tauri-apps/api/core';
 import { api } from '@/lib/tauri';
 import { pluginApi } from '@/lib/pluginSources';
 import { toast } from '@/store/toastStore';

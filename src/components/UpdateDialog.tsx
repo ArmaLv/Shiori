@@ -41,29 +41,53 @@ const itemVariants = {
   },
 };
 
-// A simple floating particle component
+interface Particle {
+  x: number;
+  y: number;
+  driftY: number;
+  duration: number;
+  delay: number;
+}
+
+// A simple floating particle component.
+// Randomness is generated once in an effect (commit phase), not during render —
+// calling Math.random() in render is impure and makes particles jump each frame.
 const FloatingParticles = () => {
+  const [particles, setParticles] = useState<Particle[]>([]);
+
+  useEffect(() => {
+    setParticles(
+      [...Array(6)].map(() => ({
+        x: Math.random() * 500,
+        y: Math.random() * 300 + 100,
+        driftY: Math.random() * -100 - 50,
+        duration: Math.random() * 3 + 2,
+        delay: Math.random() * 2,
+      }))
+    );
+  }, []);
+
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      {[...Array(6)].map((_, i) => (
+      {particles.map((p, i) => (
         <motion.div
           key={i}
           className="absolute w-2 h-2 rounded-full bg-primary/30"
           initial={{
-            x: Math.random() * 500,
-            y: Math.random() * 300 + 100,
+            x: p.x,
+            y: p.y,
             opacity: 0
           }}
           animate={{
-            y: [null, Math.random() * -100 - 50],
+            y: [null, p.driftY],
             opacity: [0, 0.8, 0],
             scale: [0.5, 1.5, 0.5]
           }}
           transition={{
-            duration: Math.random() * 3 + 2,
+            duration: p.duration,
             repeat: Infinity,
             ease: "easeInOut",
-            delay: Math.random() * 2
+            delay: p.delay
           }}
         />
       ))}

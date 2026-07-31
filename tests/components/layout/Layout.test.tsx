@@ -34,12 +34,17 @@ vi.mock('@/store/uiStore', () => ({
   }),
 }));
 
-// Mock tauri API
-vi.mock('@/lib/tauri', () => ({
-  api: {
-    getBooks: vi.fn().mockResolvedValue([]),
-  },
-}));
+// Mock tauri API. Preserve the real named exports (isAndroid, isTauri,
+// getProxyUrl, …) that Layout's descendants import; only stub `api`.
+vi.mock('@/lib/tauri', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/tauri')>();
+  return {
+    ...actual,
+    api: {
+      getBooks: vi.fn().mockResolvedValue([]),
+    },
+  };
+});
 
 vi.mock('./NavigationRailDesktop', () => ({
   NavigationRailDesktop: () => <div data-testid="navigation-rail-desktop">NavigationRailDesktop</div>,

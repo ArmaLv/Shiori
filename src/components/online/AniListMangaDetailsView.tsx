@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Download, ExternalLink, Bookmark, ArrowLeft, BookOpen, ChevronUp, ChevronDown, X, Star, Calendar, RefreshCw, AlignLeft, Plus, Minus, Loader2, Check } from 'lucide-react';
+import { Download, ExternalLink, Bookmark, ArrowLeft, BookOpen, ChevronDown, X, Star, Calendar, RefreshCw, AlignLeft, Plus, Minus, Loader2, Check } from 'lucide-react';
 import { AnilistMediaList, AnilistMediaDetails, getMediaDetails, updateMediaListEntry } from '@/lib/anilist';
 import { toast } from '@/store/toastStore';
 import { useAniListAccessToken } from '@/auth/useAniListAccessToken';

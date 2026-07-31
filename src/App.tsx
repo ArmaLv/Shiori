@@ -1,5 +1,4 @@
 import { useEffect, useState, lazy, Suspense, useCallback } from "react"
-import { GlobalDialogs as OriginalGlobalDialogs } from "./components/GlobalDialogs"
 import { ViewRouter } from "./components/ViewRouter"
 import { Layout } from "./components/layout/Layout"
 import { ToastContainer } from "./components/ui/ToastContainer"

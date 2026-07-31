@@ -18,7 +18,6 @@ import { cn } from '@/lib/utils'
 import { api, type Book, type ReadingProgress } from '@/lib/tauri'
 import {
   IconBookOpen,
-  IconEditMeta,
   IconDelete,
   
   IconCheck,
@@ -27,7 +26,7 @@ import { useLibraryStore } from '@/store/libraryStore'
 import { useCoverImage } from '../common/hooks/useCoverImage'
 import { LibraryContextMenu, type LibraryMenuItem } from '@/components/ui/LibraryContextMenu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { Edit2, Pencil, Trash2, Layers, Globe, FolderPlus, Tag as TagIcon, BookOpen } from 'lucide-react'
+import { Pencil, Trash2, Layers, Globe, FolderPlus, BookOpen } from 'lucide-react'
 import { SeriesAssignmentDialog } from './SeriesAssignmentDialog'
 
 // ─── Format Badge ─────────────────────────────

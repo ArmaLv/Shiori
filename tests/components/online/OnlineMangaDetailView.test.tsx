@@ -30,7 +30,7 @@ describe('OnlineMangaDetailView - Action Gating', () => {
     onSaveToLibrary: vi.fn(),
   };
 
-  it('regression: Action gates - Add to Library button should be disabled when isInLibrary is true', () => {
+  it('regression: Action gates - Save to Library button should be disabled when isInLibrary is true', () => {
     const { rerender } = render(
       <OnlineMangaDetailView
         {...defaultProps}
@@ -38,7 +38,8 @@ describe('OnlineMangaDetailView - Action Gating', () => {
       />
     );
 
-    const button = screen.getByRole('button', { name: /in library/i });
+    // When already in the library the button reads "SAVED" and is disabled.
+    const button = screen.getByRole('button', { name: /saved/i });
     expect(button).toBeInTheDocument();
     expect(button).toBeDisabled();
 
@@ -54,7 +55,8 @@ describe('OnlineMangaDetailView - Action Gating', () => {
       />
     );
 
-    const enabledButton = screen.getByRole('button', { name: /add to library/i });
+    // Not in library: button reads "SAVE" and is enabled.
+    const enabledButton = screen.getByRole('button', { name: /^save$/i });
     expect(enabledButton).toBeInTheDocument();
     expect(enabledButton).not.toBeDisabled();
 

@@ -14,17 +14,14 @@ import { convertFileSrc } from '@tauri-apps/api/core';
 import { useMemo, useEffect, useState, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import {
-  BookOpen, Clock, Sparkles, Rss, ArrowRight,
-  ListOrdered, Activity, HardDrive, Heart, History, CheckCircle2, PauseCircle, Globe, BarChart2,
-  Trash2, Settings, Highlighter, ChevronRight, Cloud
+  BookOpen, Clock, Sparkles, ArrowRight,
+  ListOrdered, Activity, HardDrive, Heart, History, CheckCircle2, PauseCircle, BarChart2
 } from 'lucide-react'
-import { AniListIcon, TorboxIcon } from '@/components/icons'
 import { MobileStickyHeader } from '../layout/MobileStickyHeader'
 import { useThumbnail } from '@/hooks/useThumbnail'
 import { FeaturedContinueCard } from './FeaturedContinueCard'
 import { useLibraryStore } from '@/store/libraryStore'
 import { useUIStore, type DomainView } from '@/store/uiStore'
-import { usePreferencesStore } from '@/store/preferencesStore'
 import type { Book, ReadingProgress } from '@/lib/tauri'
 import { api } from '@/lib/tauri'
 import { formatFileSize, isMangaDomain, proxyExternalCover } from '@/lib/utils'
