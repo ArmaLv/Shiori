@@ -14,7 +14,15 @@ use zip::{ZipArchive, ZipWriter};
 const BACKUP_VERSION: &str = "1.0";
 const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Backup manifest.
+///
+/// `#[serde(default)]` makes restore forward- and backward-compatible across app
+/// versions: a field added in a newer app is filled with its default when an
+/// older backup lacks it, and serde already ignores unknown fields, so a backup
+/// written by a newer app still restores on an older one. Either way, changing
+/// this struct never makes an existing backup unreadable.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
 pub struct BackupInfo {
     pub version: String,
     pub created_at: String,
@@ -34,6 +42,24 @@ pub struct RestoreInfo {
     pub covers_restored: usize,
     pub settings_restored: bool,
     pub frontend_settings: Option<String>,
+}
+
+/// Return the column names of `table` within the given attached `schema`
+/// ("main" for the live DB, "backup_db" for the attached backup).
+///
+/// Used by restore to compute the intersection of columns between a backup and
+/// the current schema, so the two can differ without breaking the restore.
+fn table_columns(
+    conn: &rusqlite::Connection,
+    schema: &str,
+    table: &str,
+) -> Result<Vec<String>> {
+    let mut stmt = conn.prepare(&format!("PRAGMA {}.table_info({})", schema, table))?;
+    // PRAGMA table_info columns: (cid, name, type, notnull, dflt_value, pk).
+    let cols = stmt
+        .query_map([], |row| row.get::<_, String>(1))?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    Ok(cols)
 }
 
 /// Create a complete backup of library database, covers, and optionally book files
@@ -229,12 +255,39 @@ pub fn restore_backup(
             .unwrap_or(false);
 
         if table_exists {
-            // Delete existing data and insert from backup
+            // Restore only the columns that exist in BOTH the backup and the
+            // current schema. A plain `SELECT *` requires the column set to match
+            // exactly, so any migration that added or removed a column would make
+            // older backups fail to restore. Intersecting the columns lets the
+            // schema evolve freely: new columns keep their defaults, and columns
+            // dropped since the backup are simply ignored.
+            let current_cols = table_columns(&conn, "main", table)?;
+            let backup_cols: std::collections::HashSet<String> =
+                table_columns(&conn, "backup_db", table)?.into_iter().collect();
+            let shared: Vec<String> = current_cols
+                .into_iter()
+                .filter(|c| backup_cols.contains(c))
+                .collect();
+
+            if shared.is_empty() {
+                // No columns in common (e.g. a fully renamed table) — skip rather
+                // than error, so one incompatible table can't abort the restore.
+                continue;
+            }
+
+            let col_list = shared
+                .iter()
+                .map(|c| format!("\"{}\"", c.replace('"', "\"\"")))
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            // Delete existing data and insert the shared columns from the backup.
             conn.execute(&format!("DELETE FROM main.{}", table), [])?;
             conn.execute(
                 &format!(
-                    "INSERT INTO main.{} SELECT * FROM backup_db.{}",
-                    table, table
+                    "INSERT INTO main.{table} ({cols}) SELECT {cols} FROM backup_db.{table}",
+                    table = table,
+                    cols = col_list
                 ),
                 [],
             )?;

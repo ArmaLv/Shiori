@@ -89,6 +89,26 @@ struct FreeDictDefinition {
     antonyms: Vec<String>,
 }
 
+// --- Wiktionary REST API (fallback dictionary) ---
+// Response is a map of language code -> list of part-of-speech entries.
+// Definitions and examples contain HTML markup that must be stripped.
+
+#[derive(Debug, Deserialize)]
+struct WiktEntry {
+    #[serde(rename = "partOfSpeech")]
+    part_of_speech: Option<String>,
+    #[serde(default)]
+    definitions: Vec<WiktDefinition>,
+}
+
+#[derive(Debug, Deserialize)]
+struct WiktDefinition {
+    #[serde(default)]
+    definition: String,
+    #[serde(default)]
+    examples: Vec<String>,
+}
+
 // --- MyMemory Translation API ---
 
 #[derive(Debug, Deserialize)]
@@ -123,10 +143,27 @@ fn build_client() -> std::result::Result<Client, reqwest::Error> {
         .build()
 }
 
-/// Look up a word in the Free Dictionary API.
+/// Look up a word, trying the Free Dictionary API first and falling back to
+/// Wiktionary if the primary provider is unavailable or has no entry.
+///
+/// Both providers are free and keyless. If both fail, the primary provider's
+/// error is surfaced (it produces the friendlier user-facing messages).
+pub async fn dictionary_lookup(word: &str, lang: &str) -> Result<DictionaryResult> {
+    match free_dictionary_lookup(word, lang).await {
+        Ok(result) => Ok(result),
+        Err(primary_err) => match wiktionary_lookup(word, lang).await {
+            Ok(result) => Ok(result),
+            // Both failed: surface the primary error (better wording than the
+            // fallback's, and it distinguishes "unavailable" from "not found").
+            Err(_fallback_err) => Err(primary_err),
+        },
+    }
+}
+
+/// Primary provider: the Free Dictionary API (dictionaryapi.dev).
 /// Returns structured definitions, phonetics, and examples.
 /// Supports English primarily; other languages via lang code.
-pub async fn dictionary_lookup(word: &str, lang: &str) -> Result<DictionaryResult> {
+async fn free_dictionary_lookup(word: &str, lang: &str) -> Result<DictionaryResult> {
     let client =
         build_client().map_err(|e| ShioriError::Other(format!("HTTP client error: {}", e)))?;
 
@@ -136,11 +173,47 @@ pub async fn dictionary_lookup(word: &str, lang: &str) -> Result<DictionaryResul
         urlencoding::encode(word)
     );
 
-    let response = client
-        .get(&url)
-        .send()
-        .await
-        .map_err(|e| ShioriError::Other(format!("Dictionary request failed: {}", e)))?;
+    // The Free Dictionary API is a free, community-run service with no SLA and
+    // frequently returns transient 5xx errors (502/503/504) or times out under
+    // load. Retry a few times with a short backoff before giving up.
+    const MAX_ATTEMPTS: u32 = 3;
+    let mut response = None;
+    let mut last_transient_error: Option<String> = None;
+
+    for attempt in 1..=MAX_ATTEMPTS {
+        match client.get(&url).send().await {
+            Ok(resp) => {
+                let status = resp.status();
+                // 502/503/504 are transient upstream failures worth retrying.
+                if matches!(status.as_u16(), 502 | 503 | 504) {
+                    last_transient_error =
+                        Some(format!("Dictionary service returned status {}", status));
+                } else {
+                    response = Some(resp);
+                    break;
+                }
+            }
+            Err(e) => {
+                // Network/timeout errors are also transient.
+                last_transient_error = Some(format!("Dictionary request failed: {}", e));
+            }
+        }
+
+        // Back off before the next attempt (skip the wait after the final try).
+        if attempt < MAX_ATTEMPTS {
+            tokio::time::sleep(Duration::from_millis(400 * attempt as u64)).await;
+        }
+    }
+
+    let response = match response {
+        Some(resp) => resp,
+        None => {
+            return Err(ShioriError::Other(format!(
+                "Dictionary service is temporarily unavailable. Please try again in a moment. ({})",
+                last_transient_error.unwrap_or_else(|| "no response".to_string())
+            )));
+        }
+    };
 
     if !response.status().is_success() {
         let status = response.status();
@@ -206,6 +279,112 @@ pub async fn dictionary_lookup(word: &str, lang: &str) -> Result<DictionaryResul
         audio_url,
         meanings,
         source_url,
+    })
+}
+
+/// Fallback provider: Wiktionary's REST API.
+///
+/// Used when the Free Dictionary API is unavailable or has no entry. Returns
+/// definitions grouped by part of speech for the requested language. Wiktionary
+/// definitions come as HTML, so tags are stripped and entities decoded.
+async fn wiktionary_lookup(word: &str, lang: &str) -> Result<DictionaryResult> {
+    let client =
+        build_client().map_err(|e| ShioriError::Other(format!("HTTP client error: {}", e)))?;
+
+    // Wiktionary keys definitions by language code (e.g. "en", "fr").
+    let lang_key = lang.to_lowercase();
+
+    let url = format!(
+        "https://en.wiktionary.org/api/rest_v1/page/definition/{}",
+        urlencoding::encode(word)
+    );
+
+    let response = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| ShioriError::Other(format!("Wiktionary request failed: {}", e)))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        if status.as_u16() == 404 {
+            return Err(ShioriError::Other(format!(
+                "No definition found for \"{}\"",
+                word
+            )));
+        }
+        return Err(ShioriError::Other(format!(
+            "Wiktionary API returned status {}",
+            status
+        )));
+    }
+
+    let by_lang: HashMap<String, Vec<WiktEntry>> = response
+        .json()
+        .await
+        .map_err(|e| ShioriError::Other(format!("Failed to parse Wiktionary response: {}", e)))?;
+
+    // Prefer the requested language; otherwise fall back to English.
+    let entries = by_lang
+        .get(&lang_key)
+        .or_else(|| by_lang.get("en"))
+        .ok_or_else(|| ShioriError::Other(format!("No definition found for \"{}\"", word)))?;
+
+    let strip = crate::conversion::utils::strip_html_tags;
+
+    let meanings: Vec<DictionaryMeaning> = entries
+        .iter()
+        .filter_map(|entry| {
+            let definitions: Vec<DictionaryDefinition> = entry
+                .definitions
+                .iter()
+                .filter_map(|d| {
+                    let text = strip(&d.definition).trim().to_string();
+                    if text.is_empty() {
+                        return None;
+                    }
+                    let example = d
+                        .examples
+                        .iter()
+                        .map(|e| strip(e).trim().to_string())
+                        .find(|e| !e.is_empty());
+                    Some(DictionaryDefinition {
+                        definition: text,
+                        example,
+                        synonyms: Vec::new(),
+                        antonyms: Vec::new(),
+                    })
+                })
+                .take(3) // Match the primary provider's per-part-of-speech limit.
+                .collect();
+
+            if definitions.is_empty() {
+                return None;
+            }
+
+            Some(DictionaryMeaning {
+                part_of_speech: entry
+                    .part_of_speech
+                    .clone()
+                    .unwrap_or_else(|| "unknown".to_string()),
+                definitions,
+            })
+        })
+        .collect();
+
+    if meanings.is_empty() {
+        return Err(ShioriError::Other(format!(
+            "No definition found for \"{}\"",
+            word
+        )));
+    }
+
+    Ok(DictionaryResult {
+        word: word.to_string(),
+        phonetic: None,
+        audio_url: None,
+        meanings,
+        source_url: Some(format!("https://en.wiktionary.org/wiki/{}", word)),
     })
 }
 
