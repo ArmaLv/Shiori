@@ -142,7 +142,7 @@ tauri-plugin-android-auth = { path = "plugins/tauri-plugin-android-auth" }
 tauri-plugin-android-package-install = "2.0.2"
 
 [features]
-default = ["custom-protocol", "native-tts"]
+default = ["custom-protocol"]
 native-tts = ["tauri-plugin-tts"]
 custom-protocol = [ "tauri/custom-protocol" ]
 
