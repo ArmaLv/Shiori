@@ -235,7 +235,7 @@ pub fn run() {
         });
     });
 
-    #[cfg(feature = "native-tts")]
+    #[cfg(all(feature = "native-tts", not(target_os = "linux")))]
     {
         log::info!("Native TTS plugin enabled - initializing tauri-plugin-tts");
         builder = builder.plugin(tauri_plugin_tts::init());
@@ -465,7 +465,13 @@ pub fn run() {
             });
 
             // Initialize discovery service
-            let discovery_service = Arc::new(services::discovery_service::DiscoveryService::new().unwrap());
+            let discovery_service = Arc::new(
+                services::discovery_service::DiscoveryService::new()
+                    .unwrap_or_else(|e| {
+                        log::warn!("Failed to initialize DiscoveryService: {}", e);
+                        services::discovery_service::DiscoveryService::dummy()
+                    })
+            );
             
             app.manage(ActiveDownloads {
                 count: std::sync::atomic::AtomicUsize::new(0),

@@ -14,15 +14,25 @@ impl Database {
     pub fn new<P: AsRef<Path>>(path: P) -> Result<Self> {
         let manager = SqliteConnectionManager::file(path.as_ref()).with_init(|c| {
             // Enable foreign keys
-            c.execute_batch("PRAGMA foreign_keys = ON")?;
-            // Enable WAL mode for better concurrency
-            c.execute_batch("PRAGMA journal_mode = WAL")?;
-            c.execute_batch("PRAGMA synchronous = NORMAL")?;
-            c.execute_batch("PRAGMA temp_store = MEMORY")?;
-            c.execute_batch("PRAGMA mmap_size = 3000000000")?;
-            c.execute_batch("PRAGMA cache_size = -65536")?; // Default to 64MB cache for all connections in pool
-                                                            // Avoid SQLITE_BUSY under concurrent access
-            c.busy_timeout(std::time::Duration::from_millis(5000))?;
+            let _ = c.execute_batch("PRAGMA foreign_keys = ON;");
+            // Enable WAL mode for better concurrency (fallback gracefully if unsupported on device)
+            let _ = c.execute_batch("PRAGMA journal_mode = WAL;");
+            let _ = c.execute_batch("PRAGMA synchronous = NORMAL;");
+            let _ = c.execute_batch("PRAGMA temp_store = MEMORY;");
+
+            #[cfg(not(target_os = "android"))]
+            {
+                let _ = c.execute_batch("PRAGMA mmap_size = 3000000000;");
+                let _ = c.execute_batch("PRAGMA cache_size = -65536;");
+            }
+
+            #[cfg(target_os = "android")]
+            {
+                let _ = c.execute_batch("PRAGMA mmap_size = 67108864;");
+                let _ = c.execute_batch("PRAGMA cache_size = -8000;");
+            }
+
+            let _ = c.busy_timeout(std::time::Duration::from_millis(5000));
             Ok(())
         });
 

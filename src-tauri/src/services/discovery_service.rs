@@ -25,6 +25,13 @@ impl DiscoveryService {
         })
     }
 
+    pub fn dummy() -> Self {
+        Self {
+            mdns: None,
+            registered_service: Arc::new(Mutex::new(None)),
+        }
+    }
+
     pub async fn start_broadcast(&self, port: u16) -> Result<()> {
         let mut registered = self.registered_service.lock().await;
         if registered.is_some() {

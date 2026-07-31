@@ -1,0 +1,17 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "identifier": "tts-capability",
+  "description": "Native TTS permissions for non-Linux platforms",
+  "platforms": [
+    "windows",
+    "macOS",
+    "android",
+    "iOS"
+  ],
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "tts:default"
+  ]
+}

@@ -84,7 +84,8 @@
       "capabilities": [
         "default",
         "android-capability",
-        "desktop-capability"
+        "desktop-capability",
+        "tts-capability"
       ]
     },
     "windows": []
