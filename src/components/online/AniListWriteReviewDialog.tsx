@@ -7,7 +7,6 @@ import { useAniListAccessToken } from '@/auth/useAniListAccessToken';
 import { saveReview, searchMedia, AnilistMedia } from '@/lib/anilist';
 import { Loader2, Search, Star } from 'lucide-react';
 import { useDebounce } from '@/hooks/useDebounce';
-import { cn } from '@/lib/utils';
 
 interface AniListWriteReviewDialogProps {
   open: boolean;

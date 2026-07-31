@@ -5,7 +5,6 @@ import { usePreferencesStore } from "@/store/preferencesStore"
 import { useLibraryStore, countActiveFilterCriteria } from "@/store/libraryStore"
 import { useState, useRef, useEffect } from "react"
 import { IconX, IconSun, IconMoon } from "@/components/icons/ShioriIcons"
-import { isAndroid } from "@/lib/tauri"
 
 interface MobileStickyHeaderProps {
   searchQuery: string

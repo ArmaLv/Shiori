@@ -1,4 +1,4 @@
-import { Home, Library, Compass, Cloud, Settings, Highlighter, Tv, Menu, BarChart2, Rss, Trash2, History, FolderOpen } from 'lucide-react'
+import { Home, Library, Compass, Settings, Highlighter, Menu, BarChart2, Rss, Trash2, History, FolderOpen } from 'lucide-react'
 import { AniListIcon, TorboxIcon } from '@/components/icons'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'

@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api, isTauri } from '@/lib/tauri';
 import type { DailyReadingStats, ReadingStreak, ReadingGoal, Book } from '@/lib/tauri';
-import { 
-  Loader2, X, RotateCw, 
+import { X, RotateCw, 
   Library, Clock, BookCheck,
   BookDashed, PlayCircle, HardDrive,
   Layers, BookText, Image as ImageIcon,

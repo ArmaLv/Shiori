@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { useState, useEffect } from 'react';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { cn } from '@/lib/utils';
-import { isAndroid, getProxyUrl } from '@/lib/tauri';
+import { getProxyUrl } from '@/lib/tauri';
 
 export interface PreviewBook {
   title: string;

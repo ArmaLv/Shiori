@@ -9,12 +9,11 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { ttsEngine, TTSEngine } from '@/lib/ttsEngine';
 import { logger } from '@/lib/logger';
-import type { TTSState, TTSOptions } from '@/lib/ttsEngine';
+import type { TTSState } from '@/lib/ttsEngine';
 import { splitSentences } from '@/lib/sentenceSplitter';
 import { highlightSentence, clearAllHighlights } from '@/lib/sentenceHighlighter';
-import { isAndroid, isTauri, api } from '@/lib/tauri';
+import { api } from '@/lib/tauri';
 import { usePreferencesStore } from '@/store/preferencesStore';
-import { convertFileSrc } from '@tauri-apps/api/core';
 import { extractTextFromDOM } from '@/lib/textExtractor';
 // Native TTS support (Tauri plugin)
 import { speak as nativeSpeak, stop as nativeStop, getVoices as nativeGetVoices } from 'tauri-plugin-tts-api';

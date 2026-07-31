@@ -1,6 +1,6 @@
 import React from 'react';
 import { AnnotationSearchResult, AnnotationCategory } from '@/lib/tauri';
-import { Bookmark, BookmarkPlus, Highlighter, StickyNote, Share2, ExternalLink, Quote } from 'lucide-react';
+import { Bookmark, BookmarkPlus, Highlighter, StickyNote, Share2, ExternalLink } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import ReactMarkdown from 'react-markdown';
 

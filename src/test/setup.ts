@@ -19,4 +19,7 @@ Object.defineProperty(window, 'matchMedia', {
 // Global Tauri core mocks if needed
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(() => Promise.resolve()),
+  convertFileSrc: vi.fn((path: string, protocol?: string) =>
+    protocol ? `${protocol}://localhost/${path}` : path
+  ),
 }));

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import { X, BookOpen, Calendar, FileText, Tag, Star, Globe, Hash, Download, Loader2, BookmarkCheck, Search, Pencil, Trash2, RefreshCw, Info, LayoutTemplate } from 'lucide-react';
+import { X, BookOpen, FileText, Tag, Star, Globe, Loader2, BookmarkCheck, Search, Pencil, Trash2, RefreshCw, LayoutTemplate } from 'lucide-react';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { api, type Book } from '../../lib/tauri';
@@ -9,7 +9,6 @@ import { useToast } from '../../store/toastStore';
 import { Button } from '../ui/button';
 import { MetadataSearchDialog } from './MetadataSearchDialog';
 import { FeatureHint } from '../ui/FeatureHint';
-import { cn } from '@/lib/utils';
 
 function resolveCoverSrc(path: string): string {
   if (path.startsWith('http://') || path.startsWith('https://')) return path;

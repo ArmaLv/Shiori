@@ -102,7 +102,7 @@ export function ContinuousEpubView({
       const ch1 = await fetchChapter(initialChapterIndex);
       if (!active || !ch1) return;
       
-      let initialList = [ch1];
+      const initialList = [ch1];
       
       if (initialChapterIndex + 1 < metadata.total_chapters) {
         const ch2 = await fetchChapter(initialChapterIndex + 1);

@@ -38,19 +38,23 @@ const DesktopSeriesHeader = memo(function DesktopSeriesHeader({
   onOpenBook: (id: number) => void
 }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  
-  if (!series) return null;
-  const firstBook = series.books[0];
+
+  // NOTE: All hooks must run unconditionally before any early return, otherwise
+  // React throws "rendered fewer/more hooks than during the previous render".
+  const firstBook = series?.books[0];
   const { coverUrl } = useCoverImage(firstBook?.id, firstBook?.cover_path)
 
-  const totalPages = useMemo(() => series.books.reduce((acc, b) => acc + (b.page_count || 0), 0), [series.books]);
-  
+  const totalPages = useMemo(() => (series?.books ?? []).reduce((acc, b) => acc + (b.page_count || 0), 0), [series?.books]);
+
   // Find next unread book
-  const sortedBooks = useMemo(() => [...series.books].sort((a, b) => (a.series_index ?? 0) - (b.series_index ?? 0)), [series.books]);
+  const sortedBooks = useMemo(() => [...(series?.books ?? [])].sort((a, b) => (a.series_index ?? 0) - (b.series_index ?? 0)), [series?.books]);
   const nextUnreadBook = useMemo(() => sortedBooks.find(b => getBookReadStatus(b) !== 'completed'), [sortedBooks]);
+
+  if (!series) return null;
+
   const readBooks = series.books.length - sortedBooks.filter(b => getBookReadStatus(b) !== 'completed').length;
   const progressPercent = series.books.length > 0 ? Math.round((readBooks / series.books.length) * 100) : 0;
-  
+
   const status = 'Ongoing';
 
   return (
@@ -189,18 +193,22 @@ const MobileSeriesHeader = memo(function MobileSeriesHeader({
   onOpenBook: (id: number) => void
 }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  
-  if (!series) return null;
-  const firstBook = series.books[0];
+
+  // NOTE: All hooks must run unconditionally before any early return, otherwise
+  // React throws "rendered fewer/more hooks than during the previous render".
+  const firstBook = series?.books[0];
   const { coverUrl } = useCoverImage(firstBook?.id, firstBook?.cover_path)
 
-  const totalPages = useMemo(() => series.books.reduce((acc, b) => acc + (b.page_count || 0), 0), [series.books]);
-  
-  const sortedBooks = useMemo(() => [...series.books].sort((a, b) => (a.series_index ?? 0) - (b.series_index ?? 0)), [series.books]);
+  const totalPages = useMemo(() => (series?.books ?? []).reduce((acc, b) => acc + (b.page_count || 0), 0), [series?.books]);
+
+  const sortedBooks = useMemo(() => [...(series?.books ?? [])].sort((a, b) => (a.series_index ?? 0) - (b.series_index ?? 0)), [series?.books]);
   const nextUnreadBook = useMemo(() => sortedBooks.find(b => getBookReadStatus(b) !== 'completed'), [sortedBooks]);
+
+  if (!series) return null;
+
   const readBooks = series.books.length - sortedBooks.filter(b => getBookReadStatus(b) !== 'completed').length;
   const progressPercent = series.books.length > 0 ? Math.round((readBooks / series.books.length) * 100) : 0;
-  
+
   const status = 'Ongoing';
 
   return (

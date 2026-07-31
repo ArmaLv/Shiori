@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef, memo } from 'react';
+import { useState, useEffect, memo } from 'react';
 import { BookOpen, User, Calendar, Download, Loader2, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { isAndroid, getProxyUrl } from '@/lib/tauri';
+import { getProxyUrl } from '@/lib/tauri';
 
 interface OnlineResultCardProps {
   id: string;

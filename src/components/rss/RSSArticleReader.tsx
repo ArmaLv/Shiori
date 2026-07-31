@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, ExternalLink, Share, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, ExternalLink } from 'lucide-react';
 import { sanitizeArticleHTML } from '@/lib/sanitize';
 import { type RssArticle } from '@/store/rssStore';
 import { open } from '@tauri-apps/plugin-shell';

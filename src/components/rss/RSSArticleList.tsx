@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { RefreshCw, ExternalLink, Filter, BookOpen, Check, Image as ImageIcon, ChevronDown, Search } from 'lucide-react';
+import { RefreshCw, ExternalLink, Filter, BookOpen, Check, ChevronDown, Search } from 'lucide-react';
 import { useRssStore, type RssArticle } from '@/store/rssStore';
 import { logger } from '@/lib/logger';
 import { RSSArticleReader } from './RSSArticleReader';
@@ -13,7 +13,6 @@ import {
 import { useUIStore } from '@/store/uiStore';
 import { Settings } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-shell';
-import { isAndroid } from '@/lib/tauri';
 
 interface RSSArticleListProps {
   activeFeedId?: number | null;

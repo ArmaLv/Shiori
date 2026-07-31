@@ -1,9 +1,8 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { X, BookOpen, DownloadCloud, Calendar, Star, BookHeart, Minus, Plus, Save, Loader2 } from 'lucide-react';
+import { X, BookOpen, DownloadCloud, Star, BookHeart, Minus, Plus, Save, Loader2 } from 'lucide-react';
 import { AnilistMediaList, AnilistMedia } from '@/lib/anilist';
 import { Button } from '@/components/ui/button';
 import { useState, useEffect } from 'react';
-import { cn } from '@/lib/utils';
 
 interface AniListMangaDetailsDialogProps {
   entry: AnilistMediaList | null;

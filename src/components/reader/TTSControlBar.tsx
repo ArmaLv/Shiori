@@ -9,7 +9,6 @@ import {
   SkipBack, 
   Play, 
   Pause, 
-  Square, 
   X,
   Settings2,
   Search,

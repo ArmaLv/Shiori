@@ -26,7 +26,7 @@ import {
   IconX,
   IconSidebarToggle,
 } from '@/components/icons/ShioriIcons'
-import { Layers, Filter, HelpCircle, BarChart2, Globe, Rss, FolderPlus } from 'lucide-react'
+import { Layers, Filter, HelpCircle, BarChart2, Rss, FolderPlus } from 'lucide-react'
 import { usePreferencesStore } from '@/store/preferencesStore'
 import type { CurrentView } from '@/store/uiStore'
 import {

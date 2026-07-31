@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, memo } from 'react';
-import { Download, CheckCircle2, AlertCircle, BookOpen } from 'lucide-react';
+import { useState, useEffect, memo } from 'react';
+import { CheckCircle2, AlertCircle, BookOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useOnlineDownloadStore } from '@/store/onlineDownloadStore';
 import { isAndroid, getProxyUrl } from '@/lib/tauri';

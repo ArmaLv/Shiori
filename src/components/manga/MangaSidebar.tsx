@@ -6,7 +6,7 @@ import {
     useMangaSettingsStore,
     type ReadingMode,
 } from '@/store/mangaReaderStore';
-import { X, Settings, Play, Square } from 'lucide-react';
+import { X, Settings } from 'lucide-react';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { cn } from '@/lib/utils';
 

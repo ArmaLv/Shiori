@@ -2,7 +2,6 @@ import { Switch } from '@/components/ui/switch'
 import { useState, useEffect, useMemo } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import * as Tabs from '@radix-ui/react-tabs'
-import * as Accordion from '@radix-ui/react-accordion'
 import { Drawer } from 'vaul'
 import { motion, AnimatePresence, Variants } from 'framer-motion'
 import { open } from '@tauri-apps/plugin-shell'
@@ -27,7 +26,6 @@ import { TTSEngine } from '@/lib/ttsEngine'
 import { open as openDialog } from '@tauri-apps/plugin-dialog'
 import { useToast } from '../../store/toastStore'
 import { logger } from '../../lib/logger'
-import { listen } from '@tauri-apps/api/event'
 import { useLibraryStore } from '@/store/libraryStore';
 import { useSourceStore } from '../../store/sourceStore'
 import { SourceManager } from './SourceManager'
@@ -47,6 +45,61 @@ import { READING_FONTS, normalizeLegacyFontPreference, resolveReadingFontCss } f
 interface SettingsDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+}
+
+const TOOLBAR_ALL_ACTIONS = [
+  { id: 'highlight', label: 'Highlight' },
+  { id: 'copy', label: 'Copy' },
+  { id: 'note', label: 'Note' },
+  { id: 'translate', label: 'Translate' },
+  { id: 'define', label: 'Define' },
+  { id: 'aloud', label: 'Read Aloud' },
+]
+
+// Extracted from an inline IIFE so its useState/useEffect run as real component
+// hooks. Hooks called inside a callback/IIFE violate the Rules of Hooks.
+function ToolbarActionsSelector() {
+  const [actions, setActions] = useState<string[]>([])
+
+  useEffect(() => {
+    const saved = localStorage.getItem('shiori-toolbar-actions')
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved)
+        if (Array.isArray(parsed) && parsed.length > 0) setActions(parsed)
+      } catch {
+        // ignore malformed persisted value
+      }
+    } else {
+      setActions(['highlight', 'note', 'translate'])
+    }
+  }, [])
+
+  const toggleAction = (action: string) => {
+    let newActions = [...actions]
+    if (newActions.includes(action)) {
+      newActions = newActions.filter(a => a !== action)
+    } else {
+      newActions.push(action)
+    }
+    if (newActions.length === 0) newActions = ['highlight'] // ensure at least one
+    setActions(newActions)
+    localStorage.setItem('shiori-toolbar-actions', JSON.stringify(newActions))
+  }
+
+  return (
+    <>
+      {TOOLBAR_ALL_ACTIONS.map(a => (
+        <button
+          key={a.id}
+          onClick={() => toggleAction(a.id)}
+          className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${actions.includes(a.id) ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-transparent border-border/50 text-muted-foreground hover:bg-muted/50'}`}
+        >
+          {a.label}
+        </button>
+      ))}
+    </>
+  )
 }
 
 type SettingsTab = 'general' | 'book-reading' | 'manga-reading' | 'companion' | 'advanced' | 'community-plugins' | 'about'
@@ -1023,52 +1076,7 @@ const BookReadingSettings = ({
             <div className="space-y-2">
               <label className="text-sm font-medium">Toolbar Base Actions</label>
               <div className="flex flex-wrap gap-2 mt-2">
-                {(() => {
-                  const [actions, setActions] = useState<string[]>([]);
-                  
-                  useEffect(() => {
-                    const saved = localStorage.getItem('shiori-toolbar-actions');
-                    if (saved) {
-                      try {
-                        const parsed = JSON.parse(saved);
-                        if (Array.isArray(parsed) && parsed.length > 0) setActions(parsed);
-                      } catch(e) {}
-                    } else {
-                      setActions(['highlight', 'note', 'translate']);
-                    }
-                  }, []);
-
-                  const toggleAction = (action: string) => {
-                    let newActions = [...actions];
-                    if (newActions.includes(action)) {
-                      newActions = newActions.filter(a => a !== action);
-                    } else {
-                      newActions.push(action);
-                    }
-                    if (newActions.length === 0) newActions = ['highlight']; // ensure at least one
-                    setActions(newActions);
-                    localStorage.setItem('shiori-toolbar-actions', JSON.stringify(newActions));
-                  };
-
-                  const ALL_ACTIONS = [
-                    { id: 'highlight', label: 'Highlight' },
-                    { id: 'copy', label: 'Copy' },
-                    { id: 'note', label: 'Note' },
-                    { id: 'translate', label: 'Translate' },
-                    { id: 'define', label: 'Define' },
-                    { id: 'aloud', label: 'Read Aloud' }
-                  ];
-
-                  return ALL_ACTIONS.map(a => (
-                    <button
-                      key={a.id}
-                      onClick={() => toggleAction(a.id)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${actions.includes(a.id) ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-transparent border-border/50 text-muted-foreground hover:bg-muted/50'}`}
-                    >
-                      {a.label}
-                    </button>
-                  ));
-                })()}
+                <ToolbarActionsSelector />
               </div>
               <p className="text-xs text-muted-foreground">
                 Select which actions appear on the main toolbar when text is selected. Unselected actions will appear in the expanded dropdown.
