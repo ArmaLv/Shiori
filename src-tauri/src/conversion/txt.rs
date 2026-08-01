@@ -324,21 +324,8 @@ fn split_into_chapters(html: &str) -> Vec<(String, String)> {
     chapters
 }
 
-/// Convert a TXT file to EPUB 3 (Legacy wrapper for ConversionEngine).
-pub async fn convert(source: &Path, output: &Path) -> Result<super::EpubOutput, ConversionError> {
-    let mut book = parse(source).await?;
-    book.sanitize_html();
-    super::epub_builder::build_epub(&book, output)?;
-
-    Ok(super::EpubOutput {
-        path: output.to_path_buf(),
-        title: book.title,
-        author: book.authors.first().cloned(),
-        cover_data: book.cover_image.map(|img| img.data),
-        chapter_count: book.chapters.len(),
-        warnings: vec![],
-    })
-}
+/// Convert a TXT file to EPUB 3 — now handled by `formats::txt::parse`
+/// through `conversion::convert_to_epub`.
 
 /// Convert "ALL CAPS TITLE" to "All Caps Title"
 fn titlecase(s: &str) -> String {

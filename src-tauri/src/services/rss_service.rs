@@ -380,12 +380,21 @@ impl RssService {
             if !content.contains("<img") {
                 if let Some(media) = entry.media.first() {
                     if let Some(thumb) = media.thumbnails.first() {
-                        content = format!("<img src=\"{}\" alt=\"Thumbnail\"/>\n{}", thumb.image.uri, content);
+                        let src = crate::conversion::oeb::escape_xml(&thumb.image.uri);
+                        content = format!("<img src=\"{}\" alt=\"Thumbnail\"/>\n{}", src, content);
                     } else if let Some(content_obj) = media.content.first() {
                         if let Some(url) = &content_obj.url {
                             let url_str = url.as_str();
-                            if url_str.ends_with(".jpg") || url_str.ends_with(".png") || url_str.ends_with(".webp") || url_str.ends_with(".gif") {
-                                content = format!("<img src=\"{}\" alt=\"Thumbnail\"/>\n{}", url_str, content);
+                            if url_str.ends_with(".jpg")
+                                || url_str.ends_with(".png")
+                                || url_str.ends_with(".webp")
+                                || url_str.ends_with(".gif")
+                            {
+                                let src = crate::conversion::oeb::escape_xml(url_str);
+                                content = format!(
+                                    "<img src=\"{}\" alt=\"Thumbnail\"/>\n{}",
+                                    src, content
+                                );
                             }
                         }
                     }
@@ -495,10 +504,7 @@ impl RssService {
                 params![fid],
             )?;
         } else {
-            conn.execute(
-                "UPDATE rss_articles SET is_read = 1",
-                [],
-            )?;
+            conn.execute("UPDATE rss_articles SET is_read = 1", [])?;
         }
         Ok(())
     }
@@ -549,7 +555,10 @@ impl RssService {
 
             // Add metadata
             if let Some(author) = &article.author {
-                content.push_str(&format!("<p><em>By {}</em></p>\n", author));
+                content.push_str(&format!(
+                    "<p><em>By {}</em></p>\n",
+                    crate::conversion::oeb::escape_xml(author)
+                ));
             }
             if let Some(published) = article.published {
                 content.push_str(&format!(
@@ -558,13 +567,14 @@ impl RssService {
                 ));
             }
             if let Some(url) = &article.url {
-                content.push_str(&format!("<p><a href=\"{}\">{}</a></p>\n", url, url));
+                let escaped = crate::conversion::oeb::escape_xml(url);
+                content.push_str(&format!("<p><a href=\"{}\">{}</a></p>\n", escaped, escaped));
             }
 
             content.push_str("<hr/>\n");
             content.push_str(&article.content);
 
-            builder.add_chapter(chapter_title, content);
+            builder.add_html_chapter(chapter_title, content);
         }
 
         // Generate file path
@@ -581,7 +591,7 @@ impl RssService {
 
         // Import the EPUB into the library
         let now_str = Utc::now().to_rfc3339();
-        
+
         // Add to database
         let new_book = crate::models::Book {
             id: None,
@@ -627,8 +637,15 @@ impl RssService {
             if let Ok(conn) = self.db.get_connection() {
                 // Ensure tag exists
                 let _ = conn.execute("INSERT OR IGNORE INTO tags (name) VALUES ('RSS')", []);
-                if let Ok(tag_id) = conn.query_row("SELECT id FROM tags WHERE name = 'RSS'", [], |row| row.get::<_, i64>(0)) {
-                    let _ = conn.execute("INSERT OR IGNORE INTO books_tags (book_id, tag_id) VALUES (?1, ?2)", rusqlite::params![book_id, tag_id]);
+                if let Ok(tag_id) =
+                    conn.query_row("SELECT id FROM tags WHERE name = 'RSS'", [], |row| {
+                        row.get::<_, i64>(0)
+                    })
+                {
+                    let _ = conn.execute(
+                        "INSERT OR IGNORE INTO books_tags (book_id, tag_id) VALUES (?1, ?2)",
+                        rusqlite::params![book_id, tag_id],
+                    );
                 }
             }
         }
@@ -695,6 +712,7 @@ impl RssService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Read;
 
     #[tokio::test]
     async fn test_rss_service_creation() {
@@ -713,6 +731,87 @@ mod tests {
         assert_eq!(options.author, "Shiori RSS");
         assert_eq!(options.max_articles, Some(50));
         assert_eq!(options.min_articles, Some(1));
+    }
+
+    #[tokio::test]
+    async fn test_daily_epub_generates_valid_epub() {
+        let temp_dir =
+            std::env::temp_dir().join(format!("shiori-test-rss-epub-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+
+        let db = Database::new(&temp_dir.join("test.db")).unwrap();
+        let service = RssService::new(db, temp_dir.clone()).unwrap();
+
+        // Insert one feed + one unread article directly.
+        {
+            let conn = service.get_connection().unwrap();
+            conn.execute(
+                "INSERT INTO rss_feeds (url, title) VALUES (?1, ?2)",
+                params!["https://example.com/feed.xml", "Test Feed"],
+            )
+            .unwrap();
+            let feed_id = conn.last_insert_rowid();
+            conn.execute(
+                "INSERT INTO rss_articles (feed_id, title, content, guid, published)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![
+                    feed_id,
+                    "Article One",
+                    "<p>Hello <b>world</b> &amp; friends<br>next line</p>",
+                    "guid-1",
+                    "2026-01-01T00:00:00Z"
+                ],
+            )
+            .unwrap();
+        }
+
+        let options = DailyEpubOptions {
+            title: "Daily Test".to_string(),
+            author: "Shiori".to_string(),
+            max_articles: Some(10),
+            min_articles: Some(1),
+            feeds: None,
+        };
+        let path = service.generate_daily_epub(options).await.unwrap();
+        assert!(path.exists(), "daily epub not written");
+
+        // The generated EPUB must open and contain the article.
+        let mut doc = ::epub::doc::EpubDoc::new(&path).unwrap();
+        assert!(doc.get_num_chapters() >= 1, "expected at least one chapter");
+        let title = doc.get_title().unwrap_or_default();
+        assert_eq!(title, "Daily Test", "epub title from options");
+
+        doc.set_current_chapter(0);
+        let (content, _mime) = doc.get_current_str().unwrap();
+        assert!(content.contains("Article One"));
+        assert!(content.contains("Hello"));
+
+        // Chapter XHTML must be well-formed XML (void elements self-closed).
+        let file = std::fs::File::open(&path).unwrap();
+        let mut archive = zip::ZipArchive::new(file).unwrap();
+        let mut chapter_xml = String::new();
+        archive
+            .by_name("OEBPS/ch0001.xhtml")
+            .unwrap()
+            .read_to_string(&mut chapter_xml)
+            .unwrap();
+        let mut reader = quick_xml::Reader::from_str(&chapter_xml);
+        reader.config_mut().check_end_names = true;
+        let mut buf = Vec::new();
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(quick_xml::events::Event::Eof) => break,
+                Ok(_) => {}
+                Err(e) => panic!("chapter XHTML is not well-formed XML: {}", e),
+            }
+            buf.clear();
+        }
+        assert!(
+            chapter_xml.contains("<br/>"),
+            "void elements must be self-closed"
+        );
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 
     #[tokio::test]

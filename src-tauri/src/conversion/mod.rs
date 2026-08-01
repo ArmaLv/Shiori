@@ -61,6 +61,8 @@ pub enum SourceFormat {
     Txt,
     Fb2,
     Docx,
+    Html,
+    Markdown,
 }
 
 impl SourceFormat {
@@ -73,6 +75,8 @@ impl SourceFormat {
             "txt" | "text" | "rtf" => Some(Self::Txt),
             "fb2" | "fb2.zip" | "fbz" => Some(Self::Fb2),
             "docx" => Some(Self::Docx),
+            "html" | "htm" | "xhtml" => Some(Self::Html),
+            "md" | "markdown" => Some(Self::Markdown),
             _ => None,
         }
     }
@@ -87,11 +91,14 @@ impl From<ConversionError> for crate::services::format_adapter::FormatError {
 
 /// Legacy convert_to_epub (used by ConversionEngine worker).
 /// Takes explicit source/output paths and SourceFormat.
+///
+/// All formats go through the OEB pipeline: `formats::*::parse` →
+/// `epub_builder::build_epub`.
 pub async fn convert_to_epub(
     source_path: &Path,
     output_path: &Path,
     format: SourceFormat,
-    progress_cb: Option<&(dyn Fn(u8, &str) + Send + Sync)>,
+    _progress_cb: Option<&(dyn Fn(u8, &str) + Send + Sync)>,
 ) -> Result<EpubOutput, ConversionError> {
     if !source_path.exists() {
         return Err(ConversionError::IoError(std::io::Error::new(
@@ -100,13 +107,27 @@ pub async fn convert_to_epub(
         )));
     }
 
-    match format {
-        SourceFormat::Mobi | SourceFormat::Azw3 => mobi::convert(source_path, output_path).await,
-        SourceFormat::Pdf => pdf::convert(source_path, output_path, progress_cb).await,
-        SourceFormat::Txt => txt::convert(source_path, output_path).await,
-        SourceFormat::Fb2 => fb2::convert(source_path, output_path).await,
-        SourceFormat::Docx => docx::convert(source_path, output_path).await,
-    }
+    let mut book = match format {
+        SourceFormat::Mobi | SourceFormat::Azw3 => formats::mobi::parse(source_path)?,
+        SourceFormat::Pdf => formats::pdf::parse(source_path)?,
+        SourceFormat::Txt => formats::txt::parse(source_path)?,
+        SourceFormat::Fb2 => formats::fb2::parse(source_path)?,
+        SourceFormat::Docx => formats::docx::parse(source_path)?,
+        SourceFormat::Html => formats::html::parse(source_path)?,
+        SourceFormat::Markdown => formats::markdown::parse(source_path)?,
+    };
+
+    book.sanitize_html();
+    epub_builder::build_epub(&book, output_path)?;
+
+    Ok(EpubOutput {
+        path: output_path.to_path_buf(),
+        title: book.title,
+        author: book.authors.first().cloned(),
+        cover_data: book.cover_image.map(|img| img.data),
+        chapter_count: book.chapters.len(),
+        warnings: vec![],
+    })
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -172,13 +193,13 @@ pub async fn convert_to_epub_new(
     let output_path = tmp_dir.join(format!("{}.epub", stem));
 
     if let Some(db) = db {
-        use crate::services::calibre_service::{self, CalibreProfile, CalibreError};
+        use crate::services::calibre_service::{self, CalibreError, CalibreProfile};
         let profile = match ext.as_str() {
             "pdf" => Some(CalibreProfile::Pdf),
             "mobi" | "azw" | "azw3" | "prc" | "fb2" | "docx" => Some(CalibreProfile::GenericBook),
             _ => None,
         };
-        
+
         if let Some(profile) = profile {
             let p_calibre = progress_arc.clone();
             let calibre_cb = move |percent: u8, msg: &str| {
@@ -189,7 +210,7 @@ pub async fn convert_to_epub_new(
                     });
                 }
             };
-            
+
             match calibre_service::convert_to_epub(
                 input_path,
                 &output_path,
@@ -197,7 +218,9 @@ pub async fn convert_to_epub_new(
                 profile,
                 || false,
                 Some(calibre_cb),
-            ).await {
+            )
+            .await
+            {
                 Ok(_) => {
                     log::info!("[AutoConvert] Successfully converted with Calibre!");
                     return Ok(output_path);
@@ -206,7 +229,10 @@ pub async fn convert_to_epub_new(
                     log::info!("[AutoConvert] Calibre not available or disabled, falling back to native conversion");
                 }
                 Err(e) => {
-                    log::warn!("[AutoConvert] Calibre conversion failed: {}. Falling back to native.", e);
+                    log::warn!(
+                        "[AutoConvert] Calibre conversion failed: {}. Falling back to native.",
+                        e
+                    );
                 }
             }
         }
@@ -235,41 +261,16 @@ pub async fn convert_to_epub_new(
             epub_builder::build_epub(&oeb, &output_path)?;
         }
 
-        // For these, the existing async converters write the EPUB directly
-        "pdf" => {
-            report("Parsing PDF", 10);
-            let pdf_report = |pct: u8, msg: &str| report(msg, pct);
-            pdf::convert(input_path, &output_path, Some(&pdf_report))
-                .await
-                .map_err(|e| ConversionError::Other(e.to_string()))?;
-        }
-
-        "mobi" | "azw" | "azw3" | "prc" => {
-            report("Parsing MOBI/AZW3", 10);
-            mobi::convert(input_path, &output_path)
-                .await
-                .map_err(|e| ConversionError::Other(e.to_string()))?;
-        }
-
-        "docx" => {
-            report("Parsing DOCX", 10);
-            docx::convert(input_path, &output_path)
-                .await
-                .map_err(|e| ConversionError::Other(e.to_string()))?;
-        }
-
-        "fb2" | "fbz" => {
-            report("Parsing FB2", 10);
-            fb2::convert(input_path, &output_path)
-                .await
-                .map_err(|e| ConversionError::Other(e.to_string()))?;
-        }
-
-        "txt" | "rtf" => {
-            report("Parsing text", 10);
-            txt::convert(input_path, &output_path)
-                .await
-                .map_err(|e| ConversionError::Other(e.to_string()))?;
+        // All book formats go through the OEB pipeline: real parser →
+        // sanitize → epub_builder (high-fidelity structure/TOC/images).
+        "pdf" | "mobi" | "azw" | "azw3" | "prc" | "docx" | "fb2" | "fbz" | "txt" | "rtf"
+        | "html" | "htm" | "xhtml" | "md" | "markdown" => {
+            let stage = format!("Parsing {}", ext.to_uppercase());
+            report(&stage, 10);
+            let mut oeb = parse_oeb(input_path, &ext)?;
+            report("Building EPUB", 60);
+            oeb.sanitize_html();
+            epub_builder::build_epub(&oeb, &output_path)?;
         }
 
         other => {
@@ -283,6 +284,20 @@ pub async fn convert_to_epub_new(
 
     report("Done", 100);
     Ok(output_path)
+}
+
+/// Dispatch a source file to the matching OEB parser by extension.
+fn parse_oeb(input_path: &Path, ext: &str) -> Result<oeb::OebBook, ConversionError> {
+    match ext {
+        "pdf" => formats::pdf::parse(input_path),
+        "mobi" | "azw" | "azw3" | "prc" => formats::mobi::parse(input_path),
+        "docx" => formats::docx::parse(input_path),
+        "fb2" | "fbz" => formats::fb2::parse(input_path),
+        "txt" | "rtf" => formats::txt::parse(input_path),
+        "html" | "htm" | "xhtml" => formats::html::parse(input_path),
+        "md" | "markdown" => formats::markdown::parse(input_path),
+        _ => Err(ConversionError::UnsupportedFormat(ext.to_string())),
+    }
 }
 
 /// Delete the Shiori conversion cache directory.

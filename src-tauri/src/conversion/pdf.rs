@@ -49,41 +49,50 @@ pub async fn parse(
         if let Ok(doc) = lopdf::Document::load_mem(&data) {
             let pdf_pages = doc.get_pages();
             let mut found_cover = false;
-            
+
             // Only look in the first 3 pages for a cover image
             for (_, object_id) in pdf_pages.into_iter().take(3) {
-                if found_cover { break; }
+                if found_cover {
+                    break;
+                }
                 if let Ok(lopdf::Object::Dictionary(page_dict)) = doc.get_object(object_id) {
-                    if let Ok(lopdf::Object::Dictionary(resources)) = page_dict.get(b"Resources").and_then(|obj| {
-                        match obj {
+                    if let Ok(lopdf::Object::Dictionary(resources)) =
+                        page_dict.get(b"Resources").and_then(|obj| match obj {
                             lopdf::Object::Reference(id) => doc.get_object(*id),
-                            _ => Ok(obj)
-                        }
-                    }) {
-                        if let Ok(lopdf::Object::Dictionary(xobjects)) = resources.get(b"XObject").and_then(|obj| {
-                            match obj {
+                            _ => Ok(obj),
+                        })
+                    {
+                        if let Ok(lopdf::Object::Dictionary(xobjects)) =
+                            resources.get(b"XObject").and_then(|obj| match obj {
                                 lopdf::Object::Reference(id) => doc.get_object(*id),
-                                _ => Ok(obj)
-                            }
-                        }) {
+                                _ => Ok(obj),
+                            })
+                        {
                             for (_key, xobj_ref) in xobjects.iter() {
-                                if let Ok(lopdf::Object::Stream(stream)) = doc.get_object(xobj_ref.as_reference().unwrap_or((0,0))) {
-                                    if let Ok(subtype) = stream.dict.get(b"Subtype").and_then(|obj| obj.as_name()) {
+                                if let Ok(lopdf::Object::Stream(stream)) =
+                                    doc.get_object(xobj_ref.as_reference().unwrap_or((0, 0)))
+                                {
+                                    if let Ok(subtype) =
+                                        stream.dict.get(b"Subtype").and_then(|obj| obj.as_name())
+                                    {
                                         if subtype == b"Image" {
                                             // Found an image! Let's extract it as the cover
-                                            if let Ok(filter) = stream.dict.get(b"Filter").and_then(|obj| {
-                                                match obj {
+                                            if let Ok(filter) =
+                                                stream.dict.get(b"Filter").and_then(|obj| match obj
+                                                {
                                                     lopdf::Object::Name(n) => Ok(vec![n.to_vec()]),
                                                     lopdf::Object::Array(arr) => {
                                                         let mut names = vec![];
                                                         for item in arr {
-                                                            if let Ok(n) = item.as_name() { names.push(n.to_vec()); }
+                                                            if let Ok(n) = item.as_name() {
+                                                                names.push(n.to_vec());
+                                                            }
                                                         }
                                                         Ok(names)
                                                     }
-                                                    _ => Err(lopdf::Error::Header)
-                                                }
-                                            }) {
+                                                    _ => Err(lopdf::Error::Header),
+                                                })
+                                            {
                                                 if filter.iter().any(|f| f == b"DCTDecode") {
                                                     // It's a JPEG!
                                                     book.images.push(OebImage {
@@ -105,14 +114,15 @@ pub async fn parse(
                     }
                 }
             }
-            
+
             // If we found a cover, prepend it to the first chapter
             if found_cover && !book.chapters.is_empty() {
                 // If the first chapter is just a headline or empty, we can just prepend
                 let img_html = "  <div style=\"text-align: center; margin-bottom: 2em;\">
     <img src=\"cover.jpg\" alt=\"Cover\" style=\"max-width: 100%; height: auto;\"/>
   </div>
-".to_string();
+"
+                .to_string();
                 book.chapters[0].html = format!("{}{}", img_html, book.chapters[0].html);
             }
         }
@@ -323,25 +333,8 @@ async fn convert_with_lopdf(
     Ok(book)
 }
 
-/// Convert a PDF file to EPUB 3 (Legacy wrapper for ConversionEngine).
-pub async fn convert(
-    source: &Path,
-    output: &Path,
-    progress_cb: Option<&(dyn Fn(u8, &str) + Send + Sync)>,
-) -> Result<super::EpubOutput, ConversionError> {
-    let mut book = parse(source, progress_cb).await?;
-    book.sanitize_html();
-    super::epub_builder::build_epub(&book, output)?;
-
-    Ok(super::EpubOutput {
-        path: output.to_path_buf(),
-        title: book.title,
-        author: book.authors.first().cloned(),
-        cover_data: book.cover_image.map(|img| img.data),
-        chapter_count: book.chapters.len(),
-        warnings: vec![],
-    })
-}
+/// Convert a PDF file to EPUB 3 — now handled by `formats::pdf::parse`
+/// through `conversion::convert_to_epub`.
 
 // ──────────────────────────────────────────────────────────────────────────
 // HTML POST-PROCESSING

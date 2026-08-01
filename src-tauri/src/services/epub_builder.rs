@@ -13,7 +13,11 @@ use crate::services::format_adapter::{FormatError, FormatResult};
 pub struct Chapter {
     pub id: String,
     pub title: String,
+    /// Content. When `is_html` is true the content is an HTML fragment that
+    /// is sanitized into XHTML before embedding; otherwise it is plain text
+    /// that gets escaped and wrapped in paragraphs.
     pub content: String,
+    pub is_html: bool,
 }
 
 /// EPUB metadata builder
@@ -70,7 +74,24 @@ impl EpubBuilder {
     /// Add a chapter
     pub fn add_chapter(&mut self, title: String, content: String) {
         let id = format!("ch{:04}", self.chapters.len() + 1);
-        self.chapters.push(Chapter { id, title, content });
+        self.chapters.push(Chapter {
+            id,
+            title,
+            content,
+            is_html: false,
+        });
+    }
+
+    /// Add a chapter whose content is an HTML fragment (sanitized to XHTML
+    /// when the EPUB is assembled).
+    pub fn add_html_chapter(&mut self, title: String, content: String) {
+        let id = format!("ch{:04}", self.chapters.len() + 1);
+        self.chapters.push(Chapter {
+            id,
+            title,
+            content,
+            is_html: true,
+        });
     }
 
     /// Set custom stylesheet
@@ -351,6 +372,11 @@ impl EpubBuilder {
 
     /// Generate chapter XHTML
     fn chapter_xhtml(&self, chapter: &Chapter) -> String {
+        let body = if chapter.is_html {
+            Self::sanitize_xhtml_fragment(&chapter.content)
+        } else {
+            Self::format_content(&chapter.content)
+        };
         format!(
             r#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
@@ -366,8 +392,67 @@ impl EpubBuilder {
 </html>"#,
             Self::escape_xml(&chapter.title),
             Self::escape_xml(&chapter.title),
-            Self::format_content(&chapter.content)
+            body
         )
+    }
+
+    /// Sanitize an HTML fragment so it is valid XHTML safe to embed in an
+    /// EPUB chapter:
+    /// - drops `<script>`/`<style>` blocks entirely
+    /// - self-closes void elements (`<br>`, `<img …>`, `<hr>`, …)
+    /// - strips `on*` event-handler and inline `style` attributes
+    ///
+    /// Text/attribute escaping is the caller's responsibility (ammonia and
+    /// `escape_xml` already guarantee it for the RSS pipeline).
+    fn sanitize_xhtml_fragment(html: &str) -> String {
+        // 1. Remove script/style blocks (case-insensitive).
+        let mut out = String::with_capacity(html.len());
+        let mut rest = html;
+        loop {
+            let lower = rest.to_lowercase();
+            let (start, tag) = ["<script", "<style"]
+                .iter()
+                .filter_map(|t| lower.find(t).map(|i| (i, *t)))
+                .min_by_key(|(i, _)| *i)
+                .unwrap_or((usize::MAX, ""));
+            if start == usize::MAX {
+                out.push_str(rest);
+                break;
+            }
+            out.push_str(&rest[..start]);
+            let close = format!("</{}>", &tag[1..]);
+            match lower[start..].find(&close) {
+                Some(rel) => rest = &rest[start + rel + close.len()..],
+                None => break,
+            }
+        }
+
+        // 2. Self-close void elements (`<br>` → `<br/>`, `<img …>` → `<img …/>`).
+        static VOID_TAG_RE: once_cell::sync::Lazy<regex::Regex> = once_cell::sync::Lazy::new(
+            || {
+                regex::Regex::new(
+                r"(?i)<\s*(br|hr|img|meta|link|input|source|wbr|col|area|base|embed|param|track)\b([^>]*?)(/?)>",
+            )
+            .unwrap()
+            },
+        );
+        let out = VOID_TAG_RE.replace_all(&out, |caps: &regex::Captures| {
+            let tag = caps.get(1).map(|m| m.as_str()).unwrap_or("");
+            let attrs = caps.get(2).map(|m| m.as_str()).unwrap_or("");
+            let already_closed = caps.get(3).map(|m| !m.as_str().is_empty()).unwrap_or(false);
+            if already_closed {
+                format!("<{}{}/>", tag, attrs)
+            } else {
+                format!("<{}{}/>", tag, attrs)
+            }
+        });
+
+        // 3. Strip event handlers and inline styles from remaining tags.
+        static EVENT_ATTR_RE: once_cell::sync::Lazy<regex::Regex> =
+            once_cell::sync::Lazy::new(|| {
+                regex::Regex::new(r#"(?i)\s+(on[a-z]+|style)=\"[^\"]*\""#).unwrap()
+            });
+        EVENT_ATTR_RE.replace_all(&out, "").to_string()
     }
 
     /// Default CSS stylesheet
@@ -404,8 +489,11 @@ p.list-item {
     /// Format content as HTML paragraphs
     fn format_content(content: &str) -> String {
         let is_list_item = |text: &str| -> bool {
-            text.starts_with('•') || text.starts_with('-') || text.starts_with('*') 
-            || (text.chars().next().map_or(false, |c| c.is_ascii_digit()) && text.contains(". "))
+            text.starts_with('•')
+                || text.starts_with('-')
+                || text.starts_with('*')
+                || (text.chars().next().map_or(false, |c| c.is_ascii_digit())
+                    && text.contains(". "))
         };
 
         content

@@ -33,12 +33,14 @@ use crate::services::format_detection::detect_format;
 
 pub const CONVERSION_MATRIX: &[(&str, &[&str])] = &[
     ("epub", &["pdf", "mobi", "azw3", "docx", "txt", "fb2"]),
-    ("pdf",  &["epub", "mobi", "azw3", "docx", "txt", "fb2"]),
+    ("pdf", &["epub", "mobi", "azw3", "docx", "txt", "fb2"]),
     ("mobi", &["epub", "pdf", "azw3", "docx", "txt", "fb2"]),
     ("azw3", &["epub", "pdf", "mobi", "docx", "txt", "fb2"]),
     ("docx", &["epub", "pdf", "mobi", "azw3", "txt", "fb2"]),
-    ("txt",  &["epub", "pdf", "mobi", "azw3", "docx", "fb2"]),
-    ("fb2",  &["epub", "pdf", "mobi", "azw3", "docx", "txt"]),
+    ("txt", &["epub", "pdf", "mobi", "azw3", "docx", "fb2"]),
+    ("fb2", &["epub", "pdf", "mobi", "azw3", "docx", "txt"]),
+    ("html", &["epub", "txt"]),
+    ("markdown", &["epub", "txt"]),
 ];
 
 pub fn can_convert(from: &str, to: &str) -> bool {
@@ -419,16 +421,16 @@ impl ConversionEngine {
                 let cb_tracker = tracker.clone();
                 let cb_job_id = job_id.clone();
                 let cb_db = db.clone();
-                
+
                 let last_db_persist = std::sync::Arc::new(std::sync::atomic::AtomicI64::new(0));
-                
+
                 let progress_cb = std::sync::Arc::new(move |pct: u8, _msg: &str| {
                     if let Some(mut j) = cb_tracker.get_mut(&cb_job_id) {
                         j.progress = pct as f32;
-                        
+
                         // Emit event frequently to frontend
                         let _ = cb_handle.emit("conversion:progress", j.value());
-                        
+
                         // Throttle database persistence to max once per second
                         let now = chrono::Utc::now().timestamp_millis();
                         let last = last_db_persist.load(std::sync::atomic::Ordering::Relaxed);
@@ -441,7 +443,8 @@ impl ConversionEngine {
                             }
                         }
                     }
-                }) as std::sync::Arc<dyn Fn(u8, &str) + Send + Sync>;
+                })
+                    as std::sync::Arc<dyn Fn(u8, &str) + Send + Sync>;
 
                 let result = Self::execute_conversion(
                     &job.source_format,
@@ -599,15 +602,20 @@ impl ConversionEngine {
                         cb(10, "Converting with native engine...");
                     }
 
-                    let res = crate::conversion::convert_to_epub(source, target, rust_fmt, progress_cb.as_deref())
-                        .await
-                        .map(|_| ())
-                        .map_err(|e| e.into());
-                        
+                    let res = crate::conversion::convert_to_epub(
+                        source,
+                        target,
+                        rust_fmt,
+                        progress_cb.as_deref(),
+                    )
+                    .await
+                    .map(|_| ())
+                    .map_err(|e| e.into());
+
                     if let Some(cb) = &progress_cb {
                         cb(100, "Finalizing...");
                     }
-                    
+
                     return res;
                 }
 
@@ -615,7 +623,7 @@ impl ConversionEngine {
                 if let Some(cb) = &progress_cb {
                     cb(10, "Converting with native engine...");
                 }
-                
+
                 match crate::conversion::convert_to_epub(
                     source,
                     target,
@@ -677,10 +685,15 @@ impl ConversionEngine {
         if source_fmt != "epub" {
             let src_format = crate::conversion::SourceFormat::from_extension(source_fmt)
                 .unwrap_or(crate::conversion::SourceFormat::Txt);
-            
-            crate::conversion::convert_to_epub(source, &intermediate_epub, src_format, progress_cb.as_deref())
-                .await
-                .map_err(|e| FormatError::ConversionError(e.to_string()))?;
+
+            crate::conversion::convert_to_epub(
+                source,
+                &intermediate_epub,
+                src_format,
+                progress_cb.as_deref(),
+            )
+            .await
+            .map_err(|e| FormatError::ConversionError(e.to_string()))?;
         } else {
             tokio::fs::copy(source, &intermediate_epub).await?;
         }
@@ -717,12 +730,12 @@ impl ConversionEngine {
     async fn epub_to_txt(source: &Path, target: &Path) -> FormatResult<()> {
         let source_clone = source.to_path_buf();
         let target_clone = target.to_path_buf();
-        
+
         tokio::task::spawn_blocking(move || -> FormatResult<()> {
             use ::epub::doc::EpubDoc;
             let mut doc = EpubDoc::new(&source_clone)
                 .map_err(|e| FormatError::ConversionError(format!("Failed to open EPUB: {}", e)))?;
-            
+
             let mut full_text = String::new();
             while doc.go_next() {
                 if let Some((content_bytes, _mime_type)) = doc.get_current() {
@@ -741,26 +754,35 @@ impl ConversionEngine {
             }
             std::fs::write(&target_clone, full_text.trim())?;
             Ok(())
-        }).await.map_err(|e| FormatError::ConversionError(format!("Task err: {}", e)))??;
+        })
+        .await
+        .map_err(|e| FormatError::ConversionError(format!("Task err: {}", e)))??;
 
         log::info!("[Conversion] EPUB → TXT: {}", target.display());
         Ok(())
     }
 
-    async fn epub_to_docx(source: &Path, target: &Path) -> FormatResult<()> {
-        log::warn!("epub_to_docx native output generator not fully implemented yet");
-        // For basic text extraction fallback right now:
-        Self::epub_to_txt(source, target).await
+    async fn epub_to_docx(_source: &Path, _target: &Path) -> FormatResult<()> {
+        // EPUB → DOCX output generation is not implemented. Return a clear
+        // error instead of silently writing plain text with a .docx extension.
+        Err(FormatError::ConversionNotSupported {
+            from: "epub".to_string(),
+            to: "docx".to_string(),
+        })
     }
 
-    async fn epub_to_mobi(source: &Path, target: &Path) -> FormatResult<()> {
-        log::warn!("epub_to_mobi native output generator not fully implemented yet");
-        Self::epub_to_txt(source, target).await
+    async fn epub_to_mobi(_source: &Path, _target: &Path) -> FormatResult<()> {
+        Err(FormatError::ConversionNotSupported {
+            from: "epub".to_string(),
+            to: "mobi".to_string(),
+        })
     }
 
-    async fn epub_to_fb2(source: &Path, target: &Path) -> FormatResult<()> {
-        log::warn!("epub_to_fb2 native output generator not fully implemented yet");
-        Self::epub_to_txt(source, target).await
+    async fn epub_to_fb2(_source: &Path, _target: &Path) -> FormatResult<()> {
+        Err(FormatError::ConversionNotSupported {
+            from: "epub".to_string(),
+            to: "fb2".to_string(),
+        })
     }
 
     // ──────────────────────────────────────────────────────────────────────
@@ -994,18 +1016,19 @@ impl ConversionEngine {
 
     /// Detect chapters in raw PDF text using heading patterns
     fn detect_pdf_chapters(text: &str) -> Vec<(String, String)> {
-        static CHAPTER_RE: once_cell::sync::Lazy<regex::Regex> = once_cell::sync::Lazy::new(|| {
-            regex::Regex::new(
-                r"(?im)^(Chapter\s+\d+[^\n]*|CHAPTER\s+\d+[^\n]*|[A-Z][A-Z\s\d\-:]{3,50})$",
-            )
-            .unwrap()
-        });
+        // Build the regex at call time; on failure fall back to a single
+        // chapter rather than panicking on a static initializer.
+        let Ok(chapter_re) = regex::Regex::new(
+            r"(?im)^(Chapter\s+\d+[^\n]*|CHAPTER\s+\d+[^\n]*|[A-Z][A-Z\s\d\-:]{3,50})$",
+        ) else {
+            return vec![("Content".to_string(), text.trim().to_string())];
+        };
 
         let mut chapters: Vec<(String, String)> = Vec::new();
         let mut last_end = 0usize;
         let mut last_title = "Introduction".to_string();
 
-        for m in CHAPTER_RE.find_iter(text) {
+        for m in chapter_re.find_iter(text) {
             if m.start() > last_end + 50 {
                 // Save previous chunk
                 let body = text[last_end..m.start()].trim().to_string();
@@ -1034,7 +1057,7 @@ impl ConversionEngine {
     /// Fixes CP1252/UTF-8 mojibake commonly found in extracted PDF text
     fn sanitize_mojibake(text: &str) -> String {
         let mut cleaned = text.to_string();
-        
+
         // Classic 3-byte UTF-8 misread as CP1252
         cleaned = cleaned.replace("â€™", "'");
         cleaned = cleaned.replace("â€œ", "\"");
@@ -1042,7 +1065,7 @@ impl ConversionEngine {
         cleaned = cleaned.replace("â€\"", "\""); // Sometimes â€“ gets mapped weirdly
         cleaned = cleaned.replace("â€”", "--");
         cleaned = cleaned.replace("â€“", "-");
-        
+
         // Truncated Mojibake (where control chars \x80 \x99 are stripped)
         // Leaving solitary 'â' where an apostrophe or quote should be
         cleaned = cleaned.replace("âs ", "'s ");
@@ -1052,7 +1075,7 @@ impl ConversionEngine {
         cleaned = cleaned.replace("âll ", "'ll ");
         cleaned = cleaned.replace("âve ", "'ve ");
         cleaned = cleaned.replace("âd ", "'d ");
-        
+
         // At the end of strings/lines
         cleaned = cleaned.replace("âs\n", "'s\n");
         cleaned = cleaned.replace("ât\n", "'t\n");
@@ -1061,10 +1084,10 @@ impl ConversionEngine {
         cleaned = cleaned.replace("âll\n", "'ll\n");
         cleaned = cleaned.replace("âve\n", "'ve\n");
         cleaned = cleaned.replace("âd\n", "'d\n");
-        
+
         // Standalone 'â' often means a curly quote was stripped of its suffix
         cleaned = cleaned.replace("â", "'");
-        
+
         cleaned
     }
 
@@ -1075,9 +1098,9 @@ impl ConversionEngine {
         })
         .await
         .map_err(|e| FormatError::ConversionError(format!("Task Join Error: {}", e)))??;
-        
+
         text = Self::sanitize_mojibake(&text);
-        
+
         tokio::fs::write(target, text).await?;
         log::info!("[Conversion] PDF → TXT: {}", target.display());
         Ok(())

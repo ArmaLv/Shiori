@@ -1,7 +1,10 @@
 pub mod cbr;
 pub mod cbz;
+pub mod common;
 pub mod docx;
 pub mod fb2;
+pub mod html;
+pub mod markdown;
 pub mod mobi;
 /// Format parser modules.
 ///
