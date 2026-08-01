@@ -288,6 +288,7 @@ impl FormatInfo {
             ),
             "txt" => ("txt", "text/plain"),
             "html" => ("html", "text/html"),
+            "markdown" => ("md", "text/markdown"),
             "cbz" => ("cbz", "application/vnd.comicbook+zip"),
             "cbr" => ("cbr", "application/vnd.comicbook-rar"),
             _ => ("bin", "application/octet-stream"),

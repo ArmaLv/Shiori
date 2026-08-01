@@ -1,8 +1,8 @@
+use std::io::Write;
 use std::path::PathBuf;
 use std::time::Instant;
-use std::io::Write;
 
-use tauri::{State, Emitter, Manager};
+use tauri::{Emitter, Manager, State};
 use tauri_plugin_store::StoreExt;
 
 use crate::error::{Result, ShioriError};
@@ -120,7 +120,6 @@ pub async fn plugin_get_chapters(
     source_id: String,
     content_id: String,
 ) -> Result<Vec<Chapter>> {
-    
     let source = {
         let registry = state.plugin_registry.read().await;
         registry
@@ -164,7 +163,8 @@ pub async fn plugin_download_chapter(
             .ok_or_else(|| ShioriError::Validation(format!("Unknown source: {}", source_id)))?
     };
 
-    let _download_guard = crate::ActiveDownloads::increment(app_handle.state::<crate::ActiveDownloads>());
+    let _download_guard =
+        crate::ActiveDownloads::increment(app_handle.state::<crate::ActiveDownloads>());
 
     let pages = source.get_pages(&chapter_id).await?;
     let dest = PathBuf::from(dest_dir);
@@ -266,9 +266,13 @@ pub async fn proxy_manga_image(source_id: String, image_url: String) -> Result<V
             .unwrap_or_default()
     });
 
-    let mut req = HTTP_CLIENT.get(&image_url)
+    let mut req = HTTP_CLIENT
+        .get(&image_url)
         .header("User-Agent", user_agent)
-        .header("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+        .header(
+            "Accept",
+            "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        )
         .header("Accept-Language", "en-US,en;q=0.9")
         .header("Sec-Fetch-Dest", "image")
         .header("Sec-Fetch-Mode", "no-cors")
@@ -425,35 +429,53 @@ pub async fn download_manga_chapter_as_cbz(
     };
 
     let pages = source.get_pages(&chapter_id).await?;
-    
-    let _download_guard = crate::ActiveDownloads::increment(app_handle.state::<crate::ActiveDownloads>());
-    
-    let store = app_handle.store("preferences.json").map_err(|e| ShioriError::Other(e.to_string()))?;
+
+    let _download_guard =
+        crate::ActiveDownloads::increment(app_handle.state::<crate::ActiveDownloads>());
+
+    let store = app_handle
+        .store("preferences.json")
+        .map_err(|e| ShioriError::Other(e.to_string()))?;
     let downloads_dir = if let Some(path_val) = store.get("defaultImportPath") {
         if let Some(path_str) = path_val.as_str() {
             if !path_str.is_empty() && !path_str.starts_with("content://") {
                 std::path::PathBuf::from(path_str).join("Online Manga")
             } else {
-                app_handle.path().download_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")).join("Shiori Downloads")
+                app_handle
+                    .path()
+                    .download_dir()
+                    .unwrap_or_else(|_| std::path::PathBuf::from("."))
+                    .join("Shiori Downloads")
             }
         } else {
-            app_handle.path().download_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")).join("Shiori Downloads")
+            app_handle
+                .path()
+                .download_dir()
+                .unwrap_or_else(|_| std::path::PathBuf::from("."))
+                .join("Shiori Downloads")
         }
     } else {
-        app_handle.path().download_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")).join("Shiori Downloads")
+        app_handle
+            .path()
+            .download_dir()
+            .unwrap_or_else(|_| std::path::PathBuf::from("."))
+            .join("Shiori Downloads")
     };
 
     tokio::fs::create_dir_all(&downloads_dir).await?;
-    
+
     // Sanitize filename
-    let safe_manga = manga_title.replace(|c: char| !c.is_alphanumeric() && c != ' ' && c != '-', "_");
-    let safe_chap = chapter_title.replace(|c: char| !c.is_alphanumeric() && c != ' ' && c != '-', "_");
+    let safe_manga =
+        manga_title.replace(|c: char| !c.is_alphanumeric() && c != ' ' && c != '-', "_");
+    let safe_chap =
+        chapter_title.replace(|c: char| !c.is_alphanumeric() && c != ' ' && c != '-', "_");
     let filename = format!("{} - {}.cbz", safe_manga, safe_chap);
     let cbz_path = downloads_dir.join(&filename);
 
     let file = std::fs::File::create(&cbz_path)?;
     let mut zip = zip::ZipWriter::new(file);
-    let options = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
 
     let mut downloaded = 0;
     let total = pages.len();
@@ -480,50 +502,67 @@ pub async fn download_manga_chapter_as_cbz(
             req = req.header("Referer", ref_url);
         }
 
-        let response = req.send().await
+        let response = req
+            .send()
+            .await
             .map_err(|e| ShioriError::Other(format!("Failed to fetch image: {}", e)))?;
-        
+
         if !response.status().is_success() {
-            return Err(ShioriError::Other(format!("Image fetch failed with status {}", response.status())));
+            return Err(ShioriError::Other(format!(
+                "Image fetch failed with status {}",
+                response.status()
+            )));
         }
 
-        let bytes = response.bytes().await
+        let bytes = response
+            .bytes()
+            .await
             .map_err(|e| ShioriError::Other(format!("Failed to read image bytes: {}", e)))?;
 
         let bytes_vec = bytes.to_vec();
-        
+
         let ext = crate::conversion::utils::detect_image_format(&bytes_vec)
             .map(|(_, ext)| ext)
             .unwrap_or("jpg");
 
         let file_name = format!("{:03}.{}", idx + 1, ext);
         let opts = options.clone();
-        
+
         // Use spawn_blocking for zip writing since it's synchronous IO
         let mut zip_clone = zip;
         zip = tokio::task::spawn_blocking(move || -> Result<zip::ZipWriter<std::fs::File>> {
-            zip_clone.start_file(file_name, opts)
+            zip_clone
+                .start_file(file_name, opts)
                 .map_err(|e| ShioriError::Other(format!("Zip error: {}", e)))?;
-            zip_clone.write_all(&bytes_vec)
+            zip_clone
+                .write_all(&bytes_vec)
                 .map_err(|e| ShioriError::Other(format!("Write error: {}", e)))?;
             Ok(zip_clone)
-        }).await.map_err(|e| ShioriError::Other(format!("Task error: {}", e)))??;
-        
+        })
+        .await
+        .map_err(|e| ShioriError::Other(format!("Task error: {}", e)))??;
+
         downloaded += 1;
-        let _ = app_handle.emit("online-manga-download-progress", MangaDownloadProgress {
-            chapter_id: chapter_id.clone(),
-            chapter_title: chapter_title.clone(),
-            pages_downloaded: downloaded,
-            total_pages: total,
-        });
-        
+        let _ = app_handle.emit(
+            "online-manga-download-progress",
+            MangaDownloadProgress {
+                chapter_id: chapter_id.clone(),
+                chapter_title: chapter_title.clone(),
+                pages_downloaded: downloaded,
+                total_pages: total,
+            },
+        );
+
         // Small delay to prevent rate-limiting and connection exhaustion
         tokio::time::sleep(std::time::Duration::from_millis(150)).await;
     }
 
     tokio::task::spawn_blocking(move || -> Result<()> {
-        zip.finish().map_err(|e| ShioriError::Other(format!("Failed to finish zip: {}", e)))?;
+        zip.finish()
+            .map_err(|e| ShioriError::Other(format!("Failed to finish zip: {}", e)))?;
         Ok(())
-    }).await.map_err(|e| ShioriError::Other(format!("Task error: {}", e)))??;
+    })
+    .await
+    .map_err(|e| ShioriError::Other(format!("Task error: {}", e)))??;
     Ok(cbz_path.to_string_lossy().to_string())
 }

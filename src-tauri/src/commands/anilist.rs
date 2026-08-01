@@ -1,6 +1,6 @@
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
 const DESKTOP_ANILIST_CLIENT_ID: &str = "45197";
 const DESKTOP_ANILIST_CLIENT_SECRET: &str = "vXYsl7taXO0YSgpjLRp0xTWLWoHbbEsWMsbf3lLD";
@@ -90,7 +90,7 @@ pub async fn start_anilist_login(app: AppHandle) -> Result<String, String> {
 
     let label = "anilist-login";
     let handle = app.clone();
-    
+
     // Close existing if open
     if let Some(window) = app.get_webview_window(label) {
         let _ = window.close();
@@ -110,7 +110,7 @@ pub async fn start_anilist_login(app: AppHandle) -> Result<String, String> {
 
                 if url_str.starts_with(DESKTOP_ANILIST_REDIRECT_URI) {
                     let mut code = None;
-                    
+
                     if let Some(query) = url.query() {
                         for (key, value) in url::form_urlencoded::parse(query.as_bytes()) {
                             if key == "code" {
@@ -119,7 +119,7 @@ pub async fn start_anilist_login(app: AppHandle) -> Result<String, String> {
                             }
                         }
                     }
-                    
+
                     let tx_sender = {
                         if let Ok(mut lock) = tx.lock() {
                             lock.take()
@@ -127,7 +127,7 @@ pub async fn start_anilist_login(app: AppHandle) -> Result<String, String> {
                             None
                         }
                     };
-                    
+
                     if let Some(c) = code {
                         if let Some(sender) = tx_sender {
                             tauri::async_runtime::spawn(async move {
@@ -136,8 +136,9 @@ pub async fn start_anilist_login(app: AppHandle) -> Result<String, String> {
                                     DESKTOP_ANILIST_CLIENT_SECRET,
                                     DESKTOP_ANILIST_REDIRECT_URI,
                                     c,
-                                ).await;
-                                
+                                )
+                                .await;
+
                                 let _ = sender.send(res);
                             });
                         }
@@ -158,8 +159,10 @@ pub async fn start_anilist_login(app: AppHandle) -> Result<String, String> {
         .build()
         .map_err(|e| e.to_string())?;
 
-    let window = app.get_webview_window(label).ok_or("Failed to get window")?;
-    
+    let window = app
+        .get_webview_window(label)
+        .ok_or("Failed to get window")?;
+
     let tx_close = std::sync::Arc::clone(&tx);
     window.on_window_event(move |event| {
         if let tauri::WindowEvent::CloseRequested { .. } = event {
@@ -173,6 +176,6 @@ pub async fn start_anilist_login(app: AppHandle) -> Result<String, String> {
 
     match rx.await {
         Ok(res) => res,
-        Err(_) => Err("Login cancelled or failed internally".to_string())
+        Err(_) => Err("Login cancelled or failed internally".to_string()),
     }
 }

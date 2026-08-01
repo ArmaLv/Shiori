@@ -1,10 +1,10 @@
-pub mod shelves;
 pub mod export;
 pub mod library;
 pub mod metadata;
 pub mod reader;
 pub mod rendering;
 pub mod search;
+pub mod shelves;
 pub mod tags;
 
 // New v2.0 commands
@@ -14,6 +14,7 @@ pub mod conversion;
 pub mod cover;
 pub mod debrid;
 pub mod discord;
+pub mod discovery;
 pub mod doodle;
 pub mod folder_watch;
 pub mod manga;
@@ -22,12 +23,11 @@ pub mod preferences;
 pub mod prowlarr;
 pub mod rss;
 pub mod share;
-pub mod discovery;
 pub mod sources;
+pub mod sync;
 pub mod torbox;
 pub mod translation;
 pub mod window;
-pub mod sync;
 
 #[macro_export]
 macro_rules! generate_shiori_handlers {
@@ -105,7 +105,6 @@ macro_rules! generate_shiori_handlers {
             crate::commands::reader::get_book_file_path,
             crate::commands::reader::detect_book_format,
             crate::commands::reader::validate_book_file,
-
             commands::reader::get_error_details,
             commands::reader::start_reading_session,
             commands::reader::end_reading_session,
@@ -144,6 +143,7 @@ macro_rules! generate_shiori_handlers {
             commands::shelves::preview_smart_shelf,
             commands::export::export_library,
             // v2.0 commands
+            commands::conversion::convert_file,
             commands::conversion::convert_book,
             commands::conversion::get_conversion_status,
             commands::conversion::list_conversion_jobs,

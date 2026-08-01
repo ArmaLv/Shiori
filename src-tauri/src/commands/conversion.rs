@@ -6,12 +6,13 @@ use tauri::{Emitter, State};
 use crate::error::ShioriError;
 use crate::services::calibre_service::{self, CalibreProfile};
 use crate::services::conversion_engine::{ConversionEngine, ConversionJob, CONVERSION_MATRIX};
+use crate::services::reader_service;
 use crate::utils::validate;
 use crate::AppState;
 
-/// Submit a conversion job
+/// Submit a conversion job (path-based, generic)
 #[tauri::command]
-pub async fn convert_book(
+pub async fn convert_file(
     engine: State<'_, Arc<ConversionEngine>>,
     input_path: String,
     output_format: String,
@@ -223,6 +224,24 @@ pub async fn convert_with_calibre(
     })
 }
 
+// ==================== Explicit Convert to EPUB (non-destructive) ====================
+
+/// Explicit, user-triggered conversion of a book to EPUB.
+///
+/// Non-destructive: the original file and the DB row are NEVER modified.
+/// The converted EPUB is written to a fresh temp cache directory and its path
+/// is returned to the caller. Emits the same `conversion:progress` events
+/// (`id: "direct"`) that the frontend conversion UI already listens to.
+#[tauri::command]
+pub async fn convert_book(
+    book_id: i64,
+    state: State<'_, AppState>,
+    app_handle: tauri::AppHandle,
+) -> crate::error::Result<reader_service::ConvertResult> {
+    validate::require_positive_id(book_id, "book_id")?;
+    reader_service::convert_book_to_epub(&state.db, book_id, Some(&app_handle)).await
+}
+
 // ==================== Auto-Convert on Open ====================
 
 /// Response for the auto-convert-and-replace operation
@@ -287,7 +306,7 @@ pub async fn convert_and_replace_book(
     // 5. Build output path (use a unique temp directory to avoid permission issues)
     let temp_dir = std::env::temp_dir().join(format!("shiori_conv_{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&temp_dir).map_err(|e| ShioriError::Other(e.to_string()))?;
-    
+
     let target = temp_dir
         .join(source.file_stem().unwrap_or_default())
         .with_extension("epub");
@@ -302,7 +321,7 @@ pub async fn convert_and_replace_book(
     // 6. Run conversion (synchronous — wraps blocking work on Tokio)
     let src_clone = source.clone();
     let out_clone = target.clone();
-    
+
     let fmt_for_cb = source_format.clone();
     let app = app_handle.clone();
     let progress_cb = std::sync::Arc::new(move |progress: u8, message: &str| {
@@ -331,7 +350,7 @@ pub async fn convert_and_replace_book(
     if let Err(e) = convert_result {
         // Cleanup on failure — remove incomplete output if it exists
         let _ = tokio::fs::remove_file(&target).await;
-        
+
         let err_msg = e.to_string();
         let msg = if err_msg.starts_with("Conversion failed:") {
             err_msg
@@ -350,23 +369,33 @@ pub async fn convert_and_replace_book(
 
     // 8. Move to final destination (fallback to AppData if source directory is read-only)
     let mut final_dest = source.with_extension("epub");
-    
+
     if let Err(e) = tokio::fs::copy(&target, &final_dest).await {
-        log::warn!("[AutoConvert] Failed to copy to original directory: {}. Falling back to AppData.", e);
-        
+        log::warn!(
+            "[AutoConvert] Failed to copy to original directory: {}. Falling back to AppData.",
+            e
+        );
+
         let app_data_dir = state.covers_dir.parent().unwrap_or(&state.covers_dir);
         let converted_dir = app_data_dir.join("converted");
         let _ = std::fs::create_dir_all(&converted_dir);
-        
-        let safe_name = format!("{}_{}", book_id, final_dest.file_name().unwrap_or_default().to_string_lossy());
+
+        let safe_name = format!(
+            "{}_{}",
+            book_id,
+            final_dest.file_name().unwrap_or_default().to_string_lossy()
+        );
         final_dest = converted_dir.join(safe_name);
-        
+
         if let Err(e2) = tokio::fs::copy(&target, &final_dest).await {
             let _ = tokio::fs::remove_file(&target).await;
-            return Err(ShioriError::Other(format!("Failed to save converted file: {}", e2)));
+            return Err(ShioriError::Other(format!(
+                "Failed to save converted file: {}",
+                e2
+            )));
         }
     }
-    
+
     // Clean up temporary file
     let _ = tokio::fs::remove_file(&target).await;
 
@@ -422,13 +451,12 @@ pub async fn convert_and_replace_book(
 
 // ==================== New Auto-Convert on Open (v2.1) ====================
 
-/// Open a book for reading, converting it to EPUB on the fly if needed.
+/// Open a book for reading.
 ///
-/// If the book is already an EPUB, returns its path immediately.
-/// For any other format, runs the built-in Rust conversion pipeline and
-/// emits `conversion-progress` events to the frontend window during each stage.
-///
-/// Returns the path to the (possibly converted) EPUB file.
+/// Every native-readable format (epub/pdf/mobi/azw3/cbz/cbr/docx/fb2/txt/html/htm/md)
+/// is returned as-is — the ORIGINAL file path, no conversion, no DB rewrite.
+/// Only formats with no native reader fall back to the legacy convert-to-EPUB
+/// pipeline (which emits `conversion-progress` events to the window).
 ///
 /// # SHIORI-FIX: migrated window param to tauri::WebviewWindow (Tauri 2 API);
 ///   wired convert_to_epub_new with a per-stage progress callback so the
@@ -442,79 +470,80 @@ pub async fn open_book_for_reading(
 ) -> crate::error::Result<String> {
     validate::require_positive_id(book_id, "book_id")?;
 
-    // Look up book path + format
-    let conn = state.db.get_connection()?;
-    let (file_path, file_format): (String, String) = conn
-        .query_row(
-            "SELECT file_path, file_format FROM books WHERE id = ?1",
-            rusqlite::params![book_id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )
-        .map_err(|_| ShioriError::BookNotFound(format!("Book {} not found", book_id)))?;
-    drop(conn);
-
-    let ext = file_format.to_lowercase();
-
-    // If already EPUB, return immediately — no conversion needed
-    if ext == "epub" {
-        return Ok(file_path);
-    }
-
-    // Check file exists
-    let path = std::path::PathBuf::from(&file_path);
-    if !path.exists() {
-        return Err(ShioriError::FileNotFound { path: file_path });
-    }
-
-    // SHIORI-FIX: Use convert_to_epub_new instead of convert_direct so we can
-    // wire a ProgressCallback that emits granular conversion-progress events to
-    // the window *during* conversion (not only once at the very end).
-    let window_for_cb = window.clone();
-    let progress_cb: crate::conversion::ProgressCallback = Box::new(move |prog| {
-        if let Err(e) = window_for_cb.emit(
-            "conversion-progress",
-            serde_json::json!({
-                "stage": prog.stage,
-                "percent": prog.percent,
-            }),
-        ) {
-            log::warn!(
-                "[open_book_for_reading] Failed to emit conversion-progress: {}",
-                e
+    match reader_service::resolve_book_open_path(&state.db, book_id)? {
+        reader_service::BookOpenPath::Native(path) => {
+            log::info!(
+                "[open_book_for_reading] Opening original file natively: {}",
+                path
             );
+            return Ok(path);
         }
-    });
+        reader_service::BookOpenPath::NeedsConversion { path, format } => {
+            log::info!(
+                "[open_book_for_reading] Format '{}' has no native reader — legacy conversion fallback",
+                format
+            );
 
-    // Emit initial event so the UI shows something immediately
-    if let Err(e) = window.emit(
-        "conversion-progress",
-        serde_json::json!({
-            "stage": "Starting conversion…",
-            "percent": 0,
-        }),
-    ) {
-        log::warn!(
-            "[open_book_for_reading] Failed to emit initial conversion-progress: {}",
-            e
-        );
+            // Check file exists
+            if !path.exists() {
+                return Err(ShioriError::FileNotFound {
+                    path: path.to_string_lossy().to_string(),
+                });
+            }
+
+            // SHIORI-FIX: Use convert_to_epub_new instead of convert_direct so we can
+            // wire a ProgressCallback that emits granular conversion-progress events to
+            // the window *during* conversion (not only once at the very end).
+            let window_for_cb = window.clone();
+            let progress_cb: crate::conversion::ProgressCallback = Box::new(move |prog| {
+                if let Err(e) = window_for_cb.emit(
+                    "conversion-progress",
+                    serde_json::json!({
+                        "stage": prog.stage,
+                        "percent": prog.percent,
+                    }),
+                ) {
+                    log::warn!(
+                        "[open_book_for_reading] Failed to emit conversion-progress: {}",
+                        e
+                    );
+                }
+            });
+
+            // Emit initial event so the UI shows something immediately
+            if let Err(e) = window.emit(
+                "conversion-progress",
+                serde_json::json!({
+                    "stage": "Starting conversion…",
+                    "percent": 0,
+                }),
+            ) {
+                log::warn!(
+                    "[open_book_for_reading] Failed to emit initial conversion-progress: {}",
+                    e
+                );
+            }
+
+            let output =
+                crate::conversion::convert_to_epub_new(&path, Some(progress_cb), Some(&state.db))
+                    .await
+                    .map_err(|e| ShioriError::Other(format!("Conversion failed: {}", e)))?;
+
+            if !output.exists() {
+                return Err(ShioriError::Other(
+                    "Conversion completed but output file was not created".to_string(),
+                ));
+            }
+
+            Ok(output.to_string_lossy().to_string())
+        }
     }
-
-    let output = crate::conversion::convert_to_epub_new(&path, Some(progress_cb), Some(&state.db))
-        .await
-        .map_err(|e| ShioriError::Other(format!("Conversion failed: {}", e)))?;
-
-    if !output.exists() {
-        return Err(ShioriError::Other(
-            "Conversion completed but output file was not created".to_string(),
-        ));
-    }
-
-    Ok(output.to_string_lossy().to_string())
 }
 
 /// Returns true if the book at the given path needs conversion before reading.
 ///
-/// A book needs conversion if it is not already an EPUB.
+/// Only formats with no native reader need conversion; every format the renderer
+/// pipeline supports natively returns false.
 /// Call this before `open_book_for_reading` to decide whether to show the
 /// conversion progress overlay.
 #[tauri::command]
@@ -524,7 +553,7 @@ pub fn book_needs_conversion(book_path: String) -> bool {
         .and_then(|e| e.to_str())
         .unwrap_or("")
         .to_lowercase();
-    ext != "epub"
+    !reader_service::is_native_readable_format(&ext)
 }
 
 /// Delete all converted EPUBs in the Shiori temp cache directory.

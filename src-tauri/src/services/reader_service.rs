@@ -1,4 +1,5 @@
-use crate::error::Result;
+use crate::db::Database;
+use crate::error::{Result, ShioriError};
 use crate::models::{
     Annotation, AnnotationCategory, AnnotationExportData, AnnotationExportOptions,
     AnnotationSearchResult, BookReadingStats, DailyReadingStats, ReaderSettings, ReadingGoal,
@@ -6,6 +7,7 @@ use crate::models::{
 };
 use chrono::Utc;
 use rusqlite::{params, Connection};
+use tauri::Emitter;
 
 pub struct ReaderService;
 
@@ -894,7 +896,7 @@ impl ReaderService {
         yearly_books_target: Option<i32>,
     ) -> Result<ReadingGoal> {
         let now = Utc::now().to_rfc3339();
-        
+
         let updated = conn.execute(
             "UPDATE reading_goals SET daily_minutes_target = ?1, yearly_books_target = ?2, updated_at = ?3 WHERE is_active = 1",
             params![daily_minutes_target, yearly_books_target, now],
@@ -1093,4 +1095,188 @@ impl ReaderService {
             }
         }
     }
+}
+
+// ==================== Native Open Path + Explicit Conversion ====================
+
+/// Formats the renderer pipeline can open natively (no conversion, no DB rewrite).
+///
+/// Mirrors the frontend NATIVE_READER_FORMATS map: epub → PremiumEpubReader,
+/// pdf → PdfReader, cbz/cbr/zip/rar → MangaReader, everything else → GenericHtmlReader.
+pub fn is_native_readable_format(ext: &str) -> bool {
+    matches!(
+        ext,
+        "epub"
+            | "pdf"
+            | "mobi"
+            | "azw"
+            | "azw3"
+            | "cbz"
+            | "cbr"
+            | "zip"
+            | "rar"
+            | "docx"
+            | "doc"
+            | "fb2"
+            | "txt"
+            | "text"
+            | "html"
+            | "htm"
+            | "xhtml"
+            | "md"
+            | "markdown"
+    )
+}
+
+/// Decision produced by `resolve_book_open_path`.
+#[derive(Debug, Clone)]
+pub enum BookOpenPath {
+    /// Return this path to the renderer as-is — the original file.
+    Native(String),
+    /// Format has no native reader — the command layer may run the legacy
+    /// convert-to-EPUB fallback.
+    NeedsConversion {
+        path: std::path::PathBuf,
+        format: String,
+    },
+}
+
+/// Resolve the path a book should be opened with.
+///
+/// For every native-readable format this returns the ORIGINAL file path and
+/// never rewrites the DB row. Only formats outside the native set fall through
+/// to `NeedsConversion`.
+pub fn resolve_book_open_path(db: &Database, book_id: i64) -> Result<BookOpenPath> {
+    let conn = db.get_connection()?;
+    let (file_path, file_format): (String, String) = conn
+        .query_row(
+            "SELECT file_path, file_format FROM books WHERE id = ?1",
+            params![book_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|_| ShioriError::BookNotFound(format!("Book {} not found", book_id)))?;
+
+    let ext = file_format.to_lowercase();
+    if is_native_readable_format(&ext) {
+        Ok(BookOpenPath::Native(file_path))
+    } else {
+        Ok(BookOpenPath::NeedsConversion {
+            path: std::path::PathBuf::from(&file_path),
+            format: ext,
+        })
+    }
+}
+
+/// Result of an explicit, non-destructive conversion.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ConvertResult {
+    pub new_path: String,
+    pub new_format: String,
+}
+
+/// Explicit "convert to EPUB" — user-triggered only.
+///
+/// Runs the existing conversion engine synchronously (same path as the legacy
+/// `convert_and_replace_book`), emits the same `conversion:progress` events the
+/// frontend ConversionJobTracker/AutoConvertDialog already listen to, and NEVER
+/// touches the DB row or the original file. The output lands in a fresh temp
+/// cache directory.
+///
+/// `app_handle` is optional so unit tests can exercise this without a Tauri app;
+/// when `None` no progress events are emitted.
+pub async fn convert_book_to_epub(
+    db: &Database,
+    book_id: i64,
+    app_handle: Option<&tauri::AppHandle>,
+) -> Result<ConvertResult> {
+    let conn = db.get_connection()?;
+    let (title, file_path, file_format): (String, String, String) = conn
+        .query_row(
+            "SELECT title, file_path, file_format FROM books WHERE id = ?1",
+            params![book_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .map_err(|_| ShioriError::BookNotFound(format!("Book {} not found", book_id)))?;
+    drop(conn);
+
+    let source = std::path::PathBuf::from(&file_path);
+    let source_format = file_format.to_lowercase();
+
+    if !source.exists() {
+        return Err(ShioriError::FileNotFound { path: file_path });
+    }
+
+    if !crate::services::conversion_engine::can_convert(&source_format, "epub") {
+        return Err(ShioriError::Other(format!(
+            "Conversion from {} to EPUB is not supported",
+            source_format.to_uppercase()
+        )));
+    }
+
+    // Fresh temp output dir — never collides with the library or the original.
+    let temp_dir = std::env::temp_dir().join(format!("shiori_conv_{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&temp_dir).map_err(|e| ShioriError::Other(e.to_string()))?;
+
+    let target = temp_dir
+        .join(source.file_stem().unwrap_or_default())
+        .with_extension("epub");
+
+    log::info!(
+        "[ConvertBook] Converting book {} ({}) from {} → EPUB (non-destructive)",
+        book_id,
+        title,
+        source_format.to_uppercase()
+    );
+
+    let progress_cb = app_handle.map(|app| {
+        let app = app.clone();
+        let fmt_for_cb = source_format.clone();
+        std::sync::Arc::new(move |progress: u8, message: &str| {
+            let payload = serde_json::json!({
+                "id": "direct",
+                "book_id": book_id,
+                "source_format": fmt_for_cb,
+                "target_format": "epub",
+                "status": "Processing",
+                "progress": progress,
+                "message": message,
+            });
+            let _ = app.emit("conversion:progress", payload);
+        }) as std::sync::Arc<dyn Fn(u8, &str) + Send + Sync>
+    });
+
+    let convert_result = crate::services::conversion_engine::ConversionEngine::convert_direct(
+        &source,
+        &target,
+        &source_format,
+        "epub",
+        Some(db),
+        progress_cb,
+    )
+    .await;
+
+    if let Err(e) = convert_result {
+        // Cleanup on failure — remove incomplete output if it exists
+        let _ = tokio::fs::remove_file(&target).await;
+        let err_msg = e.to_string();
+        let msg = if err_msg.starts_with("Conversion failed:") {
+            err_msg
+        } else {
+            format!("Conversion failed: {}", err_msg)
+        };
+        return Err(ShioriError::Other(msg));
+    }
+
+    if !target.exists() {
+        return Err(ShioriError::Other(
+            "Conversion completed but output file was not created".to_string(),
+        ));
+    }
+
+    log::info!("[ConvertBook] Done: {}", target.display());
+
+    Ok(ConvertResult {
+        new_path: target.to_string_lossy().to_string(),
+        new_format: "epub".to_string(),
+    })
 }

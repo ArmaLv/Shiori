@@ -252,3 +252,36 @@ impl BookReaderAdapter for PdfAdapter {
         self.page_count
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Regression guard for the user-reported "never opens" PDF:
+    /// load must return Ok or Err — never panic.
+    #[test]
+    fn broken_pdf_load_never_panics() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../broken-files/Teachers_Pet_The_Shadows_of_Darkness_Universe_Book_2_Katerina_St.pdf"
+        );
+        if !std::path::Path::new(path).exists() {
+            // Fixture absent (e.g. CI checkout) — nothing to guard, skip.
+            return;
+        }
+
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            tauri::async_runtime::block_on(async {
+                let mut adapter = PdfAdapter::new();
+                adapter.load(path).await
+            })
+        }));
+
+        match result {
+            Ok(_) => {
+                // Ok(_) and Err(_) are both acceptable — the invariant is "no panic".
+            }
+            Err(_) => panic!("PdfAdapter::load panicked on the broken PDF at {}", path),
+        }
+    }
+}

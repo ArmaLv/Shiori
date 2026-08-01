@@ -15,28 +15,18 @@ pub async fn toggle_fullscreen<R: Runtime>(_app: AppHandle<R>) -> Result<bool, S
             .get_webview_window("main")
             .ok_or_else(|| "Main window not found".to_string())?;
 
-        let is_full = window
-            .is_fullscreen()
-            .map_err(|e| e.to_string())?;
+        let is_full = window.is_fullscreen().map_err(|e| e.to_string())?;
 
         if !is_full {
             // Step 1: promote to TOPMOST so we are above the taskbar
-            window
-                .set_always_on_top(true)
-                .map_err(|e| e.to_string())?;
+            window.set_always_on_top(true).map_err(|e| e.to_string())?;
             // Step 2: enter fullscreen (SetWindowPos now covers taskbar)
-            window
-                .set_fullscreen(true)
-                .map_err(|e| e.to_string())?;
+            window.set_fullscreen(true).map_err(|e| e.to_string())?;
         } else {
             // Step 1: exit fullscreen first
-            window
-                .set_fullscreen(false)
-                .map_err(|e| e.to_string())?;
+            window.set_fullscreen(false).map_err(|e| e.to_string())?;
             // Step 2: drop TOPMOST so dialogs / other apps can focus normally
-            window
-                .set_always_on_top(false)
-                .map_err(|e| e.to_string())?;
+            window.set_always_on_top(false).map_err(|e| e.to_string())?;
         }
 
         Ok(!is_full)
@@ -66,43 +56,55 @@ struct DownloadProgress {
 #[tauri::command]
 pub async fn download_apk(url: String, app_handle: tauri::AppHandle) -> Result<String, String> {
     use std::io::Write;
-    use tauri::Manager;
     use tauri::Emitter;
-    
+    use tauri::Manager;
+
     // Use app_cache_dir so FileProvider can find it via <cache-path>
-    let cache_dir = app_handle.path().app_cache_dir().map_err(|e| e.to_string())?;
-    
+    let cache_dir = app_handle
+        .path()
+        .app_cache_dir()
+        .map_err(|e| e.to_string())?;
+
     if !cache_dir.exists() {
-        std::fs::create_dir_all(&cache_dir).map_err(|e| format!("Failed to create cache dir: {}", e))?;
+        std::fs::create_dir_all(&cache_dir)
+            .map_err(|e| format!("Failed to create cache dir: {}", e))?;
     }
-    
+
     let apk_path = cache_dir.join("update.apk");
-    
-    let mut response = reqwest::get(&url).await.map_err(|e| format!("Failed to download: {}", e))?;
-    
+
+    let mut response = reqwest::get(&url)
+        .await
+        .map_err(|e| format!("Failed to download: {}", e))?;
+
     if !response.status().is_success() {
-        return Err(format!("Download failed with status: {}", response.status()));
+        return Err(format!(
+            "Download failed with status: {}",
+            response.status()
+        ));
     }
-    
+
     if apk_path.exists() {
         let _ = std::fs::remove_file(&apk_path);
     }
-    
-    let mut file = std::fs::File::create(&apk_path).map_err(|e| format!("Failed to create file: {}", e))?;
-    
+
+    let mut file =
+        std::fs::File::create(&apk_path).map_err(|e| format!("Failed to create file: {}", e))?;
+
     let total = response.content_length();
     let mut downloaded: u64 = 0;
-    
+
     // Stream chunks instead of loading entire APK into memory
-    while let Some(chunk) = response.chunk().await.map_err(|e| format!("Failed to read chunk: {}", e))? {
-        file.write_all(&chunk).map_err(|e| format!("Failed to write chunk: {}", e))?;
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(|e| format!("Failed to read chunk: {}", e))?
+    {
+        file.write_all(&chunk)
+            .map_err(|e| format!("Failed to write chunk: {}", e))?;
         downloaded += chunk.len() as u64;
-        
-        let _ = app_handle.emit("download_progress", DownloadProgress {
-            downloaded,
-            total,
-        });
+
+        let _ = app_handle.emit("download_progress", DownloadProgress { downloaded, total });
     }
-    
+
     Ok(apk_path.to_string_lossy().to_string())
 }

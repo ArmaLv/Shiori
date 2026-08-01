@@ -1428,7 +1428,9 @@ impl<'a> MigrationManager<'a> {
         log::info!("[Migration] Applying v13: Collection types and book favorites");
 
         // Add collection_type column: 'regular', 'shelf', 'favorites'
-        if self.table_exists("collections")? && !self.column_exists("collections", "collection_type")? {
+        if self.table_exists("collections")?
+            && !self.column_exists("collections", "collection_type")?
+        {
             self.conn.execute(
                 "ALTER TABLE collections ADD COLUMN collection_type TEXT NOT NULL DEFAULT 'regular'",
                 [],
@@ -1443,14 +1445,21 @@ impl<'a> MigrationManager<'a> {
             )?;
         }
 
-        // Create the built-in Favorites collection if it doesn't exist
-        let favorites_exists: bool = self.conn.query_row(
-            "SELECT COUNT(*) > 0 FROM collections WHERE collection_type = 'favorites'",
-            [],
-            |row| row.get(0),
-        )?;
+        // Create the built-in Favorites collection if it doesn't exist.
+        // SHIORI-FIX: `collections` was renamed to `shelves` (v40) and is never
+        // created on fresh databases — guard both statements so new installs
+        // don't die on a missing table (this also unblocks fresh-DB tests).
+        let favorites_exists: bool = if self.table_exists("collections")? {
+            self.conn.query_row(
+                "SELECT COUNT(*) > 0 FROM collections WHERE collection_type = 'favorites'",
+                [],
+                |row| row.get(0),
+            )?
+        } else {
+            false
+        };
 
-        if !favorites_exists {
+        if !favorites_exists && self.table_exists("collections")? {
             let now = chrono::Utc::now().to_rfc3339();
             self.conn.execute(
                 "INSERT INTO collections (name, description, is_smart, collection_type, icon, sort_order, created_at, updated_at) VALUES ('Favorites', 'Your favorite books', 0, 'favorites', '❤️', -1, ?1, ?2)",
@@ -2146,10 +2155,8 @@ impl<'a> MigrationManager<'a> {
         log::info!("[Migration] Applying v35: Add deleted_at to books");
 
         if !self.column_exists("books", "deleted_at")? {
-            self.conn.execute(
-                "ALTER TABLE books ADD COLUMN deleted_at TEXT",
-                [],
-            )?;
+            self.conn
+                .execute("ALTER TABLE books ADD COLUMN deleted_at TEXT", [])?;
         }
 
         let hash = Self::calculate_checksum("v35_add_deleted_at");
@@ -2225,7 +2232,7 @@ impl<'a> MigrationManager<'a> {
         log::info!("[Migration] Applying v40: Rename collections to shelves safely");
 
         let migrate_collections = self.table_exists("collections")?;
-        
+
         if migrate_collections {
             // Recreate shelves table to avoid ALTER TABLE RENAME TO constraints on old SQLite
             self.conn.execute(
@@ -2287,7 +2294,6 @@ impl<'a> MigrationManager<'a> {
                 self.conn.execute("DROP TABLE collections", [])?;
             }
         }
-
 
         let hash = Self::calculate_checksum("v40_rename_collections_to_shelves");
         self.record_migration(40, "rename_collections_to_shelves", &hash)?;

@@ -21,6 +21,10 @@ pub enum BookFormat {
     Cbz,
     Cbr,
     Txt,
+    Docx,
+    Fb2,
+    Html,
+    Markdown,
     Audio,
 }
 
@@ -34,6 +38,10 @@ impl BookFormat {
             BookFormat::Cbz => "cbz",
             BookFormat::Cbr => "cbr",
             BookFormat::Txt => "txt",
+            BookFormat::Docx => "docx",
+            BookFormat::Fb2 => "fb2",
+            BookFormat::Html => "html",
+            BookFormat::Markdown => "markdown",
             BookFormat::Audio => "audio",
         }
     }
@@ -45,8 +53,12 @@ impl BookFormat {
             "mobi" => Some(BookFormat::Mobi),
             "azw3" => Some(BookFormat::Azw3),
             "cbz" | "zip" => Some(BookFormat::Cbz),
-            "cbr" => Some(BookFormat::Cbr),
-            "txt" => Some(BookFormat::Txt),
+            "cbr" | "rar" => Some(BookFormat::Cbr),
+            "txt" | "text" => Some(BookFormat::Txt),
+            "docx" | "doc" => Some(BookFormat::Docx),
+            "fb2" => Some(BookFormat::Fb2),
+            "html" | "htm" | "xhtml" => Some(BookFormat::Html),
+            "md" | "markdown" => Some(BookFormat::Markdown),
             "mp3" | "m4a" | "m4b" | "ogg" | "flac" | "wav" => Some(BookFormat::Audio),
             _ => None,
         }
@@ -124,13 +136,42 @@ fn verify_format_with_magic(path: &Path, format: &BookFormat) -> Result<bool> {
             Ok(buffer.len() >= 68 && &buffer[60..68] == b"BOOKMOBI" || buffer.starts_with(b"TPZ"))
         }
         BookFormat::Txt => {
-            // Text files should be mostly valid UTF-8
+            // Text files should be mostly valid UTF-8 (allow UTF-8 BOM)
+            let end = bytes_read.min(512);
+            let start = if buffer.starts_with(b"\xEF\xBB\xBF") && end > 3 {
+                3
+            } else {
+                0
+            };
+            let sample = String::from_utf8_lossy(&buffer[start..end]);
+            Ok(sample
+                .chars()
+                .filter(|c| c.is_control() && *c != '\n' && *c != '\r' && *c != '\t')
+                .count()
+                < bytes_read / 10)
+        }
+        BookFormat::Markdown => {
+            // Markdown is text — extension is authoritative; just require it to
+            // look like readable UTF-8 text.
             let sample = String::from_utf8_lossy(&buffer[..bytes_read.min(512)]);
             Ok(sample
                 .chars()
                 .filter(|c| c.is_control() && *c != '\n' && *c != '\r' && *c != '\t')
                 .count()
                 < bytes_read / 10)
+        }
+        BookFormat::Docx => {
+            // DOCX is a ZIP; deep word/document.xml check happens in validate_docx
+            Ok(buffer.starts_with(ZIP_MAGIC))
+        }
+        BookFormat::Fb2 => {
+            let sample = String::from_utf8_lossy(&buffer[..bytes_read.min(512)]);
+            Ok(sample.contains("FictionBook"))
+        }
+        BookFormat::Html => {
+            let sample = String::from_utf8_lossy(&buffer[..bytes_read.min(512)]);
+            let lower = sample.to_lowercase();
+            Ok(lower.contains("<!doctype html") || lower.contains("<html"))
         }
         BookFormat::Cbr => {
             // CBR files are RAR archives
@@ -139,11 +180,11 @@ fn verify_format_with_magic(path: &Path, format: &BookFormat) -> Result<bool> {
         BookFormat::Audio => {
             // Minimal magic byte checking for audio (mp3, flac, ogg, m4a).
             // Usually symphonia handles this, but we'll do a quick check to return true
-            // if we are pretty sure, otherwise we can just trust the extension for now 
+            // if we are pretty sure, otherwise we can just trust the extension for now
             // since symphonia probe will fail safely later.
-            Ok(buffer.starts_with(b"ID3") 
-                || buffer.starts_with(b"fLaC") 
-                || buffer.starts_with(b"OggS") 
+            Ok(buffer.starts_with(b"ID3")
+                || buffer.starts_with(b"fLaC")
+                || buffer.starts_with(b"OggS")
                 || (buffer.len() > 8 && &buffer[4..8] == b"ftyp"))
         }
     }
@@ -186,11 +227,32 @@ fn detect_format_from_magic(path: &Path) -> Result<String> {
         return Ok("cbr".to_string());
     }
 
+    // Check XML-based formats (FB2)
+    if buffer.starts_with(b"<?xml") || buffer.starts_with(b"\xEF\xBB\xBF<?xml") {
+        let sample = String::from_utf8_lossy(&buffer[..bytes_read.min(512)]);
+        if sample.contains("FictionBook") {
+            return Ok("fb2".to_string());
+        }
+        if sample.to_lowercase().contains("<html") {
+            return Ok("html".to_string());
+        }
+    }
+
+    // Check HTML
+    {
+        let sample = String::from_utf8_lossy(&buffer[..bytes_read.min(512)]);
+        let lower = sample.to_lowercase();
+        if lower.contains("<!doctype html") || lower.contains("<html") {
+            return Ok("html".to_string());
+        }
+    }
+
     // Check Audio
-    if buffer.starts_with(b"ID3") 
-        || buffer.starts_with(b"fLaC") 
-        || buffer.starts_with(b"OggS") 
-        || (buffer.len() > 8 && &buffer[4..8] == b"ftyp") {
+    if buffer.starts_with(b"ID3")
+        || buffer.starts_with(b"fLaC")
+        || buffer.starts_with(b"OggS")
+        || (buffer.len() > 8 && &buffer[4..8] == b"ftyp")
+    {
         return Ok("audio".to_string());
     }
 
@@ -224,7 +286,78 @@ pub async fn validate_file_integrity(path: &Path, format: &str) -> Result<bool> 
         BookFormat::Cbz => validate_cbz(path),
         BookFormat::Cbr => validate_cbr(path),
         BookFormat::Txt => validate_txt(path),
+        BookFormat::Docx => validate_docx(path),
+        BookFormat::Fb2 => validate_fb2(path),
+        BookFormat::Html => validate_html(path),
+        BookFormat::Markdown => validate_txt(path), // extension + UTF-8 is enough
         BookFormat::Audio => Ok(true), // We trust symphonia for playback, basic structural validation is enough.
+    }
+}
+
+fn validate_docx(path: &Path) -> Result<bool> {
+    use std::io::Read;
+    use zip::ZipArchive;
+
+    let file = File::open(path)?;
+    let mut archive = match ZipArchive::new(file) {
+        Ok(a) => a,
+        Err(e) => {
+            return Err(ShioriError::InvalidFormat(format!(
+                "Invalid DOCX (bad ZIP): {}",
+                e
+            )))
+        }
+    };
+
+    // DOCX must contain the WordprocessingML document part
+    {
+        let mut doc_part = match archive.by_name("word/document.xml") {
+            Ok(f) => f,
+            Err(_) => {
+                return Err(ShioriError::InvalidFormat(
+                    "DOCX missing word/document.xml".to_string(),
+                ))
+            }
+        };
+        let mut buf = Vec::new();
+        doc_part
+            .read_to_end(&mut buf)
+            .map_err(|e| ShioriError::InvalidFormat(format!("DOCX read error: {}", e)))?;
+        if String::from_utf8_lossy(&buf).contains("<w:document") {
+            Ok(true)
+        } else {
+            Err(ShioriError::InvalidFormat(
+                "DOCX missing <w:document> root".to_string(),
+            ))
+        }
+    }
+}
+
+fn validate_fb2(path: &Path) -> Result<bool> {
+    let mut file = File::open(path)?;
+    let mut buffer = vec![0u8; 8192];
+    let bytes_read = file.read(&mut buffer)?;
+    let sample = String::from_utf8_lossy(&buffer[..bytes_read]);
+    if sample.contains("FictionBook") {
+        Ok(true)
+    } else {
+        Err(ShioriError::InvalidFormat(
+            "FB2 file missing <FictionBook> root element".to_string(),
+        ))
+    }
+}
+
+fn validate_html(path: &Path) -> Result<bool> {
+    let mut file = File::open(path)?;
+    let mut buffer = vec![0u8; 8192];
+    let bytes_read = file.read(&mut buffer)?;
+    let lower = String::from_utf8_lossy(&buffer[..bytes_read]).to_lowercase();
+    if lower.contains("<!doctype html") || lower.contains("<html") {
+        Ok(true)
+    } else {
+        Err(ShioriError::InvalidFormat(
+            "HTML file missing <html> or <!DOCTYPE html> marker".to_string(),
+        ))
     }
 }
 
@@ -329,5 +462,48 @@ fn validate_txt(path: &Path) -> Result<bool> {
         Err(_) => Err(ShioriError::InvalidFormat(
             "Text file is not valid UTF-8".to_string(),
         )),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn markdown_extensions_map_to_markdown() {
+        assert_eq!(BookFormat::from_str("md"), Some(BookFormat::Markdown));
+        assert_eq!(BookFormat::from_str("markdown"), Some(BookFormat::Markdown));
+        assert_eq!(BookFormat::Markdown.as_str(), "markdown");
+    }
+
+    #[test]
+    fn new_native_formats_map_correctly() {
+        assert_eq!(BookFormat::from_str("docx"), Some(BookFormat::Docx));
+        assert_eq!(BookFormat::from_str("fb2"), Some(BookFormat::Fb2));
+        assert_eq!(BookFormat::from_str("html"), Some(BookFormat::Html));
+        assert_eq!(BookFormat::from_str("htm"), Some(BookFormat::Html));
+        assert_eq!(BookFormat::from_str("txt"), Some(BookFormat::Txt));
+    }
+
+    #[tokio::test]
+    async fn detect_markdown_by_extension_and_content() {
+        let dir = std::env::temp_dir().join(format!(
+            "shiori_fmt_detect_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        for name in ["book.md", "book.markdown"] {
+            let path = dir.join(name);
+            std::fs::write(&path, "# Title\n\nSome **bold** text.\n").unwrap();
+            let detected = detect_format(&path).await.unwrap();
+            assert_eq!(detected, "markdown", "{} should detect as markdown", name);
+        }
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

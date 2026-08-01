@@ -24,9 +24,17 @@ struct ScanCompletePayload {
 fn allowed_extensions(content_type: &str) -> &'static [&'static str] {
     match content_type.trim().to_lowercase().as_str() {
         "manga" => &["cbz", "cbr", "zip"],
-        "book" | "books" => &["epub", "pdf", "mobi", "azw3"],
-        "both" => &["cbz", "cbr", "zip", "epub", "pdf", "mobi", "azw3"],
-        _ => &["cbz", "cbr", "zip", "epub", "pdf", "mobi", "azw3"],
+        "book" | "books" => &[
+            "epub", "pdf", "mobi", "azw3", "txt", "docx", "fb2", "html", "htm", "md",
+        ],
+        "both" => &[
+            "cbz", "cbr", "zip", "epub", "pdf", "mobi", "azw3", "txt", "docx", "fb2", "html",
+            "htm", "md",
+        ],
+        _ => &[
+            "cbz", "cbr", "zip", "epub", "pdf", "mobi", "azw3", "txt", "docx", "fb2", "html",
+            "htm", "md",
+        ],
     }
 }
 
@@ -324,9 +332,9 @@ pub async fn scan_folder_unified(
     Ok(result)
 }
 
+use crate::services::manga_metadata_service::parse_manga_title;
 use crate::services::online::provider::{ItemType, MetadataQuery};
 use crate::services::online::worker::MetadataJob;
-use crate::services::manga_metadata_service::parse_manga_title;
 
 async fn enqueue_auto_metadata(
     db: &crate::db::Database,
@@ -336,13 +344,15 @@ async fn enqueue_auto_metadata(
     if success_paths.is_empty() {
         return;
     }
-    
+
     let conn_res = db.get_connection();
-    if conn_res.is_err() { return; }
+    if conn_res.is_err() {
+        return;
+    }
     let conn = conn_res.unwrap();
-    
+
     let mut jobs = Vec::new();
-    
+
     for path in success_paths {
         if let Ok(mut stmt) = conn.prepare("SELECT id, title, isbn, file_format, (SELECT name FROM book_authors ba JOIN authors a ON ba.author_id = a.id WHERE ba.book_id = books.id LIMIT 1) as author FROM books WHERE file_path = ?1") {
             if let Ok(mut rows) = stmt.query(rusqlite::params![path]) {
@@ -352,7 +362,7 @@ async fn enqueue_auto_metadata(
                     let isbn: Option<String> = row.get(2).unwrap_or(None);
                     let file_format: String = row.get(3).unwrap_or_default();
                     let author: Option<String> = row.get(4).unwrap_or(None);
-                    
+
                     if book_id > 0 {
                         let is_manga = matches!(file_format.to_lowercase().as_str(), "cbz" | "cbr");
                         let query = if is_manga {
@@ -362,7 +372,7 @@ async fn enqueue_auto_metadata(
                         } else {
                             MetadataQuery::TitleAuthor { title, author }
                         };
-                        
+
                         let item_type = if is_manga { ItemType::Manga } else { ItemType::Book };
                         jobs.push(MetadataJob {
                             item_id: book_id,
@@ -375,7 +385,7 @@ async fn enqueue_auto_metadata(
             }
         }
     }
-    
+
     // Explicitly drop the connection before awaiting to ensure Send bounds are met
     drop(conn);
 
@@ -687,7 +697,9 @@ pub async fn download_gutenberg_epub(
     let file_name = format!("{}.epub", safe_title.trim());
 
     let prefs = crate::commands::preferences::get_user_preferences(state.clone()).await?;
-    let downloads_dir = if !prefs.default_import_path.is_empty() && !prefs.default_import_path.starts_with("content://") {
+    let downloads_dir = if !prefs.default_import_path.is_empty()
+        && !prefs.default_import_path.starts_with("content://")
+    {
         std::path::PathBuf::from(&prefs.default_import_path).join("Online Books")
     } else {
         app_handle
@@ -696,7 +708,8 @@ pub async fn download_gutenberg_epub(
             .map_err(|e| crate::error::ShioriError::Other(format!("Failed to get app dir: {}", e)))?
             .join("downloads")
     };
-    let _download_guard = crate::ActiveDownloads::increment(app_handle.state::<crate::ActiveDownloads>());
+    let _download_guard =
+        crate::ActiveDownloads::increment(app_handle.state::<crate::ActiveDownloads>());
     std::fs::create_dir_all(&downloads_dir)
         .map_err(|e| crate::error::ShioriError::Other(e.to_string()))?;
 
@@ -829,8 +842,14 @@ pub async fn download_libgen_epub(
                 || mirror_url.contains("libgen.li")
                 || mirror_url.contains("libgen.is")
             {
-                let proxy1 = format!("https://api.allorigins.win/raw?url={}", urlencoding::encode(mirror_url));
-                let proxy2 = format!("https://api.codetabs.com/v1/proxy?quest={}", urlencoding::encode(mirror_url));
+                let proxy1 = format!(
+                    "https://api.allorigins.win/raw?url={}",
+                    urlencoding::encode(mirror_url)
+                );
+                let proxy2 = format!(
+                    "https://api.codetabs.com/v1/proxy?quest={}",
+                    urlencoding::encode(mirror_url)
+                );
                 let proxy3 = format!("https://corsproxy.io/?{}", urlencoding::encode(mirror_url));
 
                 // Try direct first, then proxies
@@ -839,7 +858,9 @@ pub async fn download_libgen_epub(
                         if resp.status().is_success() {
                             if let Ok(text) = resp.text().await {
                                 // 1. Try to get the very first link inside the <div id="download"> (usually the direct GET link)
-                                if let Ok(re) = regex::Regex::new(r#"(?is)id=["']download["'][^>]*>.*?href=["']([^"']+)["']"#) {
+                                if let Ok(re) = regex::Regex::new(
+                                    r#"(?is)id=["']download["'][^>]*>.*?href=["']([^"']+)["']"#,
+                                ) {
                                     if let Some(caps) = re.captures(&text) {
                                         download_url = caps.get(1).unwrap().as_str().to_string();
                                         break;
@@ -909,7 +930,8 @@ pub async fn download_libgen_epub(
     };
 
     let total_bytes = resp.content_length();
-    let _download_guard = crate::ActiveDownloads::increment(app_handle.state::<crate::ActiveDownloads>());
+    let _download_guard =
+        crate::ActiveDownloads::increment(app_handle.state::<crate::ActiveDownloads>());
 
     let safe_title = title_hint
         .chars()
@@ -920,10 +942,12 @@ pub async fn download_libgen_epub(
         .replace(".", "")
         .to_lowercase();
     let file_name = format!("{}.{}", safe_title.trim(), ext);
-    
+
     let state = app_handle.state::<AppState>();
     let prefs = crate::commands::preferences::get_user_preferences(state.clone()).await?;
-    let downloads_dir = if !prefs.default_import_path.is_empty() && !prefs.default_import_path.starts_with("content://") {
+    let downloads_dir = if !prefs.default_import_path.is_empty()
+        && !prefs.default_import_path.starts_with("content://")
+    {
         std::path::PathBuf::from(&prefs.default_import_path).join("Online Books")
     } else {
         app_handle
@@ -1055,19 +1079,19 @@ pub async fn import_online_manga_chapters(
 ) -> Result<crate::models::ImportResult> {
     let db = state.db.clone();
     let covers_dir = state.covers_dir.clone();
-    
+
     tokio::task::spawn_blocking(move || {
         let paths: Vec<String> = paths_with_chapters.iter().map(|p| p.path.clone()).collect();
         let batch_result = crate::services::library_service::import_manga(&db, paths, &covers_dir)?;
-        
+
         let conn = db.get_connection()?;
-        
+
         let series_id: Option<i64> = conn.query_row(
             "SELECT id FROM manga_series WHERE title = ?",
             [&series_metadata.title],
             |row| row.get(0),
         ).ok();
-        
+
         let series_id = if let Some(sid) = series_id {
             if let Some(cover_url) = &series_metadata.cover_url {
                 let _ = conn.execute(
@@ -1078,17 +1102,17 @@ pub async fn import_online_manga_chapters(
             sid
         } else {
             conn.execute(
-                "INSERT INTO manga_series (title, sort_title, status, cover_path, added_date) 
+                "INSERT INTO manga_series (title, sort_title, status, cover_path, added_date)
                  VALUES (?, ?, 'ongoing', ?, CURRENT_TIMESTAMP)",
                 rusqlite::params![
-                    series_metadata.title, 
-                    series_metadata.title, 
+                    series_metadata.title,
+                    series_metadata.title,
                     series_metadata.cover_url
                 ],
             )?;
             conn.last_insert_rowid()
         };
-        
+
         for path_obj in paths_with_chapters {
             if batch_result.success.contains(&path_obj.path) || batch_result.duplicates.contains(&path_obj.path) {
                 let book_id: Option<i64> = conn.query_row(
@@ -1096,22 +1120,22 @@ pub async fn import_online_manga_chapters(
                     [&path_obj.path],
                     |row| row.get(0)
                 ).ok();
-                
+
                 if let Some(bid) = book_id {
                     let chapter_f64 = path_obj.chapter.as_ref().and_then(|ch| ch.parse::<f64>().ok());
                     let chapter_i32 = chapter_f64.map(|v| v as i32);
-                    
+
                     let _ = conn.execute(
                         "UPDATE books SET manga_series_id = ?, series = ?, series_index = ?, anilist_id = ? WHERE id = ?",
                         rusqlite::params![
-                            series_id, 
-                            series_metadata.title, 
+                            series_id,
+                            series_metadata.title,
                             chapter_i32,
-                            series_metadata.anilist_id, 
+                            series_metadata.anilist_id,
                             bid
                         ],
                     );
-                    
+
                     if let Some(desc) = &series_metadata.description {
                         let _ = conn.execute(
                             "UPDATE books SET notes = ? WHERE id = ? AND (notes IS NULL OR notes = '')",
@@ -1121,7 +1145,7 @@ pub async fn import_online_manga_chapters(
                 }
             }
         }
-        
+
         Ok(batch_result)
     })
     .await

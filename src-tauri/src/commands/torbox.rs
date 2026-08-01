@@ -141,9 +141,9 @@ async fn finalize_import_from_target(
 
     let mut user_download_dir: Option<String> = None;
     if let Ok(conn) = app_state.db.get_connection() {
-        if let Ok(mut stmt) =
-            conn.prepare("SELECT default_manga_path, default_import_path FROM user_preferences WHERE id = 1")
-        {
+        if let Ok(mut stmt) = conn.prepare(
+            "SELECT default_manga_path, default_import_path FROM user_preferences WHERE id = 1",
+        ) {
             if let Ok(mut rows) = stmt.query([]) {
                 if let Ok(Some(row)) = rows.next() {
                     let manga_path: Option<String> = row.get(0).unwrap_or(None);
@@ -156,17 +156,19 @@ async fn finalize_import_from_target(
         }
     }
 
-    let _download_guard = crate::ActiveDownloads::increment(app_handle.state::<crate::ActiveDownloads>());
+    let _download_guard =
+        crate::ActiveDownloads::increment(app_handle.state::<crate::ActiveDownloads>());
 
-    let downloads_dir = if let Some(path) = user_download_dir.filter(|p| !p.starts_with("content://")) {
-        std::path::PathBuf::from(path).join("Torbox Downloads")
-    } else {
-        app_handle
-            .path()
-            .app_data_dir()
-            .map_err(|e| ShioriError::Other(format!("Failed to get app dir: {}", e)))?
-            .join("downloads")
-    };
+    let downloads_dir =
+        if let Some(path) = user_download_dir.filter(|p| !p.starts_with("content://")) {
+            std::path::PathBuf::from(path).join("Torbox Downloads")
+        } else {
+            app_handle
+                .path()
+                .app_data_dir()
+                .map_err(|e| ShioriError::Other(format!("Failed to get app dir: {}", e)))?
+                .join("downloads")
+        };
 
     std::fs::create_dir_all(&downloads_dir)?;
 

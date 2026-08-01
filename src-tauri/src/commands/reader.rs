@@ -295,15 +295,18 @@ pub fn get_reader_startup_data(book_id: i64, state: State<AppState>) -> Result<R
 pub fn get_book_file_path(book_id: i64, state: State<AppState>) -> Result<String> {
     validate::require_positive_id(book_id, "book_id")?;
     let conn = state.db.get_connection()?;
-    let file_path: String = conn.query_row(
-        "SELECT file_path FROM books WHERE id = ?1",
+    let (file_path, file_format): (String, String) = conn.query_row(
+        "SELECT file_path, file_format FROM books WHERE id = ?1",
         rusqlite::params![book_id],
-        |row| row.get::<_, String>(0),
+        |row| Ok((row.get(0)?, row.get(1)?)),
     )?;
 
-    // Self-healing: if stored path doesn't exist, check for converted .epub
+    // Self-healing: if stored path doesn't exist AND the book is an EPUB,
+    // check for a sibling .epub (legacy auto-convert artifact).
+    // Native formats (pdf/mobi/docx/…) must NEVER be rewritten — the DB row
+    // stays pointing at the original file.
     let path = std::path::Path::new(&file_path);
-    if !path.exists() {
+    if !path.exists() && file_format.eq_ignore_ascii_case("epub") {
         let epub_path = path.with_extension("epub");
         if epub_path.exists() {
             let new_path = epub_path.to_string_lossy().to_string();

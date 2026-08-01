@@ -97,11 +97,7 @@ pub fn delete_shelf(id: i64, state: State<AppState>) -> Result<()> {
 // ==================== Book Management Commands ====================
 
 #[tauri::command]
-pub fn add_book_to_shelf(
-    shelf_id: i64,
-    book_id: i64,
-    state: State<AppState>,
-) -> Result<()> {
+pub fn add_book_to_shelf(shelf_id: i64, book_id: i64, state: State<AppState>) -> Result<()> {
     validate::require_positive_id(shelf_id, "shelf_id")?;
     validate::require_positive_id(book_id, "book_id")?;
     let conn = state.db.get_connection()?;
@@ -109,11 +105,7 @@ pub fn add_book_to_shelf(
 }
 
 #[tauri::command]
-pub fn remove_book_from_shelf(
-    shelf_id: i64,
-    book_id: i64,
-    state: State<AppState>,
-) -> Result<()> {
+pub fn remove_book_from_shelf(shelf_id: i64, book_id: i64, state: State<AppState>) -> Result<()> {
     validate::require_positive_id(shelf_id, "shelf_id")?;
     validate::require_positive_id(book_id, "book_id")?;
     let conn = state.db.get_connection()?;
@@ -121,11 +113,7 @@ pub fn remove_book_from_shelf(
 }
 
 #[tauri::command]
-pub fn add_books_to_shelf(
-    shelf_id: i64,
-    book_ids: Vec<i64>,
-    state: State<AppState>,
-) -> Result<()> {
+pub fn add_books_to_shelf(shelf_id: i64, book_ids: Vec<i64>, state: State<AppState>) -> Result<()> {
     validate::require_positive_id(shelf_id, "shelf_id")?;
     validate::require_non_empty_vec(&book_ids, "book_ids")?;
     let conn = state.db.get_connection()?;
@@ -166,10 +154,7 @@ pub fn get_favorite_book_ids(state: State<AppState>) -> Result<Vec<i64>> {
 }
 
 #[tauri::command]
-pub fn get_shelves_by_type(
-    shelf_type: String,
-    state: State<AppState>,
-) -> Result<Vec<Shelf>> {
+pub fn get_shelves_by_type(shelf_type: String, state: State<AppState>) -> Result<Vec<Shelf>> {
     let conn = state.db.get_connection()?;
     ShelfService::get_shelves_by_type(&conn, &shelf_type)
 }

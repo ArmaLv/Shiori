@@ -29,16 +29,19 @@ impl PdfFormatAdapter {
                         .collect();
                     return Some(String::from_utf16_lossy(&u16_chars));
                 }
-                
+
                 // If it's valid UTF-8, use it.
                 if let Ok(s) = std::str::from_utf8(bytes) {
                     return Some(s.to_string());
                 }
-                
+
                 // If invalid UTF-8, check if it's likely UTF-8 (few replacements).
                 let utf8_lossy = String::from_utf8_lossy(bytes);
-                let replacement_count = utf8_lossy.chars().filter(|&c| c == std::char::REPLACEMENT_CHARACTER).count();
-                
+                let replacement_count = utf8_lossy
+                    .chars()
+                    .filter(|&c| c == std::char::REPLACEMENT_CHARACTER)
+                    .count();
+
                 // If too many replacements, fallback to Latin-1 / WinAnsi
                 if replacement_count > bytes.len() / 4 {
                     Some(bytes.iter().map(|&b| b as char).collect())
@@ -91,9 +94,10 @@ impl PdfFormatAdapter {
     pub fn extract_content(path: &Path) -> FormatResult<String> {
         let bytes = std::fs::read(path)
             .map_err(|e| FormatError::ConversionError(format!("Failed to read PDF file: {}", e)))?;
-            
-        let full_text = pdf_extract::extract_text_from_mem(&bytes)
-            .map_err(|e| FormatError::ConversionError(format!("Failed to extract text from PDF: {}", e)))?;
+
+        let full_text = pdf_extract::extract_text_from_mem(&bytes).map_err(|e| {
+            FormatError::ConversionError(format!("Failed to extract text from PDF: {}", e))
+        })?;
 
         // Post-process text with heuristics
         Ok(Self::post_process_text(&full_text))
@@ -107,13 +111,22 @@ impl PdfFormatAdapter {
 
         let is_list_item = |line: &str| -> bool {
             let t = line.trim_start();
-            t.starts_with('•') || t.starts_with('-') || t.starts_with('*') || t.starts_with("o ") 
-            || (t.chars().next().map_or(false, |c| c.is_ascii_digit()) && t.contains(". "))
+            t.starts_with('•')
+                || t.starts_with('-')
+                || t.starts_with('*')
+                || t.starts_with("o ")
+                || (t.chars().next().map_or(false, |c| c.is_ascii_digit()) && t.contains(". "))
         };
 
         let ends_with_punctuation = |line: &str| -> bool {
             let t = line.trim_end();
-            t.ends_with('.') || t.ends_with('!') || t.ends_with('?') || t.ends_with('"') || t.ends_with('\'') || t.ends_with(':') || t.ends_with(';')
+            t.ends_with('.')
+                || t.ends_with('!')
+                || t.ends_with('?')
+                || t.ends_with('"')
+                || t.ends_with('\'')
+                || t.ends_with(':')
+                || t.ends_with(';')
         };
 
         // Collapse spaces helper
@@ -136,7 +149,7 @@ impl PdfFormatAdapter {
 
         while i < lines.len() {
             let line = lines[i].trim();
-            
+
             if line.is_empty() {
                 if !processed.ends_with("\n\n") && !processed.is_empty() {
                     if processed.ends_with('\n') {
@@ -165,7 +178,7 @@ impl PdfFormatAdapter {
             processed.push_str(&collapsed_line);
 
             let has_punct = ends_with_punctuation(&collapsed_line);
-            
+
             // Lookahead to next non-empty line
             let mut j = i + 1;
             let mut next_line = "";
@@ -196,7 +209,7 @@ impl PdfFormatAdapter {
                     processed.push(' ');
                 }
             }
-            
+
             i = j;
         }
 
@@ -426,7 +439,10 @@ mod tests {
 
         let list_raw = "Here is a list:\n1. First item\n2. Second item\n• Bullet one\n• Bullet two";
         let list_processed = PdfFormatAdapter::post_process_text(list_raw);
-        assert_eq!(list_processed, "Here is a list:\n\n1. First item\n\n2. Second item\n\n• Bullet one\n\n• Bullet two");
+        assert_eq!(
+            list_processed,
+            "Here is a list:\n\n1. First item\n\n2. Second item\n\n• Bullet one\n\n• Bullet two"
+        );
     }
 
     #[test]

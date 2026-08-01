@@ -1,8 +1,8 @@
-use tauri::State;
+use crate::services::discovery_service::CompanionInstance;
+use crate::AppState;
 use log::error;
 use serde::Serialize;
-use crate::AppState;
-use crate::services::discovery_service::CompanionInstance;
+use tauri::State;
 
 #[derive(Serialize)]
 pub struct LocalIpResponse {
@@ -25,17 +25,11 @@ pub async fn start_companion_broadcast(
 }
 
 #[tauri::command]
-pub async fn stop_companion_broadcast(
-    state: State<'_, AppState>,
-) -> Result<(), String> {
-    state
-        .discovery_service
-        .stop_broadcast()
-        .await
-        .map_err(|e| {
-            error!("Failed to stop mDNS broadcast: {}", e);
-            e.to_string()
-        })
+pub async fn stop_companion_broadcast(state: State<'_, AppState>) -> Result<(), String> {
+    state.discovery_service.stop_broadcast().await.map_err(|e| {
+        error!("Failed to stop mDNS broadcast: {}", e);
+        e.to_string()
+    })
 }
 
 #[tauri::command]
@@ -58,7 +52,7 @@ pub fn get_local_ips() -> Result<Vec<LocalIpResponse>, String> {
     if let Ok(ip) = local_ip_address::local_ip() {
         ips.push(LocalIpResponse { ip: ip.to_string() });
     }
-    
+
     // Attempt to get all interface IPs if necessary
     if let Ok(interfaces) = local_ip_address::list_afinet_netifas() {
         for (_name, ip) in interfaces {
@@ -79,13 +73,15 @@ pub fn generate_pairing_qr(ip: String, port: u16, token: Option<String>) -> Resu
     if let Some(t) = token {
         payload.push_str(&format!("&token={}", t));
     }
-    
-    use qrcode::QrCode;
-    use qrcode::render::svg;
 
-    let code = QrCode::new(payload.as_bytes()).map_err(|e| format!("Failed to create QR code: {}", e))?;
-    
-    let svg_xml = code.render()
+    use qrcode::render::svg;
+    use qrcode::QrCode;
+
+    let code =
+        QrCode::new(payload.as_bytes()).map_err(|e| format!("Failed to create QR code: {}", e))?;
+
+    let svg_xml = code
+        .render()
         .min_dimensions(200, 200)
         .dark_color(svg::Color("#000000"))
         .light_color(svg::Color("#ffffff"))

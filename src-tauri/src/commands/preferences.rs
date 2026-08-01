@@ -114,16 +114,16 @@ pub struct OnboardingState {
 pub async fn get_user_preferences(state: State<'_, AppState>) -> Result<UserPreferences> {
     let conn = state.db.get_connection()?;
     let prefs = conn.query_row(
-        "SELECT 
+        "SELECT
             theme,
             book_font_family, book_font_size, book_line_height, book_page_width,
-            book_scroll_mode, book_justification, book_paragraph_spacing, 
+            book_scroll_mode, book_justification, book_paragraph_spacing,
             book_animation_speed, book_hyphenation, book_custom_css,
             manga_mode, manga_direction, manga_margin_size, manga_fit_width,
             manga_background_color, manga_progress_bar, manga_image_smoothing,
             manga_preload_count, manga_gpu_acceleration,
             auto_start, default_import_path, ui_density, accent_color,
-            preferred_content_type, ui_scale, performance_mode, 
+            preferred_content_type, ui_scale, performance_mode,
             metadata_mode, auto_scan_enabled, default_manga_path,
             tts_voice, tts_rate, tts_auto_advance, tts_highlight_color,
             translation_target_language, auto_group_manga,
@@ -492,7 +492,10 @@ pub async fn update_user_preferences(
         params.push(Box::new(enable_recycle_bin));
     }
 
-    if let Some(migration_status) = updates.get("legacyLibraryMigrationStatus").and_then(|v| v.as_str()) {
+    if let Some(migration_status) = updates
+        .get("legacyLibraryMigrationStatus")
+        .and_then(|v| v.as_str())
+    {
         set_clauses.push("legacy_library_migration_status = ?".to_string());
         params.push(Box::new(migration_status.to_string()));
     }
@@ -533,7 +536,7 @@ pub async fn get_book_preference_overrides(
 ) -> Result<Vec<PreferenceOverride>> {
     let conn = state.db.get_connection()?;
     let mut stmt = conn.prepare(
-        "SELECT book_id, 
+        "SELECT book_id,
             font_family, font_size, line_height, page_width,
             scroll_mode, justification, paragraph_spacing, animation_speed,
             hyphenation, custom_css
@@ -699,7 +702,7 @@ pub async fn get_manga_preference_overrides(
 ) -> Result<Vec<PreferenceOverride>> {
     let conn = state.db.get_connection()?;
     let mut stmt = conn.prepare(
-        "SELECT book_id, 
+        "SELECT book_id,
             mode, direction, margin_size, fit_width,
             background_color, progress_bar, image_smoothing, preload_count,
             gpu_acceleration
@@ -853,14 +856,18 @@ pub async fn get_onboarding_state(state: State<'_, AppState>) -> Result<Onboardi
         "SELECT completed, completed_at, version, skipped_steps FROM onboarding_state WHERE id = 1",
         [],
         |row| {
-            let skipped_json = row.get::<_, Option<String>>(3)
+            let skipped_json = row
+                .get::<_, Option<String>>(3)
                 .unwrap_or(None)
                 .unwrap_or_else(|| "[]".to_string());
             let skipped_steps: Vec<String> =
                 serde_json::from_str(&skipped_json).unwrap_or_else(|_| Vec::new());
 
             Ok(OnboardingState {
-                completed: row.get::<_, Option<bool>>(0).unwrap_or(Some(false)).unwrap_or(false),
+                completed: row
+                    .get::<_, Option<bool>>(0)
+                    .unwrap_or(Some(false))
+                    .unwrap_or(false),
                 completed_at: row.get::<_, Option<String>>(1).unwrap_or(None),
                 version: row.get::<_, Option<i32>>(2).unwrap_or(Some(1)).unwrap_or(1),
                 skipped_steps,
@@ -882,7 +889,7 @@ pub async fn complete_onboarding(
 
     // Ensure id = 1 is created or updated
     conn.execute(
-        "INSERT OR REPLACE INTO onboarding_state (id, completed, completed_at, skipped_steps, version) 
+        "INSERT OR REPLACE INTO onboarding_state (id, completed, completed_at, skipped_steps, version)
          VALUES (1, 1, CURRENT_TIMESTAMP, ?, 2)",
         [skipped_json],
     )?;
@@ -898,9 +905,9 @@ pub async fn complete_onboarding(
 pub async fn reset_onboarding(state: State<'_, AppState>) -> Result<()> {
     let conn = state.db.get_connection()?;
     conn.execute(
-        "UPDATE onboarding_state SET 
-            completed = 0, 
-            completed_at = NULL, 
+        "UPDATE onboarding_state SET
+            completed = 0,
+            completed_at = NULL,
             skipped_steps = '[]',
             version = 2
          WHERE id = 1",
@@ -935,16 +942,16 @@ pub async fn get_startup_data(state: State<'_, AppState>) -> Result<StartupData>
 
     // ── User preferences ──────────────────────────────────────────────────────
     let preferences = conn.query_row(
-        "SELECT 
+        "SELECT
             theme,
             book_font_family, book_font_size, book_line_height, book_page_width,
-            book_scroll_mode, book_justification, book_paragraph_spacing, 
+            book_scroll_mode, book_justification, book_paragraph_spacing,
             book_animation_speed, book_hyphenation, book_custom_css,
             manga_mode, manga_direction, manga_margin_size, manga_fit_width,
             manga_background_color, manga_progress_bar, manga_image_smoothing,
             manga_preload_count, manga_gpu_acceleration,
             auto_start, default_import_path, ui_density, accent_color,
-            preferred_content_type, ui_scale, performance_mode, 
+            preferred_content_type, ui_scale, performance_mode,
             metadata_mode, auto_scan_enabled, default_manga_path,
             tts_voice, tts_rate, tts_auto_advance, tts_highlight_color,
             translation_target_language, auto_group_manga,
@@ -1029,7 +1036,7 @@ pub async fn get_startup_data(state: State<'_, AppState>) -> Result<StartupData>
     // ── Book preference overrides ─────────────────────────────────────────────
     let book_overrides = {
         let mut stmt = conn.prepare(
-            "SELECT book_id, 
+            "SELECT book_id,
                 font_family, font_size, line_height, page_width,
                 scroll_mode, justification, paragraph_spacing, animation_speed,
                 hyphenation, custom_css
@@ -1131,7 +1138,10 @@ pub async fn get_startup_data(state: State<'_, AppState>) -> Result<StartupData>
 
     // ── Onboarding state ──────────────────────────────────────────────────────
     // Fix any bad version strings from a previous bug where version was stored as '2.0'
-    let _ = conn.execute("UPDATE onboarding_state SET version = 2 WHERE typeof(version) = 'text'", []);
+    let _ = conn.execute(
+        "UPDATE onboarding_state SET version = 2 WHERE typeof(version) = 'text'",
+        [],
+    );
 
     let onboarding = conn.query_row(
         "SELECT completed, completed_at, version, skipped_steps FROM onboarding_state WHERE id = 1",
@@ -1141,7 +1151,7 @@ pub async fn get_startup_data(state: State<'_, AppState>) -> Result<StartupData>
                 .unwrap_or(None)
                 .unwrap_or_else(|| "[]".to_string());
             let skipped_steps = serde_json::from_str(&skipped_json).unwrap_or_default();
-            
+
             // Be resilient in case of other issues with version type
             let version = match row.get::<_, i32>(2) {
                 Ok(v) => v,
@@ -1222,10 +1232,10 @@ pub async fn torrent_network_set_config(
 ) -> Result<()> {
     let conn = state.db.get_connection()?;
     conn.execute(
-        "UPDATE user_preferences SET 
-            torrent_proxy_url = ?, 
-            torrent_timeout_seconds = ?, 
-            torrent_max_retries = ? 
+        "UPDATE user_preferences SET
+            torrent_proxy_url = ?,
+            torrent_timeout_seconds = ?,
+            torrent_max_retries = ?
          WHERE id = 1",
         rusqlite::params![config.proxy_url, config.timeout_seconds, config.max_retries,],
     )?;

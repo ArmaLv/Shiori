@@ -37,13 +37,13 @@ impl DocxAdapter {
                         .as_ref()
                         .map_or(false, |s| s.val.starts_with("Heading"));
                     let heading_level = if is_heading {
+                        // is_heading guarantees style is Some; be defensive anyway
                         let level_str = para
                             .property
                             .style
                             .as_ref()
-                            .unwrap()
-                            .val
-                            .replace("Heading", "");
+                            .map(|s| s.val.replace("Heading", ""))
+                            .unwrap_or_default();
                         level_str.parse::<u8>().unwrap_or(2)
                     } else {
                         0

@@ -34,8 +34,12 @@ impl MobiAdapter {
         // Fix double-encoded HTML numeric entities that the MOBI decompressor sometimes produces:
         // &amp;#160; → &#160;  (so innerHTML parses them correctly as NBSP/etc.)
         let normalized = {
-            let re = regex::Regex::new(r"&amp;(#(?:[0-9]+|x[0-9a-fA-F]+);)").unwrap();
-            re.replace_all(&normalized, "&$1").into_owned()
+            // Static pattern — never fails; degrade gracefully if it somehow did.
+            let re = regex::Regex::new(r"&amp;(#(?:[0-9]+|x[0-9a-fA-F]+);)").ok();
+            match re {
+                Some(re) => re.replace_all(&normalized, "&$1").into_owned(),
+                None => normalized,
+            }
         };
         // Also fix named entities like &amp;nbsp; → &nbsp;
         let normalized = normalized

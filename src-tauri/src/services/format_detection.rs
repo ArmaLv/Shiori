@@ -37,6 +37,8 @@ lazy_static::lazy_static! {
         m.insert("xhtml", "html");
         m.insert("cbz", "cbz");
         m.insert("cbr", "cbr");
+        m.insert("md", "markdown");
+        m.insert("markdown", "markdown");
         m
     };
 }
@@ -138,8 +140,8 @@ async fn verify_magic_bytes(path: &Path, format: &str) -> FormatResult<bool> {
             magic.starts_with(MAGIC_XML)
         }
         "html" => magic.starts_with(MAGIC_HTML_DOCTYPE) || magic.starts_with(MAGIC_HTML_TAG),
-        "txt" => {
-            // Text files should be valid UTF-8
+        "txt" | "markdown" => {
+            // Text files (incl. Markdown) should be valid UTF-8
             is_valid_utf8(&magic)
         }
         _ => false,
@@ -295,6 +297,34 @@ mod tests {
 
         let result = detect_format(file.path()).await.unwrap();
         assert_eq!(result.format, "txt");
+    }
+
+    #[tokio::test]
+    async fn test_detect_markdown_by_extension() {
+        // NamedTempFile can't set the extension — use a real file with .md/.markdown
+        let dir = std::env::temp_dir().join(format!(
+            "shiori_md_detect_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        for name in ["book.md", "book.markdown"] {
+            let path = dir.join(name);
+            std::fs::write(&path, "# Chapter One\n\nSome markdown *content* here.\n").unwrap();
+
+            let result = detect_format(&path).await.unwrap();
+            assert_eq!(
+                result.format, "markdown",
+                "{} should detect as markdown",
+                name
+            );
+        }
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

@@ -48,7 +48,7 @@ pub async fn sync_with_desktop(
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
     let url = format!("http://{}:{}/sync/pair", ip, port);
-    
+
     let resp = client.post(&url)
         .json(&serde_json::json!({ "token": token }))
         .send()
@@ -73,12 +73,18 @@ pub async fn sync_with_desktop(
                 format!("Connection failed: {}", e)
             }
         })?;
-        
+
     if resp.status().is_success() {
         Ok("Synced successfully".to_string())
     } else if resp.status() == reqwest::StatusCode::UNAUTHORIZED {
-        Err("Invalid pairing token. Please check the token shown in your desktop Settings.".to_string())
+        Err(
+            "Invalid pairing token. Please check the token shown in your desktop Settings."
+                .to_string(),
+        )
     } else {
-        Err(format!("Desktop rejected the request (HTTP {}). Try rotating the pairing token.", resp.status().as_u16()))
+        Err(format!(
+            "Desktop rejected the request (HTTP {}). Try rotating the pairing token.",
+            resp.status().as_u16()
+        ))
     }
 }

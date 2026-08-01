@@ -30,7 +30,9 @@ pub async fn migrate_library(
     };
 
     if !target_dir.exists() {
-        fs::create_dir_all(&target_dir).await.map_err(|e| crate::error::ShioriError::Other(e.to_string()))?;
+        fs::create_dir_all(&target_dir)
+            .await
+            .map_err(|e| crate::error::ShioriError::Other(e.to_string()))?;
     }
 
     let conn = state.db.get_connection()?;
@@ -55,7 +57,7 @@ pub async fn migrate_library(
         if !path.starts_with(&target_dir) {
             if let Some(file_name) = path.file_name() {
                 let new_path = target_dir.join(file_name);
-                
+
                 // Copy first, then remove original to be safe
                 match fs::copy(&path, &new_path).await {
                     Ok(_) => {

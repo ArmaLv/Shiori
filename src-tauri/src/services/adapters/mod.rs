@@ -1,6 +1,7 @@
 pub mod docx;
 pub mod fb2;
 pub mod html;
+pub mod markdown;
 pub mod mobi;
 pub mod pdf;
 /// Format Adapters Module
@@ -13,6 +14,7 @@ pub mod txt;
 pub use docx::DocxFormatAdapter;
 pub use fb2::Fb2FormatAdapter;
 pub use html::HtmlFormatAdapter;
+pub use markdown::MarkdownFormatAdapter;
 pub use mobi::MobiFormatAdapter;
 pub use pdf::PdfFormatAdapter;
 pub use txt::TxtFormatAdapter;

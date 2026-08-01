@@ -243,14 +243,17 @@ pub fn get_book_by_id(db: &Database, id: i64) -> Result<Book> {
 pub fn get_books_by_paths(db: &Database, paths: Vec<String>) -> Result<Vec<Book>> {
     let conn = db.get_connection()?;
     let mut books = Vec::new();
-    
+
     for path in paths {
-        let sql = format!("SELECT {} FROM books b WHERE b.file_path = ?1", BOOK_COLUMNS);
+        let sql = format!(
+            "SELECT {} FROM books b WHERE b.file_path = ?1",
+            BOOK_COLUMNS
+        );
         if let Ok(mut book) = conn.query_row(&sql, params![path], book_from_row) {
             let book_id = book.id.unwrap_or(0);
             book.authors = get_authors_for_book(&conn, book_id).unwrap_or_default();
             book.tags = get_tags_for_book(&conn, book_id).unwrap_or_default();
-            
+
             // If it's a manga and has no series string, try fetching it from manga_series
             if book.domain.as_deref() == Some("manga_comics") && book.series.is_none() {
                 if let Ok(Some(series_title)) = conn.query_row(
@@ -261,11 +264,11 @@ pub fn get_books_by_paths(db: &Database, paths: Vec<String>) -> Result<Vec<Book>
                     book.series = Some(series_title);
                 }
             }
-            
+
             books.push(book);
         }
     }
-    
+
     Ok(books)
 }
 
@@ -1300,7 +1303,8 @@ pub fn reset_database(db: &Database) -> Result<()> {
     // Disable foreign keys temporarily for a cleaner drop
     tx.execute("PRAGMA foreign_keys = OFF", [])?;
 
-    // Tables to reset
+    // Tables to reset (legacy `collections*` names no longer exist on fresh DBs —
+    // skip missing tables so reset works on both old and new installs)
     let tables = vec![
         "collections_books",
         "collections",
@@ -1316,7 +1320,14 @@ pub fn reset_database(db: &Database) -> Result<()> {
     ];
 
     for table in tables {
-        tx.execute(&format!("DELETE FROM {}", table), [])?;
+        let exists: bool = tx.query_row(
+            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name=?1)",
+            [table],
+            |row| row.get(0),
+        )?;
+        if exists {
+            tx.execute(&format!("DELETE FROM {}", table), [])?;
+        }
     }
 
     // Re-enable foreign keys
@@ -1362,11 +1373,7 @@ pub fn get_books_by_reading_status(
     Ok(books)
 }
 
-pub fn get_reading_history(
-    db: &Database,
-    limit: u32,
-    offset: u32,
-) -> Result<Vec<Book>> {
+pub fn get_reading_history(db: &Database, limit: u32, offset: u32) -> Result<Vec<Book>> {
     let conn = db.get_connection()?;
     let sql = format!(
         "SELECT {} FROM books b 

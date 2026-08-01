@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 const SUPPORTED_FORMATS: &[&str] = &[
-    "epub", "pdf", "mobi", "azw3", "docx", "fb2", "cbz", "cbr", "zip",
+    "epub", "pdf", "mobi", "azw3", "docx", "fb2", "cbz", "cbr", "zip", "txt", "html", "htm", "md",
 ];
 
 const SYSTEM_DIRS: &[&str] = &[

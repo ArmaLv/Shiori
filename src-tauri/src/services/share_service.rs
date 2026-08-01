@@ -157,11 +157,11 @@ impl ShareService {
             "INSERT INTO shares (book_id, token, format, password_hash, expires_at, max_accesses, revoked_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, NULL)",
             params![
-                book_id, 
-                token, 
+                book_id,
+                token,
                 format,
-                password_hash, 
-                expires_at.to_rfc3339(), 
+                password_hash,
+                expires_at.to_rfc3339(),
                 options.max_accesses
             ]
         )?;
@@ -278,7 +278,7 @@ impl ShareService {
     ) -> Result<()> {
         let conn = self.db.get_connection().map_err(|e| anyhow!("{}", e))?;
         conn.execute(
-            "INSERT INTO share_access_log (share_token, ip_address, user_agent) 
+            "INSERT INTO share_access_log (share_token, ip_address, user_agent)
              VALUES ((SELECT token FROM shares WHERE id = ?1), ?2, ?3)",
             params![share_id, ip_address, user_agent],
         )?;
@@ -578,7 +578,7 @@ mod tests {
 
         let db_path = temp_dir.join("test-entropy.db");
         let db = Database::new(&db_path).unwrap();
-        
+
         // Add a mock book to satisfy foreign key constraints
         {
             let conn = db.get_connection().unwrap();
@@ -589,7 +589,7 @@ mod tests {
         }
 
         let service = ShareService::new(db, temp_dir, Some(8888));
-        
+
         // Generate two tokens and ensure they are 32 chars, alphanumeric, and not equal
         let share1 = service.create_share(1, ShareOptions::default()).unwrap();
         let share2 = service.create_share(1, ShareOptions::default()).unwrap();
@@ -597,7 +597,7 @@ mod tests {
         assert_eq!(share1.token.len(), 32);
         assert_eq!(share2.token.len(), 32);
         assert_ne!(share1.token, share2.token);
-        
+
         // Verify alphanumeric (which proves OsRng + Alphanumeric logic works as intended)
         assert!(share1.token.chars().all(|c| c.is_ascii_alphanumeric()));
         assert!(share2.token.chars().all(|c| c.is_ascii_alphanumeric()));

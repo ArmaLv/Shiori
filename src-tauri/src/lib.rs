@@ -129,18 +129,18 @@ pub fn run() {
         builder = builder.plugin(tauri_plugin_android_auth::init());
         builder = builder.plugin(tauri_plugin_android_package_install::init());
     }
-    
+
     builder = builder
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_shell::init());
 
     builder = builder.register_asynchronous_uri_scheme_protocol("shiori-proxy", |_ctx, request, responder| {
         let uri = request.uri().to_string();
-        
+
         tauri::async_runtime::spawn(async move {
             let mut source_id = None;
             let mut image_url = None;
-            
+
             if let Ok(url) = url::Url::parse(&uri) {
                 for (key, value) in url.query_pairs() {
                     if key == "source" {
@@ -150,7 +150,7 @@ pub fn run() {
                     }
                 }
             }
-            
+
             if let (Some(source_id), Some(image_url)) = (source_id, image_url) {
                 // Security Fix: SSRF Prevention
                 let is_valid = is_safe_url(&image_url);
@@ -169,14 +169,14 @@ pub fn run() {
                         "libgen" => Some("https://libgen.li/"),
                         _ => None,
                     };
-                    
+
                     lazy_static::lazy_static! {
                         static ref CLIENT: reqwest::Client = reqwest::Client::builder()
                             .timeout(std::time::Duration::from_secs(15))
                             .build()
                             .unwrap_or_default();
                     }
-                        
+
                     let mut req = CLIENT
                         .get(&image_url)
                         .header("User-Agent", user_agent)
@@ -188,7 +188,7 @@ pub fn run() {
                 if let Some(ref_url) = referer {
                     req = req.header("Referer", ref_url);
                 }
-                
+
                 if let Ok(response) = req.send().await {
                     let status = response.status();
                     if status.is_success() {
@@ -199,7 +199,7 @@ pub fn run() {
                             .and_then(|v| v.to_str().ok())
                             .unwrap_or("image/jpeg")
                             .to_string();
-                            
+
                         if let Ok(bytes) = response.bytes().await {
                             responder.respond(
                                 tauri::http::Response::builder()
@@ -225,7 +225,7 @@ pub fn run() {
                 }
                 }
             }
-            
+
             responder.respond(
                 tauri::http::Response::builder()
                     .status(404)
@@ -270,7 +270,7 @@ pub fn run() {
                         }
                     }
                 }
-                
+
                 if let Ok(mut stmt) = conn.prepare("SELECT value FROM user_preferences WHERE key = '_cachedOnboardingCompleted'") {
                     if let Ok(mut rows) = stmt.query([]) {
                         if let Ok(Some(row)) = rows.next() {
@@ -374,12 +374,12 @@ pub fn run() {
             #[cfg(not(any(target_os = "android", target_os = "ios")))]
             let discord_service =
                 services::discord_service::DiscordService::new("1512062340827316265");
-                
+
             #[cfg(not(any(target_os = "android", target_os = "ios")))]
             {
                 use tauri::menu::{Menu, MenuItem};
                 use tauri::tray::{TrayIconBuilder, MouseButton, MouseButtonState, TrayIconEvent};
-                
+
                 let show_i = MenuItem::with_id(app, "show", "Show Shiori", true, None::<&str>)?;
                 let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
                 let menu = Menu::with_items(app, &[&show_i, &quit_i])?;
@@ -472,7 +472,7 @@ pub fn run() {
                         services::discovery_service::DiscoveryService::dummy()
                     })
             );
-            
+
             app.manage(ActiveDownloads {
                 count: std::sync::atomic::AtomicUsize::new(0),
             });

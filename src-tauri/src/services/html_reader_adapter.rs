@@ -30,7 +30,25 @@ impl HtmlReaderAdapter {
     }
 
     fn split_into_chapters(html: &str) -> (Vec<Chapter>, Vec<TocEntry>) {
-        let heading_re = Regex::new(r"(?i)<h([1-3])([^>]*)>(.*?)</h[1-3]>").unwrap();
+        // Static patterns — never fail, but avoid panicking if they somehow do.
+        let Some(heading_re) = Regex::new(r"(?i)<h([1-3])([^>]*)>(.*?)</h[1-3]>").ok() else {
+            // Degrade gracefully: single flat chapter
+            return (
+                vec![Chapter {
+                    index: 0,
+                    title: "Content".to_string(),
+                    content: format!("<div class=\"html-chapter\">{}</div>", html),
+                    location: "html-chapter-0".to_string(),
+                }],
+                vec![TocEntry {
+                    label: "Content".to_string(),
+                    location: "html-chapter-0".to_string(),
+                    level: 0,
+                    children: Vec::new(),
+                }],
+            );
+        };
+        let strip_re = Regex::new(r"<[^>]+>").ok();
         let mut chapters: Vec<Chapter> = Vec::new();
         let mut toc: Vec<TocEntry> = Vec::new();
 
@@ -74,14 +92,15 @@ impl HtmlReaderAdapter {
         }
 
         for (i, heading_match) in heading_matches.iter().enumerate() {
-            let caps = heading_re.captures(heading_match.as_str()).unwrap();
+            let Some(caps) = heading_re.captures(heading_match.as_str()) else {
+                continue;
+            };
             let level: usize = caps[1].parse().unwrap_or(1);
             let heading_text = caps[3].to_string();
-            let plain_text = Regex::new(r"<[^>]+>")
-                .unwrap()
-                .replace_all(&heading_text, "")
-                .trim()
-                .to_string();
+            let plain_text = strip_re
+                .as_ref()
+                .map(|re| re.replace_all(&heading_text, "").trim().to_string())
+                .unwrap_or_else(|| heading_text.trim().to_string());
 
             let section_start = heading_match.start();
             let section_end = if i + 1 < heading_matches.len() {
