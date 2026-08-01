@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo, memo } from 'react';
 import { api } from '@/lib/tauri';
 import { logger } from '@/lib/logger';
 import type { BookMetadata, Annotation } from '@/lib/tauri';
@@ -27,9 +27,66 @@ import '@/styles/premium-reader.css';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
+import { resolveReadingFontCss } from '@/lib/readingFonts';
 
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 pdfjs.GlobalWorkerOptions.workerSrc = pdfWorker;
+
+// ── Friendly page-level error (replaces react-pdf's default English string) ──
+function PdfPageError({ message, onRetry }: { message: string; onRetry?: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center gap-3 p-8 text-center min-h-[220px]">
+      <AlertCircle className="w-8 h-8" style={{ color: 'var(--color-error)' }} />
+      <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>This page could not be rendered.</p>
+      <p className="text-xs max-w-sm opacity-70" style={{ color: 'var(--text-tertiary)' }}>{message}</p>
+      {onRetry && (
+        <button type="button" onClick={onRetry} className="premium-error-button">
+          Retry Page
+        </button>
+      )}
+    </div>
+  );
+}
+
+interface MemoPdfPageProps {
+  pageNumber: number;
+  scale: number;
+  renderEpoch: number;
+  onLoadSuccess: (page: { width: number }) => void;
+  onRetryPage: () => void;
+}
+
+/**
+ * Memoized Page wrapper — pageNumber changes only re-render the affected
+ * pages, not the whole scroll stack (kills the flicker on navigation).
+ * Custom comparator ignores the freshly-created `error` element identity.
+ */
+const MemoPdfPage = memo(function MemoPdfPageInner({ pageNumber, scale, renderEpoch, onLoadSuccess, onRetryPage }: MemoPdfPageProps) {
+  return (
+    <Page
+      key={`${pageNumber}-${renderEpoch}`}
+      pageNumber={pageNumber}
+      scale={scale}
+      renderTextLayer={true}
+      renderAnnotationLayer={true}
+      className="pdf-page-surface"
+      onLoadSuccess={onLoadSuccess}
+      error={
+        <PdfPageError
+          message="This page could not be rendered. The file may be damaged or password-protected."
+          onRetry={onRetryPage}
+        />
+      }
+      onRenderError={(err) => logger.error('[PdfReader] Page render error:', err)}
+    />
+  );
+}, (prev, next) =>
+  prev.pageNumber === next.pageNumber &&
+  prev.scale === next.scale &&
+  prev.renderEpoch === next.renderEpoch &&
+  prev.onLoadSuccess === next.onLoadSuccess &&
+  prev.onRetryPage === next.onRetryPage
+);
 
 // ── Page Input Component ──
 function PageInput({ pageNumber, numPages, onNavigate }: { pageNumber: number; numPages: number; onNavigate: (p: number) => void }) {
@@ -178,7 +235,7 @@ export function PdfReader({ bookPath, bookId, readerContent, onClose }: PdfReade
   const setPendingAnnotationId = useReaderUIStore(state => state.setPendingAnnotationId);
   const setTopBarVisible = useReaderUIStore(state => state.setTopBarVisible);
   const toggleSidebar = useReaderUIStore(state => state.toggleSidebar);
-  const { theme, width, margin, brightness, backgroundColor, textColor } = useReadingSettings();
+  const { theme, width, margin, brightness, backgroundColor, textColor, fontFamily, fontSize, lineHeight } = useReadingSettings();
 
   const isDoodleMode = useDoodleStore(state => state.isDoodleMode);
   const toggleDoodleMode = useDoodleStore(state => state.toggleDoodleMode);
@@ -197,6 +254,8 @@ export function PdfReader({ bookPath, bookId, readerContent, onClose }: PdfReade
   const [pdfUrl, setPdfUrl] = useState<string>('');
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [docBaseWidth, setDocBaseWidth] = useState<number>(0);
+  // Bumped to force a page remount when the user hits "Retry Page"
+  const [renderEpoch, setRenderEpoch] = useState(0);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const readerContainerRef = useRef<HTMLDivElement>(null);
@@ -233,6 +292,8 @@ export function PdfReader({ bookPath, bookId, readerContent, onClose }: PdfReade
     const preset = TEXT_COLOR_PRESETS.find((p) => p.id === textColor);
     return preset?.color ?? textColor;
   }, [textColor]);
+
+  const readerFontCss = useMemo(() => resolveReadingFontCss(fontFamily), [fontFamily]);
 
   const getViewportMetrics = useCallback(() => {
     const container = containerRef.current;
@@ -477,6 +538,7 @@ export function PdfReader({ bookPath, bookId, readerContent, onClose }: PdfReade
     return () => window.removeEventListener('resize', onResize);
   }, [computeAutoScale, zoomMode]);
 
+
   const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
     setNumPages(numPages);
     setIsLoading(false);
@@ -489,19 +551,39 @@ export function PdfReader({ bookPath, bookId, readerContent, onClose }: PdfReade
     setIsLoading(false);
   };
 
+  /**
+   * Anchor the fit-scale to the FIRST loaded page only. Computing per page
+   * load re-renders every page (mixed-size scans oscillate the scale) — the
+   * original source of the flicker. Container resizes are handled by the
+   * ResizeObserver below, and zoom-mode switches by the mode setters.
+   */
   const onPageLoadSuccess = useCallback((page: { width: number }) => {
-    if (!docBaseWidth) {
-      setDocBaseWidth(page.width);
-    }
+    if (docBaseWidth) return;
+    setDocBaseWidth(page.width);
     if (zoomMode === 'fit-width' || zoomMode === 'fit-page') {
       const metrics = getViewportMetrics();
       const nextScale = zoomMode === 'fit-width'
         ? clamp(metrics.widthPx / page.width, 0.5, 3)
         : clamp(Math.min(metrics.widthPx / page.width, metrics.heightPx / (page.width * Math.sqrt(2))), 0.5, 3);
-      // Only update if meaningfully different to prevent infinite re-render loops
+      // Only update if meaningfully different to prevent re-render loops
       setScale((prev) => Math.abs(prev - nextScale) > 0.001 ? nextScale : prev);
     }
   }, [docBaseWidth, getViewportMetrics, zoomMode]);
+
+  const handleRetryPage = useCallback(() => setRenderEpoch((e) => e + 1), []);
+
+  // Refit when the reading container resizes (window resize, sidebar toggle, …)
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || (zoomMode !== 'fit-width' && zoomMode !== 'fit-page')) return;
+    const observer = new ResizeObserver(() => {
+      if (zoomMode === 'fit-width' || zoomMode === 'fit-page') {
+        setScale(computeAutoScale(zoomMode));
+      }
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [zoomMode, computeAutoScale]);
 
   useEffect(() => {
     if (numPages <= 0) return;
@@ -726,6 +808,19 @@ export function PdfReader({ bookPath, bookId, readerContent, onClose }: PdfReade
 
   return (
     <div ref={readerContainerRef} className={`premium-reader ${isFocusMode ? 'premium-reader--focus-mode' : ''}`} onDoubleClick={handleContainerDoubleClick}>
+      {/* Typography settings (font family/size/line height) applied to react-pdf's
+          selectable text layer — the canvas render itself is untouched. */}
+      <style>{`
+        .pdf-reading-canvas .react-pdf__Page__textContent {
+          font-family: ${readerFontCss} !important;
+          line-height: ${lineHeight} !important;
+        }
+        .pdf-reading-canvas .react-pdf__Page__textContent span {
+          font-family: ${readerFontCss} !important;
+          font-size: ${fontSize}px !important;
+          line-height: ${lineHeight} !important;
+        }
+      `}</style>
       <ReaderTopBar
         bookId={bookId}
         title={metadata?.title || readerContent?.title || 'Loading...'}
@@ -816,30 +911,37 @@ export function PdfReader({ bookPath, bookId, readerContent, onClose }: PdfReade
           scrollBehavior: 'smooth',
         }}
       >
-        {isLoading && (
-          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center backdrop-blur-sm" style={{ backgroundColor: 'var(--overlay-bg)' }}>
-            <Loader2 className="w-12 h-12 animate-spin mb-4" style={{ color: 'var(--loading-spinner)' }} />
-            <p className="font-medium" style={{ color: 'var(--text-secondary)' }}>Rendering PDF Document...</p>
-          </div>
-        )}
+        {/* Loading overlay — fades out via CSS transition (no abrupt unmount,
+            no flicker). Kept mounted but inert while the document is ready. */}
+        <div
+          className={`absolute inset-0 z-10 flex flex-col items-center justify-center transition-opacity duration-300 ${isLoading ? 'opacity-100 backdrop-blur-sm' : 'opacity-0 pointer-events-none'}`}
+          style={{ backgroundColor: isLoading ? 'var(--overlay-bg)' : 'transparent' }}
+        >
+          <Loader2 className={`w-12 h-12 mb-4 ${isLoading ? 'animate-spin' : ''}`} style={{ color: 'var(--loading-spinner)' }} />
+          <p className={`font-medium transition-opacity duration-300 ${isLoading ? 'opacity-100' : 'opacity-0'}`} style={{ color: 'var(--text-secondary)' }}>Rendering PDF Document...</p>
+        </div>
 
         {pdfUrl && (
           <div className="pdf-document-shell" ref={pageWrapperRef}>
+            {/* key={pdfUrl} forces a clean Document remount per file — no stale
+                pdf.js state when switching books. error={null} suppresses
+                react-pdf's default English error; our Shiori-styled UI handles it. */}
             <Document
+              key={pdfUrl}
               file={pdfUrl}
               onLoadSuccess={onDocumentLoadSuccess}
               onLoadError={onDocumentLoadError}
               loading={null}
+              error={null}
             >
               {viewMode === 'page' ? (
                 <div className="pdf-page-frame" data-page-number={pageNumber}>
-                  <Page
+                  <MemoPdfPage
                     pageNumber={pageNumber}
                     scale={scale}
-                    renderTextLayer={true}
-                    renderAnnotationLayer={true}
-                    className="pdf-page-surface"
+                    renderEpoch={renderEpoch}
                     onLoadSuccess={onPageLoadSuccess}
+                    onRetryPage={handleRetryPage}
                   />
                 </div>
               ) : (
@@ -850,13 +952,12 @@ export function PdfReader({ bookPath, bookId, readerContent, onClose }: PdfReade
                     return (
                       <div key={page} className="pdf-page-frame" data-page-number={page}>
                         {shouldRenderPage ? (
-                          <Page
+                          <MemoPdfPage
                             pageNumber={page}
                             scale={scale}
-                            renderTextLayer={true}
-                            renderAnnotationLayer={true}
-                            className="pdf-page-surface"
+                            renderEpoch={renderEpoch}
                             onLoadSuccess={onPageLoadSuccess}
+                            onRetryPage={handleRetryPage}
                           />
                         ) : (
                           <div

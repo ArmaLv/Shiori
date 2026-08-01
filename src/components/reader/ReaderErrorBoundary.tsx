@@ -1,6 +1,6 @@
 import { logger } from '@/lib/logger';
 import React from 'react';
-import { XCircle, RefreshCw, Copy, X } from 'lucide-react';
+import { XCircle, RefreshCw, Copy, X, FileOutput, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface ErrorDetails {
@@ -14,9 +14,12 @@ interface ReaderErrorBoundaryProps {
   error: ErrorDetails | null;
   onRetry?: () => void;
   onClose?: () => void;
+  /** Explicit, non-destructive "Convert to EPUB" action (never automatic) */
+  onConvert?: () => void;
+  isConverting?: boolean;
 }
 
-export function ReaderErrorBoundary({ error, onRetry, onClose }: ReaderErrorBoundaryProps) {
+export function ReaderErrorBoundary({ error, onRetry, onClose, onConvert, isConverting }: ReaderErrorBoundaryProps) {
   const [copied, setCopied] = React.useState(false);
 
   if (!error) return null;
@@ -98,12 +101,27 @@ ${error.technicalDetails ? `\nTechnical Details:\n${error.technicalDetails}` : '
         )}
 
         {/* Action Buttons */}
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
+          {onConvert && (
+            <Button
+              onClick={onConvert}
+              disabled={isConverting}
+              className="flex items-center gap-2"
+              variant="default"
+            >
+              {isConverting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <FileOutput className="w-4 h-4" />
+              )}
+              {isConverting ? 'Converting...' : 'Convert to EPUB'}
+            </Button>
+          )}
           {onRetry && (
             <Button
               onClick={onRetry}
               className="flex items-center gap-2"
-              variant="default"
+              variant="outline"
             >
               <RefreshCw className="w-4 h-4" />
               Try Again

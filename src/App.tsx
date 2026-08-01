@@ -114,7 +114,7 @@ function App() {
 
   // ── Extracted hooks ──
   const { displayBooks, books } = useLibraryFilter(searchQuery)
-  const { selectedBookId, handleOpenBook, handleCloseReader, handleDownloadBook, handleAutoGroupManga, autoConvert, resumeReading } = useBookActions(books)
+  const { selectedBookId, handleOpenBook, handleCloseReader, handleDownloadBook, handleAutoGroupManga, resumeReading } = useBookActions(books)
   const dialogs = useDialogManager()
 
   useBackButton(isReaderOpen, handleCloseReader)
@@ -311,7 +311,6 @@ function App() {
         <GlobalDialogs
           books={books}
           dialogs={dialogs}
-          autoConvert={autoConvert}
           resumeReading={resumeReading}
           handleOpenBook={handleOpenBook}
           handleViewDetails={handleViewDetails}

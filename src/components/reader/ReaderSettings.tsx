@@ -5,6 +5,7 @@ import { useReadingSettings, type ReaderTheme, applyReaderThemeToElement } from 
 import { Settings, Columns, ChevronDown, ChevronUp } from '@/components/icons';
 import { READING_FONTS, normalizeLegacyFontPreference } from '@/lib/readingFonts';
 import { isAndroid } from '@/lib/tauri';
+import { getReaderCapabilities } from './readerCapabilities';
 
 export type ReaderFormat = 'epub' | 'pdf' | 'mobi' | 'azw' | 'azw3' | 'manga' | 'fb2' | 'docx' | 'html' | 'htm' | 'txt' | 'md' | 'markdown';
 
@@ -72,13 +73,22 @@ export function ReaderSettings({ format = 'epub' }: ReaderSettingsProps) {
     }
   }, [theme, isOpen, isMobile]);
 
-  const showTypography = format === 'epub' || format === 'mobi' || format === 'azw' || format === 'azw3';
-  const showLayout = format === 'epub';
-  const showPageTransition = format === 'epub';
-  const isTextFormat = !['pdf', 'manga'].includes(format);
+  // Capability-driven settings per format (see readerCapabilities.ts):
+  //   epub  → typography + layout + page transitions
+  //   pdf   → typography (text layer) + pdfZoom (width controls)
+  //   text formats (mobi/azw/azw3/docx/fb2/txt/html/htm/md) → typography + layout
+  //   manga → no typography settings
+  const caps = getReaderCapabilities(format);
+  const showTypography = caps.typography;
+  const showLayout = caps.layout;
+  const showPageTransition = caps.pageTransition;
+  const showWidthControls = caps.typography || caps.pdfZoom;
+  const showSpacingControls = caps.typography || caps.pdfZoom;
+  // Letter/paragraph spacing + font family apply to HTML text formats.
+  // PDF gets font family/size/line-height via the text layer (see PdfReader).
+  const isTextFormat = caps.typography && format !== 'pdf';
+  const showFontFamily = caps.typography;
   const isPdf = format === 'pdf';
-  const showWidthControls = showTypography || isPdf;
-  const showSpacingControls = isTextFormat || isPdf;
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -408,7 +418,7 @@ export function ReaderSettings({ format = 'epub' }: ReaderSettingsProps) {
             </div>
           )}
 
-          {isTextFormat && (
+          {showFontFamily && (
             <div className="premium-settings-section">
               <label className="premium-settings-label">Font Family</label>
               <div className="premium-settings-font-grid">

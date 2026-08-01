@@ -9,7 +9,6 @@ const EditMetadataDialog = lazy(() => import("./library/EditMetadataDialog").the
 const DeleteBookDialog = lazy(() => import("./library/DeleteBookDialog").then(m => ({ default: m.DeleteBookDialog })))
 const SettingsDialog = lazy(() => import("./settings/SettingsDialog").then(m => ({ default: m.SettingsDialog })))
 const BookDetailsDialog = lazy(() => import("./library/BookDetailsDialog").then(m => ({ default: m.BookDetailsDialog })))
-const AutoConvertDialog = lazy(() => import("./conversion/AutoConvertDialog").then(m => ({ default: m.AutoConvertDialog })))
 const ConversionJobTracker = lazy(() => import("./conversion/ConversionJobTracker"))
 const MetadataSearchDialog = lazy(() => import("./library/MetadataSearchDialog").then(m => ({ default: m.MetadataSearchDialog })))
 const SeriesView = lazy(() => import("./library/SeriesView").then(m => ({ default: m.SeriesView })))
@@ -24,7 +23,6 @@ const UpdateDialog = lazy(() => import("./UpdateDialog").then(m => ({ default: m
 export interface GlobalDialogsProps {
   books: Book[]
   dialogs: any
-  autoConvert: any
   resumeReading: any
   handleOpenBook: (id: number, location?: string) => void
   handleViewDetails: (id: number) => void
@@ -37,7 +35,6 @@ export interface GlobalDialogsProps {
 export function GlobalDialogs({
   books,
   dialogs,
-  autoConvert,
   resumeReading,
   handleOpenBook,
   handleViewDetails,
@@ -55,7 +52,6 @@ export function GlobalDialogs({
   useBackButton(dialogs.batchMetadataDialogOpen, () => dialogs.setBatchMetadataDialogOpen(false));
   useBackButton(dialogs.shelfSelectDialogOpen, () => dialogs.setShelfSelectDialogOpen(false));
   useBackButton(dialogs.tagSelectDialogOpen, () => dialogs.setTagSelectDialogOpen(false));
-  useBackButton(autoConvert.showDialog, () => autoConvert.onDialogOpenChange(false));
   useBackButton(resumeReading.showDialog, () => resumeReading.onDialogOpenChange(false));
 
   return (
@@ -112,19 +108,6 @@ export function GlobalDialogs({
       <Suspense fallback={null}>
         <SettingsDialog open={dialogs.settingsDialogOpen} onOpenChange={dialogs.setSettingsDialogOpen} />
       </Suspense>
-
-      {autoConvert.pendingBook && (
-        <Suspense fallback={null}>
-          <AutoConvertDialog
-            isOpen={autoConvert.showDialog}
-            onOpenChange={autoConvert.onDialogOpenChange}
-            bookTitle={autoConvert.pendingBook.title}
-            currentFormat={autoConvert.pendingBook.file_format}
-            onConfirm={autoConvert.onConfirm}
-            isConverting={autoConvert.isConverting}
-          />
-        </Suspense>
-      )}
 
       {resumeReading.pendingResume && (
         <Suspense fallback={null}>

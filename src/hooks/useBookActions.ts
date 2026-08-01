@@ -98,14 +98,6 @@ export function useBookActions(books: Book[]) {
     handleCloseReader,
     handleDownloadBook,
     handleAutoGroupManga,
-    // Expose auto-convert dialog state
-    autoConvert: {
-      showDialog: bookOpen.showConvertDialog,
-      isConverting: bookOpen.isConverting,
-      pendingBook: bookOpen.pendingBook,
-      onConfirm: bookOpen.onConfirm,
-      onDialogOpenChange: bookOpen.onDialogOpenChange,
-    },
     // Expose resume-reading dialog state
     resumeReading: {
       showDialog: bookOpen.showResumeDialog,

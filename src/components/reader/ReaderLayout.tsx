@@ -8,7 +8,8 @@ import { PdfReader } from './PdfReader';
 import { GenericHtmlReader } from './GenericHtmlReader';
 import { MangaReader } from '@/components/manga/MangaReader';
 import { ReaderErrorBoundary, parseReaderError } from './ReaderErrorBoundary';
-import { ConversionProgress } from './ConversionProgress';
+import { getReaderKind } from './readerRouting';
+import { useToastStore } from '@/store/toastStore';
 import type { ReaderFormat } from './ReaderSettings';
 import type { ReaderContent } from './readerContent';
 
@@ -21,13 +22,9 @@ type LoadingStage =
   | 'idle'
   | 'fetching-path'
   | 'detecting-format'
-  | 'converting'
   | 'validating-file'
   | 'loading-metadata'
   | 'complete';
-
-// Formats handled as-is by their native readers (no conversion needed)
-const NATIVE_FORMATS = ['epub', 'pdf', 'cbz', 'cbr'];
 
 export function ReaderLayout({ bookId, onClose }: ReaderLayoutProps) {
   const {
@@ -44,7 +41,7 @@ export function ReaderLayout({ bookId, onClose }: ReaderLayoutProps) {
   const [loadingStage, setLoadingStage] = useState<LoadingStage>('idle');
   const [error, setError] = useState<ReturnType<typeof parseReaderError> | null>(null);
   const [retryCount, setRetryCount] = useState(0);
-  const [bookTitle, setBookTitle] = useState<string | undefined>(undefined);
+  const [isConverting, setIsConverting] = useState(false);
 
   useEffect(() => {
     let currentStage: LoadingStage = 'idle';
@@ -58,11 +55,12 @@ export function ReaderLayout({ bookId, onClose }: ReaderLayoutProps) {
         updateStage('fetching-path');
         setError(null);
 
-        logger.debug('[ReaderLayout] Step 1: Getting file path for bookId:', bookId);
-        const filePath = await api.getBookFilePath(bookId);
+        logger.debug('[ReaderLayout] Step 1: Opening book natively for bookId:', bookId);
+        // Backend returns the ORIGINAL file path for every format — never converts.
+        const filePath = await api.openBookForReading(bookId);
         logger.debug('[ReaderLayout] Step 1 ✓ Got file path:', filePath);
 
-        // Step 2: Detect format
+        // Step 2: Detect format (determines which native reader renders the file)
         updateStage('detecting-format');
         let detectedFormat: string;
         try {
@@ -70,50 +68,18 @@ export function ReaderLayout({ bookId, onClose }: ReaderLayoutProps) {
         } catch {
           detectedFormat = filePath.split('.').pop()?.toLowerCase() || 'epub';
         }
-        const finalFormat = detectedFormat.toLowerCase();
-        logger.debug('[ReaderLayout] Detected format:', finalFormat);
+        const effectiveFormat = detectedFormat.toLowerCase();
+        logger.debug('[ReaderLayout] Detected format:', effectiveFormat);
 
-        // Step 3: Convert if not a natively handled format
-        let finalFilePath = filePath;
-
-        if (!NATIVE_FORMATS.includes(finalFormat)) {
-          logger.debug('[ReaderLayout] Format', finalFormat, 'needs conversion → running open_book_for_reading');
-          updateStage('converting');
-
-          try {
-            // open_book_for_reading handles: MOBI, AZW3, DOCX, FB2, TXT, CBZ, CBR, PDF
-            // It emits conversion-progress events → picked up by <ConversionProgress>
-            const convertedPath = await api.openBookForReading(bookId);
-            logger.info('[ReaderLayout] ✓ Converted/opened:', convertedPath);
-            finalFilePath = convertedPath;
-            // format is now epub (the command outputs EPUB for all non-native types)
-          } catch (convErr) {
-            logger.warn('[ReaderLayout] openBookForReading failed, falling back to convertAndReplaceBook:', convErr);
-            try {
-              const result = await api.convertAndReplaceBook(bookId);
-              finalFilePath = result.new_path;
-              logger.info('[ReaderLayout] ✓ Fallback conversion succeeded:', finalFilePath);
-            } catch (fallbackErr) {
-              logger.warn('[ReaderLayout] Fallback also failed, using original file:', fallbackErr);
-              // Continue with the original — GenericHtmlReader will do its best
-            }
-          }
-        }
-
-        // Determine effective format from the (possibly converted) file path
-        const effectiveFormat = finalFilePath.endsWith('.epub')
-          ? 'epub'
-          : finalFormat;
-
-        // Step 4: Validate file
+        // Step 3: Validate file (non-fatal)
         updateStage('validating-file');
         try {
-          await api.validateBookFile(finalFilePath, effectiveFormat);
+          await api.validateBookFile(filePath, effectiveFormat);
         } catch {
           // Non-fatal — let the reader attempt to open it
         }
 
-        // Step 5: Fetch book metadata + open in store
+        // Step 4: Fetch book metadata + open in store
         updateStage('loading-metadata');
         const startupData = await invoke<{
           book: any;
@@ -123,8 +89,6 @@ export function ReaderLayout({ bookId, onClose }: ReaderLayoutProps) {
         }>('get_reader_startup_data', { bookId });
 
         const { book, progress, annotations, settings } = startupData;
-
-        setBookTitle(book.title);
 
         const content: ReaderContent = {
           title: book.title,
@@ -137,7 +101,7 @@ export function ReaderLayout({ bookId, onClose }: ReaderLayoutProps) {
           content.pages = book.page_count;
         }
 
-        openBook(bookId, finalFilePath, effectiveFormat, content);
+        openBook(bookId, filePath, effectiveFormat, content);
 
         if (progress) setProgress(progress);
         setAnnotations(annotations);
@@ -152,14 +116,12 @@ export function ReaderLayout({ bookId, onClose }: ReaderLayoutProps) {
       }
     };
 
-    // 90 s timeout — long enough for large MOBI/CBR files
+    // 90 s timeout — long enough for very large files
     const timeoutId = setTimeout(() => {
       if (currentStage !== 'complete' && currentStage !== 'idle') {
         setError({
           title: 'Loading Timeout',
-          message: currentStage === 'converting'
-            ? 'Conversion is taking too long. The file may be very large or corrupted.'
-            : 'The book is taking too long to load.',
+          message: 'The book is taking too long to load.',
           suggestions: [
             'Try closing and reopening the book',
             'Restart the application',
@@ -180,6 +142,35 @@ export function ReaderLayout({ bookId, onClose }: ReaderLayoutProps) {
 
   const handleClose = () => { closeBook(); onClose(); };
   const handleRetry = () => { setRetryCount(p => p + 1); setError(null); setLoadingStage('idle'); };
+
+  // ── "Convert to EPUB" from the error screen — explicit, non-destructive ──
+  const handleConvertToEpub = useCallback(async () => {
+    if (isConverting) return;
+    setIsConverting(true);
+    try {
+      const result = await api.convertBook(bookId);
+      useToastStore.getState().addToast({
+        title: 'Converted to EPUB',
+        description: 'The EPUB file is ready. Opening it now.',
+        variant: 'success',
+        duration: 3000,
+      });
+      setError(null);
+      // Open the freshly converted EPUB directly in the reader.
+      useReaderStore.getState().setStartFromBeginning(false);
+      openBook(bookId, result.new_path, result.new_format || 'epub');
+      setLoadingStage('complete');
+    } catch (err) {
+      logger.error('[ReaderLayout] Convert to EPUB failed:', err);
+      useToastStore.getState().addToast({
+        title: 'Conversion failed',
+        description: String(err),
+        variant: 'error',
+      });
+    } finally {
+      setIsConverting(false);
+    }
+  }, [bookId, isConverting, openBook]);
 
   const handleNextChapter = useCallback(async () => {
     try {
@@ -208,26 +199,12 @@ export function ReaderLayout({ bookId, onClose }: ReaderLayoutProps) {
     }
   }, [bookId]);
 
-  // ── CONVERSION OVERLAY ─────────────────────────────────────────────────
-  // Shown during 'converting' stage — replaces the generic spinner with the
-  // animated ConversionProgress component that listens to Tauri events.
-  if (loadingStage === 'converting') {
-    return (
-      <ConversionProgress
-        visible
-        bookTitle={bookTitle}
-        onComplete={() => {/* conversion-progress events control this; stage updates complete it */}}
-      />
-    );
-  }
-
   // ── GENERIC LOADING SPINNER ────────────────────────────────────────────
   if (loadingStage !== 'complete' && loadingStage !== 'idle' && !error) {
     const stageMessages: Record<LoadingStage, string> = {
       idle: 'Preparing...',
       'fetching-path': 'Locating book file...',
       'detecting-format': 'Detecting file format...',
-      converting: 'Converting...',
       'validating-file': 'Validating file...',
       'loading-metadata': 'Loading book data...',
       complete: 'Complete',
@@ -246,26 +223,32 @@ export function ReaderLayout({ bookId, onClose }: ReaderLayoutProps) {
   if (error) {
     return (
       <div className="fixed inset-0 z-50">
-        <ReaderErrorBoundary error={error} onRetry={handleRetry} onClose={handleClose} />
+        <ReaderErrorBoundary
+          error={error}
+          onRetry={handleRetry}
+          onClose={handleClose}
+          onConvert={handleConvertToEpub}
+          isConverting={isConverting}
+        />
       </div>
     );
   }
 
-
-
   // ── READER ─────────────────────────────────────────────────────────────
+  // Unknown formats fall back to the GenericHtmlReader (best-effort) — nothing falls through.
+  const readerKind = getReaderKind(currentBookFormat) ?? 'html';
   return (
     <div className="fixed inset-0 z-50 flex flex-col" style={{ backgroundColor: 'var(--reader-bg)' }}>
-      {currentBookPath && currentBookFormat === 'epub' && (
+      {currentBookPath && readerKind === 'epub' && (
         <PremiumEpubReader bookPath={currentBookPath} bookId={bookId} readerContent={currentContent} onClose={handleClose} />
       )}
-      {currentBookPath && currentBookFormat === 'pdf' && (
+      {currentBookPath && readerKind === 'pdf' && (
         <PdfReader bookPath={currentBookPath} bookId={bookId} readerContent={currentContent} onClose={handleClose} />
       )}
-      {currentBookPath && (['cbz', 'cbr', 'zip', 'rar'].includes(currentBookFormat || '')) && (
+      {currentBookPath && readerKind === 'manga' && (
         <MangaReader mode="local" bookId={bookId} bookPath={currentBookPath} onClose={handleClose} onNextChapter={handleNextChapter} />
       )}
-      {currentBookPath && !['epub', 'pdf', 'cbz', 'cbr', 'zip', 'rar'].includes(currentBookFormat || '') && (
+      {currentBookPath && readerKind === 'html' && (
         <GenericHtmlReader
           bookPath={currentBookPath}
           bookId={bookId}

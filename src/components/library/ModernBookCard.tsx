@@ -26,8 +26,9 @@ import { useLibraryStore } from '@/store/libraryStore'
 import { useCoverImage } from '../common/hooks/useCoverImage'
 import { LibraryContextMenu, type LibraryMenuItem } from '@/components/ui/LibraryContextMenu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { Pencil, Trash2, Layers, Globe, FolderPlus, BookOpen } from 'lucide-react'
+import { Edit2, Pencil, Trash2, Layers, Globe, FolderPlus, Tag as TagIcon, BookOpen, FileOutput } from 'lucide-react'
 import { SeriesAssignmentDialog } from './SeriesAssignmentDialog'
+import { ConvertToEpubMenuItem } from '@/components/conversion/ConvertToEpubMenuItem'
 
 // ─── Format Badge ─────────────────────────────
 const fmtColors: Record<string, string> = {
@@ -39,6 +40,8 @@ const fmtColors: Record<string, string> = {
   TXT: 'bg-neutral-400 text-neutral-900',
   DOCX: 'bg-neutral-300 text-neutral-900',
   HTML: 'bg-neutral-200 text-neutral-900',
+  MD: 'bg-emerald-800/80 text-emerald-100',
+  MARKDOWN: 'bg-emerald-800/80 text-emerald-100',
   CBZ: 'bg-[var(--manga-accent)] text-white',
   CBR: 'bg-[var(--manga-accent)] text-white',
 }
@@ -233,6 +236,7 @@ export const PremiumBookCard = memo(function PremiumBookCard({
   const cardRef = useRef<HTMLDivElement>(null)
   const [visible, setVisible] = useState(forceVisible)
   const [assignOpen, setAssignOpen] = useState(false)
+  const [convertBookId, setConvertBookId] = useState<number | null>(null)
 
   // Cover is only requested once the card is visible in the viewport.
   // The coverCache batcher groups all cards visible in the same render
@@ -269,6 +273,9 @@ export const PremiumBookCard = memo(function PremiumBookCard({
   const menuItems: LibraryMenuItem[] = [
     { label: 'Open', icon: BookOpen, onClick: () => onOpen(book.id!) },
     ...(onViewDetails ? [{ label: 'View Details', icon: Info, onClick: () => onViewDetails(book.id!) }] : []),
+    ...(book.file_format && !['epub', 'online-manga'].includes(book.file_format.toLowerCase())
+      ? [{ label: 'Convert to EPUB', icon: FileOutput, onClick: () => setConvertBookId(book.id!) }]
+      : []),
     { label: 'Edit Metadata', icon: Pencil, onClick: () => onEdit(book.id!) },
     ...(onAddToShelf ? [{ label: 'Add to Shelf...', icon: FolderPlus, onClick: () => onAddToShelf(book.id!) }] : []),
     ...(isManga ? [
@@ -452,6 +459,16 @@ export const PremiumBookCard = memo(function PremiumBookCard({
           onOpenChange={setAssignOpen}
           bookId={book.id!}
           bookTitle={book.title}
+        />
+      )}
+
+      {convertBookId !== null && (
+        <ConvertToEpubMenuItem
+          bookId={convertBookId}
+          bookTitle={book.title}
+          format={book.file_format}
+          variant="overlay"
+          onDone={() => setConvertBookId(null)}
         />
       )}
     </>

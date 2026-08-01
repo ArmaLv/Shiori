@@ -14,6 +14,10 @@ import type { ReaderFormat } from './ReaderSettings';
 import type { ReaderContent } from './readerContent';
 import { PremiumSidebar } from './PremiumSidebar';
 import { TextSelectionToolbar } from './TextSelectionToolbar';
+import { TTSControlBar } from './TTSControlBar';
+import { DoodleCanvas } from './DoodleCanvas';
+import { DoodleToolbar } from './DoodleToolbar';
+import { useDoodleStore } from '@/store/doodleStore';
 import { sanitizeBookContent } from '@/lib/sanitize';
 import { applyHighlightsToDOM } from '@/lib/highlightAnnotations';
 import { resolveReadingFontCss } from '@/lib/readingFonts';
@@ -31,9 +35,18 @@ interface GenericHtmlReaderProps {
 type SidebarNavigateHandler = (chapterIndex: number, searchTerm?: string | null) => void;
 
 export function GenericHtmlReader({ bookPath, bookId, format, readerContent, onClose }: GenericHtmlReaderProps) {
+    // ponytail: page-flip is NOT wired for HTML-rendered formats. PageFlipEngine
+    // assumes epubjs CFI-based chapter navigation and needs a refactor to accept
+    // arbitrary HTML chapters (the GenericHtmlReader chapter model). Out of scope
+    // for this slice — settings for these formats expose layout but not page
+    // transitions (see readerCapabilities.ts).
     const { isFocusMode } = useReaderAutoHide();
     const toggleSidebar = useReaderUIStore(state => state.toggleSidebar);
     const { theme, fontSize, fontFamily, lineHeight, width } = useReadingSettings();
+
+    const isDoodleMode = useDoodleStore(state => state.isDoodleMode);
+    const toggleDoodleMode = useDoodleStore(state => state.toggleDoodleMode);
+    const setActivePage = useDoodleStore(state => state.setActivePage);
 
     useReadingSession(bookId);
 
@@ -59,6 +72,11 @@ export function GenericHtmlReader({ bookPath, bookId, format, readerContent, onC
         [progressPrefix, format]
     );
     const sanitizedContent = useMemo(() => sanitizeBookContent(content), [content]);
+
+    // Keep the doodle layer scoped to the active chapter.
+    useEffect(() => {
+        setActivePage(`${locationPrefix}-chapter-${currentChapter}`);
+    }, [locationPrefix, currentChapter, setActivePage]);
 
     useEffect(() => {
         if (contentRef.current) {
@@ -442,6 +460,17 @@ export function GenericHtmlReader({ bookPath, bookId, format, readerContent, onC
                         >
                             <Highlighter className="premium-control-icon" />
                         </button>
+                        <button
+                            type="button"
+                            onClick={toggleDoodleMode}
+                            className={`premium-control-button ${isDoodleMode ? 'premium-control-button--active' : ''}`}
+                            title="Toggle drawing mode"
+                        >
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <path d="M12 20h9" />
+                                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                            </svg>
+                        </button>
                     </>
                 }
             />
@@ -496,10 +525,31 @@ export function GenericHtmlReader({ bookPath, bookId, format, readerContent, onC
                     : (() => { /* no navigation needed */ })) as SidebarNavigateHandler}
             />
 
+            {/* Doodle Canvas Overlay (mirrors PremiumEpubReader/PdfReader) */}
+            {isDoodleMode && (
+                <DoodleCanvas
+                    bookId={bookId}
+                    pageId={`${locationPrefix}-chapter-${currentChapter}`}
+                    containerRef={containerRef}
+                />
+            )}
+
+            {/* Doodle Toolbar (floating, only when active) */}
+            {isDoodleMode && <DoodleToolbar />}
+
             {/* Text Selection Toolbar */}
-            <TextSelectionToolbar
-                bookId={bookId}
-                currentLocation={`${locationPrefix}-chapter-${currentChapter}`}
+            {!isDoodleMode && (
+                <TextSelectionToolbar
+                    bookId={bookId}
+                    currentLocation={`${locationPrefix}-chapter-${currentChapter}`}
+                />
+            )}
+
+            {/* TTS Audiobook UI (mirrors PremiumEpubReader) */}
+            <TTSControlBar
+                contentRef={contentRef}
+                onChapterEnd={() => goToChapter(currentChapter + 1)}
+                contentKey={currentChapter}
             />
 
         </div>

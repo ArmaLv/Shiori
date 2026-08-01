@@ -1725,11 +1725,24 @@ export const api = {
     })
   },
 
-  // Auto-Convert on Open
+  // Auto-Convert on Open (legacy destructive path — kept for backend compat, no UI calls it)
   async convertAndReplaceBook(
     bookId: number
   ): Promise<{ new_path: string; new_format: string; title: string; cover_path: string | null }> {
     return invoke("convert_and_replace_book", { bookId })
+  },
+
+  // ── Convert to EPUB (menu-triggered, NON-destructive) ──
+
+  /**
+   * Convert a book to EPUB on demand. Non-destructive: the original file and
+   * DB row are left untouched. Uses the conversion engine job queue and emits
+   * `conversion:progress` / `conversion:complete` / `conversion:error` events.
+   */
+  async convertBook(
+    bookId: number
+  ): Promise<{ new_path: string; new_format: string }> {
+    return invoke("convert_book", { bookId })
   },
 
   // ── New v2.1: native Rust conversion pipeline with real-time progress ──

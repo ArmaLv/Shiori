@@ -8,6 +8,7 @@ import { ReaderSettings, type ReaderFormat } from './ReaderSettings';
 import { WindowControls } from '../layout/WindowControls';
 import { useFullscreen } from '@/hooks/useFullscreen';
 import { useReadingSettings } from '@/store/premiumReaderStore';
+import { ConvertToEpubMenuItem } from '@/components/conversion/ConvertToEpubMenuItem';
 
 interface ReaderTopBarProps {
   bookId: number;
@@ -37,6 +38,7 @@ export function ReaderTopBar({
   const increaseFontSize = useReadingSettings(state => state.increaseFontSize);
   const decreaseFontSize = useReadingSettings(state => state.decreaseFontSize);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = React.useState(false);
+  const [isDesktopMenuOpen, setIsDesktopMenuOpen] = React.useState(false);
 
   return (
     <div className={`premium-top-bar ${!isTopBarVisible ? 'premium-top-bar--hidden' : ''}`} data-tauri-drag-region>
@@ -121,6 +123,15 @@ export function ReaderTopBar({
                           )}
                         </button>
                       </motion.div>
+                      <motion.div variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } }}>
+                        <ConvertToEpubMenuItem
+                          bookId={bookId}
+                          bookTitle={title}
+                          format={format}
+                          variant="menu"
+                          reopenOnSuccess
+                        />
+                      </motion.div>
                     </motion.div>
                     <motion.div 
                       className="w-full border-t border-[var(--ui-border)] pt-2 flex flex-col gap-1 premium-mobile-menu-items"
@@ -151,6 +162,34 @@ export function ReaderTopBar({
                 <Maximize2 className="premium-control-icon" />
               )}
             </button>
+            {/* Reader overflow menu (desktop) — explicit, non-destructive convert action */}
+            <div className="relative">
+              <button
+                className={`premium-control-button ${isDesktopMenuOpen ? 'premium-control-button--active' : ''}`}
+                aria-label="More options"
+                title="More options"
+                onClick={() => setIsDesktopMenuOpen(!isDesktopMenuOpen)}
+              >
+                <MoreVertical className="premium-control-icon" />
+              </button>
+              {isDesktopMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-[95]" onClick={() => setIsDesktopMenuOpen(false)} />
+                  <div
+                    className="absolute top-full right-0 mt-2 w-56 flex flex-col p-2 bg-[var(--bg-elevated)] border border-[var(--ui-border)] shadow-xl rounded-[var(--radius-lg)] z-[100] backdrop-blur-xl bg-opacity-90"
+                    onClick={() => setIsDesktopMenuOpen(false)}
+                  >
+                    <ConvertToEpubMenuItem
+                      bookId={bookId}
+                      bookTitle={title}
+                      format={format}
+                      variant="menu"
+                      reopenOnSuccess
+                    />
+                  </div>
+                </>
+              )}
+            </div>
             <div className="ml-2 pl-2 border-l border-[var(--ui-divider)] h-6 flex items-center">
               <WindowControls />
             </div>

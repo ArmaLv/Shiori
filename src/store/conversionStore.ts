@@ -61,8 +61,8 @@ export const useConversionStore = create<ConversionState>((set) => ({
    */
   initEventListeners: async () => {
     const unlistenProgress = await listen<ConversionJob>('conversion:progress', ({ payload }) => {
-      // Ignore 'direct' conversions which are handled by the AutoConvertDialog directly
-      // and lack full ConversionJob fields like source_path.
+      // Ignore 'direct' conversions (legacy convert-and-replace path) which
+      // lack full ConversionJob fields like source_path.
       if (payload.id === 'direct') return;
 
       set(state => {
@@ -132,7 +132,7 @@ export const useConversionStore = create<ConversionState>((set) => ({
   submitConversion: async (inputPath, outputFormat, outputDir, bookId) => {
     try {
       set({ isLoading: true, error: null });
-      const jobId = await invoke<string>('convert_book', {
+      const jobId = await invoke<string>('convert_file', {
         inputPath,
         outputFormat,
         outputDir,

@@ -9,6 +9,8 @@ import { useToast } from '../../store/toastStore';
 import { Button } from '../ui/button';
 import { MetadataSearchDialog } from './MetadataSearchDialog';
 import { FeatureHint } from '../ui/FeatureHint';
+import { cn } from '@/lib/utils';
+import { ConvertToEpubMenuItem } from '@/components/conversion/ConvertToEpubMenuItem';
 
 function resolveCoverSrc(path: string): string {
   if (path.startsWith('http://') || path.startsWith('https://')) return path;
@@ -234,6 +236,16 @@ export const BookDetailsDialog = ({
                       <Search className="w-4 h-4 mr-2"/> Find Match
                     </Button>
                   </FeatureHint>
+
+                  {!['epub', 'online-manga'].includes(book.file_format.toLowerCase()) && (
+                    <ConvertToEpubMenuItem
+                      bookId={bookId}
+                      bookTitle={book.title}
+                      format={book.file_format}
+                      variant="button"
+                      onDone={() => { void loadBook(); }}
+                    />
+                  )}
                   
                   <Button variant="secondary" size="sm" className="w-full sm:w-auto rounded-full bg-secondary/50 hover:bg-secondary border border-border/50 shadow-sm" disabled={autoEnrichLoading} onClick={() => api.enrichBookMetadata(bookId)}>
                     {autoEnrichLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin"/> : <RefreshCw className="w-4 h-4 mr-2"/>}
