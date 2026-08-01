@@ -244,6 +244,73 @@ pub async fn get_cover_paths_batch(
     Ok(result)
 }
 
+/// Look up a cover online (Google Books → Open Library) for a book that has
+/// none, store it, and persist `books.cover_path`. Returns the stored cover
+/// path, or None when no cover could be found. This is the on-demand
+/// counterpart of the import-time background lookup; the frontend does not
+/// call it yet — it exists so the UI can trigger it later for cover-less books.
+#[tauri::command]
+pub async fn fetch_online_cover(
+    app_state: State<'_, crate::AppState>,
+    service: State<'_, Arc<CoverService>>,
+    id: i64,
+) -> crate::error::Result<Option<String>> {
+    let book = crate::services::library_service::get_book_by_id(&app_state.db, id)?;
+
+    // Already has a usable cover? Nothing to do.
+    if let Some(cover_path) = &book.cover_path {
+        if cover_path.starts_with("http://")
+            || cover_path.starts_with("https://")
+            || std::path::Path::new(cover_path).exists()
+        {
+            return Ok(Some(cover_path.clone()));
+        }
+    }
+
+    // At most one online attempt per book per app run.
+    if !crate::services::online_cover::try_begin_online_cover_attempt(id) {
+        log::debug!(
+            "[fetch_online_cover] book {} already attempted this run",
+            id
+        );
+        return Ok(None);
+    }
+
+    let author = book.authors.first().map(|a| a.name.clone());
+    let bytes = match crate::services::online_cover::fetch_online_cover(
+        &book.title,
+        author.as_deref(),
+        book.isbn.as_deref(),
+    )
+    .await
+    {
+        Ok(Some(bytes)) => bytes,
+        Ok(None) => {
+            log::debug!("[fetch_online_cover] no cover found online for book {}", id);
+            return Ok(None);
+        }
+        Err(e) => {
+            log::warn!("[fetch_online_cover] lookup failed for book {}: {}", id, e);
+            return Ok(None);
+        }
+    };
+
+    let uuid = Uuid::parse_str(&book.uuid)
+        .map_err(|e| ShioriError::Other(format!("Invalid book UUID: {}", e)))?;
+    let cover_set = service
+        .store_cover_bytes(uuid, bytes)
+        .await
+        .map_err(|e| ShioriError::Other(e.to_string()))?;
+    let path = cover_set.medium.to_string_lossy().to_string();
+    crate::services::library_service::update_book_cover_path(&app_state.db, id, Some(&path))?;
+    log::info!(
+        "[fetch_online_cover] ✅ stored online cover for book {} at {}",
+        id,
+        path
+    );
+    Ok(Some(path))
+}
+
 /// Clear cover cache
 #[tauri::command]
 pub async fn clear_cover_cache(service: State<'_, Arc<CoverService>>) -> crate::error::Result<()> {

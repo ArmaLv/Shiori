@@ -573,6 +573,13 @@ impl CoverService {
         Ok(cover_set)
     }
 
+    /// Store raw image bytes (e.g. from an online cover lookup) as a full cover set.
+    pub async fn store_cover_bytes(&self, book_id: Uuid, bytes: Vec<u8>) -> FormatResult<CoverSet> {
+        let image = image::load_from_memory(&bytes)?;
+        self.process_and_store(book_id, CoverImage::new(image))
+            .await
+    }
+
     /// Clear the cover cache
     pub async fn clear_cache(&self) {
         let mut cache = self.cache.lock().await;

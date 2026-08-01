@@ -2,11 +2,13 @@ use crate::db::Database;
 use crate::error::{Result, ShioriError};
 use crate::models::{Author, Book, ImportResult, Tag};
 use crate::services::metadata_service;
+use crate::services::online_cover;
 use crate::utils::file::{calculate_file_hash, get_file_size};
 use crate::utils::validate;
 use rayon::prelude::*;
 use rusqlite::params;
 use std::collections::HashMap;
+use std::sync::Arc;
 use uuid::Uuid;
 use walkdir::WalkDir;
 
@@ -703,11 +705,20 @@ pub fn import_single_book(db: &Database, path: &str, covers_dir: &std::path::Pat
     let cover_path = metadata_service::extract_cover(path, &book_uuid, covers_dir)
         .ok()
         .flatten();
+    let needs_online_cover = cover_path.is_none();
+
+    // Captured for the background online-cover lookup (book is moved below).
+    let book_title = metadata
+        .title
+        .clone()
+        .unwrap_or_else(|| "Unknown Title".to_string());
+    let book_authors: Vec<String> = metadata.authors.clone();
+    let book_isbn = metadata.isbn.clone();
 
     // Create book
     let book = Book {
         id: None,
-        uuid: book_uuid,
+        uuid: book_uuid.clone(),
         title: metadata
             .title
             .unwrap_or_else(|| "Unknown Title".to_string()),
@@ -755,8 +766,70 @@ pub fn import_single_book(db: &Database, path: &str, covers_dir: &std::path::Pat
         metadata_locked: None,
     };
 
-    add_book(db, book)?;
+    let book_id = add_book(db, book)?;
+
+    // No embedded cover → look up an online cover (Google Books → Open Library)
+    // in the background. Fire-and-forget: any failure is logged and the book
+    // falls back to the generated geometric cover.
+    if needs_online_cover {
+        spawn_online_cover_lookup_for_book(
+            db,
+            covers_dir,
+            book_id,
+            &book_uuid,
+            &book_title,
+            &book_authors,
+            book_isbn.as_deref(),
+        );
+    }
+
     Ok(false) // Not a duplicate
+}
+
+/// Persist a book's cover path (used when a background online-cover lookup
+/// lands after import).
+pub fn update_book_cover_path(db: &Database, book_id: i64, cover_path: Option<&str>) -> Result<()> {
+    let conn = db.get_connection()?;
+    conn.execute(
+        "UPDATE books SET cover_path = ?1 WHERE id = ?2",
+        params![cover_path, book_id],
+    )?;
+    Ok(())
+}
+
+/// Kick off a background online-cover lookup for a book imported without an
+/// embedded cover. Builds a throwaway CoverService rooted at the storage dir
+/// next to the covers dir (mirrors the app layout: app_dir/covers + app_dir/storage).
+fn spawn_online_cover_lookup_for_book(
+    db: &Database,
+    covers_dir: &std::path::Path,
+    book_id: i64,
+    book_uuid: &str,
+    title: &str,
+    authors: &[String],
+    isbn: Option<&str>,
+) {
+    let storage_path = covers_dir.parent().unwrap_or(covers_dir).join("storage");
+    let cover_service = match crate::services::cover_service::CoverService::new(storage_path) {
+        Ok(cs) => Arc::new(cs),
+        Err(e) => {
+            log::warn!(
+                "[online_cover] failed to init cover service for book {}: {}",
+                book_id,
+                e
+            );
+            return;
+        }
+    };
+    online_cover::spawn_online_cover_lookup(
+        db.clone(),
+        cover_service,
+        book_id,
+        book_uuid,
+        title.to_string(),
+        authors.to_vec(),
+        isbn.map(String::from),
+    );
 }
 
 struct PreprocessedBook {
@@ -920,6 +993,7 @@ pub fn scan_and_import_folder(
                 if exists {
                     result.duplicates.push(pre.path);
                 } else {
+                    let needs_online_cover = pre.book.cover_path.is_none();
                     let mut book = pre.book;
                     if book.uuid.is_empty() {
                         book.uuid = Uuid::new_v4().to_string();
@@ -954,6 +1028,24 @@ pub fn scan_and_import_folder(
                                     );
                                 }
                             }
+
+                            // Books without an embedded cover get a background
+                            // online lookup (Google Books → Open Library); manga
+                            // and comics keep their existing cover flow.
+                            if needs_online_cover && book.domain.as_deref() == Some("books") {
+                                let authors: Vec<String> =
+                                    book.authors.iter().map(|a| a.name.clone()).collect();
+                                spawn_online_cover_lookup_for_book(
+                                    db,
+                                    covers_dir,
+                                    book_id,
+                                    &book.uuid,
+                                    &book.title,
+                                    &authors,
+                                    book.isbn.as_deref(),
+                                );
+                            }
+
                             result.success.push(book.file_path);
                         }
                         Err(e) => {

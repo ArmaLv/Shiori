@@ -161,6 +161,7 @@ macro_rules! generate_shiori_handlers {
             commands::cover::get_cover_by_id,
             commands::cover::get_cover_path_by_id,
             commands::cover::get_cover_paths_batch,
+            commands::cover::fetch_online_cover,
             commands::cover::clear_cover_cache,
             commands::rss::add_rss_feed,
             commands::rss::get_rss_feed,

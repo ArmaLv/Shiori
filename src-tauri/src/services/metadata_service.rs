@@ -1,5 +1,6 @@
 use crate::error::{Result, ShioriError};
 use crate::models::Metadata;
+use base64::Engine as _;
 use std::fs;
 use std::io::{Cursor, Read, Write};
 use std::path::Path;
@@ -41,6 +42,11 @@ pub fn extract_cover(
         "cbz" | "cbr" | "zip" => extract_cbz_cover(file_path, book_uuid, covers_dir),
         "pdf" => extract_pdf_cover(file_path, book_uuid, covers_dir),
         "mobi" | "azw3" => extract_mobi_cover(file_path, book_uuid, covers_dir),
+        "docx" => extract_docx_cover(file_path, book_uuid, covers_dir),
+        "fb2" => extract_fb2_cover(file_path, book_uuid, covers_dir),
+        // Markdown has no embedded-cover concept — the caller falls back to an
+        // online lookup and, last, to the generated geometric cover.
+        "md" | "markdown" => return Ok(None),
         _ => return Ok(None),
     }?;
 
@@ -49,10 +55,10 @@ pub fn extract_cover(
         if let Ok(img) = image::open(&raw_path) {
             let webp_filename = format!("{}.webp", book_uuid);
             let webp_path = covers_dir.join(&webp_filename);
-            
+
             // Resize to a sensible thumbnail size (e.g. max 600px height or width)
             let thumb = img.thumbnail(600, 800);
-            
+
             if thumb.save(&webp_path).is_ok() {
                 // Remove the original raw extracted file if it's different
                 if raw_path != webp_path {
@@ -63,7 +69,7 @@ pub fn extract_cover(
         }
         return Ok(Some(raw_path_str));
     }
-    
+
     Ok(None)
 }
 
@@ -300,12 +306,12 @@ fn extract_epub_cover(
 
     // Try to get cover image - returns (Vec<u8>, String) where String is media type
     let mut cover_result = doc.get_cover();
-    
+
     // Fallback: search resources for a cover if explicit metadata is missing
     if cover_result.is_none() {
         let mut fallback_id = None;
         let resources = doc.resources.clone();
-        
+
         // 1. Look for 'cover' in resource ID or path
         for (id, res) in &resources {
             if res.mime.starts_with("image/") {
@@ -317,21 +323,25 @@ fn extract_epub_cover(
                 }
             }
         }
-        
+
         // 2. Look for 'title' or 'front' in image name
         if fallback_id.is_none() {
             for (id, res) in &resources {
                 if res.mime.starts_with("image/") {
                     let id_lower = id.to_lowercase();
                     let path_lower = res.path.to_string_lossy().to_lowercase();
-                    if id_lower.contains("title") || path_lower.contains("title") || id_lower.contains("front") || path_lower.contains("front") {
+                    if id_lower.contains("title")
+                        || path_lower.contains("title")
+                        || id_lower.contains("front")
+                        || path_lower.contains("front")
+                    {
                         fallback_id = Some(id.clone());
                         break;
                     }
                 }
             }
         }
-        
+
         // 3. Fallback to the very first image found
         if fallback_id.is_none() {
             for (id, res) in &resources {
@@ -341,11 +351,17 @@ fn extract_epub_cover(
                 }
             }
         }
-        
+
         if let Some(id) = fallback_id {
-            log::info!("[extract_epub_cover] Falling back to image resource ID: {}", id);
+            log::info!(
+                "[extract_epub_cover] Falling back to image resource ID: {}",
+                id
+            );
             if let Some((data, mime)) = doc.get_resource(&id) {
-                let final_mime = resources.get(&id).map(|res| res.mime.clone()).unwrap_or(mime);
+                let final_mime = resources
+                    .get(&id)
+                    .map(|res| res.mime.clone())
+                    .unwrap_or(mime);
                 cover_result = Some((data, final_mime));
             }
         }
@@ -617,10 +633,393 @@ fn extract_pdf_cover(
     Ok(None)
 }
 
+/// Write raw image bytes to the covers dir under the book's uuid.
+fn save_raw_cover(covers_dir: &Path, book_uuid: &str, ext: &str, data: &[u8]) -> Result<String> {
+    fs::create_dir_all(covers_dir).map_err(|e| {
+        ShioriError::MetadataExtraction(format!("Failed to create covers dir: {}", e))
+    })?;
+
+    let cover_filename = format!("{}.{}", book_uuid, ext);
+    let cover_path = covers_dir.join(&cover_filename);
+    let mut file = fs::File::create(&cover_path).map_err(|e| {
+        ShioriError::MetadataExtraction(format!("Failed to create cover file: {}", e))
+    })?;
+    file.write_all(data).map_err(|e| {
+        ShioriError::MetadataExtraction(format!("Failed to write cover data: {}", e))
+    })?;
+
+    Ok(cover_path.to_string_lossy().to_string())
+}
+
+/// DOCX covers: the first image embedded in the document part, in document
+/// order. Primary path walks the OOXML package directly (document.xml blips
+/// resolved through document.xml.rels — true reading order); docx-rs is kept
+/// as a fallback for files our direct parse can't handle.
+fn extract_docx_cover(
+    file_path: &str,
+    book_uuid: &str,
+    covers_dir: &Path,
+) -> Result<Option<String>> {
+    log::info!("[extract_docx_cover] Extracting cover from: {}", file_path);
+
+    let file_data = fs::read(file_path)
+        .map_err(|e| ShioriError::MetadataExtraction(format!("Failed to read DOCX: {}", e)))?;
+
+    if let Some((ext, image_bytes)) = first_docx_embedded_image(&file_data) {
+        let cover_path = save_raw_cover(covers_dir, book_uuid, ext, &image_bytes)?;
+        log::info!("[extract_docx_cover] ✅ Cover extracted to: {}", cover_path);
+        return Ok(Some(cover_path));
+    }
+
+    // Fallback: docx-rs enumerates media (ordered by relationship id rather
+    // than document order, so it is not the primary path).
+    if let Ok(doc) = docx_rs::read_docx(&file_data) {
+        for (media_path, data) in &doc.media {
+            let ext = Path::new(media_path)
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|e| e.to_lowercase())
+                .filter(|e| matches!(e.as_str(), "jpg" | "jpeg" | "png" | "gif" | "webp" | "bmp"))
+                .or_else(|| detect_image_format(data).map(|(e, _)| e.to_string()));
+            if let Some(ext) = ext {
+                let cover_path = save_raw_cover(covers_dir, book_uuid, &ext, data)?;
+                log::info!("[extract_docx_cover] ✅ Cover extracted to: {}", cover_path);
+                return Ok(Some(cover_path));
+            }
+        }
+    }
+
+    log::warn!("[extract_docx_cover] No embedded image found");
+    Ok(None)
+}
+
+/// Find the first embedded image in a DOCX (zip) package, in document order.
+/// Returns (extension, image bytes).
+fn first_docx_embedded_image(file_data: &[u8]) -> Option<(&'static str, Vec<u8>)> {
+    use quick_xml::events::Event;
+    use quick_xml::Reader;
+
+    let mut archive = ZipArchive::new(Cursor::new(file_data)).ok()?;
+
+    // 1. Locate the main document part via the package-level relationships.
+    let mut doc_path = "word/document.xml".to_string();
+    if let Ok(mut package_rels) = archive.by_name("_rels/.rels") {
+        let mut xml = String::new();
+        if package_rels.read_to_string(&mut xml).is_ok() {
+            let mut reader = Reader::from_str(&xml);
+            let mut buf = Vec::new();
+            loop {
+                match reader.read_event_into(&mut buf) {
+                    Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
+                        let mut is_office_doc = false;
+                        let mut target = None;
+                        for attr in e.attributes().filter_map(|a| a.ok()) {
+                            let key = String::from_utf8_lossy(attr.key.as_ref()).to_string();
+                            let value = String::from_utf8_lossy(&attr.value).to_string();
+                            if key == "Type" && value.ends_with("relationships/officeDocument") {
+                                is_office_doc = true;
+                            } else if key == "Target" {
+                                target = Some(value);
+                            }
+                        }
+                        if is_office_doc {
+                            if let Some(t) = target {
+                                doc_path = t.trim_start_matches('/').to_string();
+                            }
+                        }
+                    }
+                    Ok(Event::Eof) => break,
+                    Err(_) => break,
+                    _ => {}
+                }
+                buf.clear();
+            }
+        }
+    }
+
+    // 2. Map relationship ids to media targets (resolved relative to the
+    // document part directory, e.g. word/media/image1.png).
+    let rels_path = format!(
+        "{}/_rels/{}.rels",
+        Path::new(&doc_path).parent()?.to_string_lossy(),
+        Path::new(&doc_path).file_name()?.to_string_lossy()
+    );
+    let rels_dir = Path::new(&doc_path).parent()?.to_path_buf();
+    let mut rid_to_target: std::collections::HashMap<String, String> = Default::default();
+    if let Ok(mut doc_rels) = archive.by_name(&rels_path) {
+        let mut xml = String::new();
+        if doc_rels.read_to_string(&mut xml).is_ok() {
+            let mut reader = Reader::from_str(&xml);
+            let mut buf = Vec::new();
+            loop {
+                match reader.read_event_into(&mut buf) {
+                    Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
+                        let mut rid = None;
+                        let mut target = None;
+                        let mut is_image_rel = false;
+                        for attr in e.attributes().filter_map(|a| a.ok()) {
+                            let key = String::from_utf8_lossy(attr.key.as_ref()).to_string();
+                            let clean = key.rsplit(':').next().unwrap_or(&key).to_string();
+                            let value = String::from_utf8_lossy(&attr.value).to_string();
+                            match clean.as_str() {
+                                "Id" => rid = Some(value),
+                                "Target" => target = Some(value),
+                                "Type" => is_image_rel = value.ends_with("relationships/image"),
+                                _ => {}
+                            }
+                        }
+                        if is_image_rel {
+                            if let (Some(rid), Some(target)) = (rid, target) {
+                                let resolved = if target.starts_with('/') {
+                                    target.trim_start_matches('/').to_string()
+                                } else {
+                                    rels_dir.join(&target).to_string_lossy().to_string()
+                                };
+                                rid_to_target.insert(rid, resolved);
+                            }
+                        }
+                    }
+                    Ok(Event::Eof) => break,
+                    Err(_) => break,
+                    _ => {}
+                }
+                buf.clear();
+            }
+        }
+    }
+    if rid_to_target.is_empty() {
+        return None;
+    }
+
+    // 3. Walk the document XML: the first r:embed / r:id image reference wins.
+    let document_xml: Option<String> = archive.by_name(&doc_path).ok().and_then(|mut f| {
+        let mut s = String::new();
+        f.read_to_string(&mut s).ok().map(|_| s)
+    });
+    let Some(xml) = document_xml else {
+        return None;
+    };
+    let mut reader = Reader::from_str(&xml);
+    let mut buf = Vec::new();
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
+                let elem = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                let elem_local = elem.rsplit(':').next().unwrap_or(&elem).to_string();
+                for attr in e.attributes().filter_map(|a| a.ok()) {
+                    let key = String::from_utf8_lossy(attr.key.as_ref()).to_string();
+                    let key_local = key.rsplit(':').next().unwrap_or(&key).to_string();
+                    // <a:blip r:embed="rIdN"/> and legacy <v:imagedata r:id="rIdN"/>
+                    let is_embed =
+                        key_local == "embed" || (key_local == "id" && elem_local == "imagedata");
+                    if !is_embed {
+                        continue;
+                    }
+                    let rid = String::from_utf8_lossy(&attr.value).to_string();
+                    if let Some(media_path) = rid_to_target.get(&rid) {
+                        if let Ok(mut entry) = archive.by_name(media_path) {
+                            let mut image_bytes = Vec::new();
+                            if entry.read_to_end(&mut image_bytes).is_ok() {
+                                if let Some((ext, _)) = detect_image_format(&image_bytes) {
+                                    return Some((ext, image_bytes));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Ok(Event::Eof) => break,
+            Err(_) => break,
+            _ => {}
+        }
+        buf.clear();
+    }
+
+    None
+}
+
+/// FB2 covers: <description><title-info><coverpage><image l:href="#id"/>,
+/// resolved against <binary id="..." content-type="image/...">base64</binary>.
+/// Falls back to the first <image> in the body, then to the first image
+/// content-type binary.
+fn extract_fb2_cover(
+    file_path: &str,
+    book_uuid: &str,
+    covers_dir: &Path,
+) -> Result<Option<String>> {
+    use quick_xml::events::Event;
+    use quick_xml::Reader;
+
+    log::info!("[extract_fb2_cover] Extracting cover from: {}", file_path);
+
+    // FB2 is XML; tolerate non-UTF8 files by reading bytes and converting lossily.
+    let content = match fs::read_to_string(file_path) {
+        Ok(c) => c,
+        Err(_) => fs::read(file_path)
+            .map(|b| String::from_utf8_lossy(&b).into_owned())
+            .map_err(|e| ShioriError::MetadataExtraction(format!("Failed to read FB2: {}", e)))?,
+    };
+
+    let xml_local_name = |name: &[u8]| -> String {
+        let full = String::from_utf8_lossy(name).to_string();
+        full.rsplit_once(':')
+            .map(|(_, n)| n.to_string())
+            .unwrap_or(full)
+    };
+    let xml_attr = |e: &quick_xml::events::BytesStart, name: &str| -> Option<String> {
+        for attr in e.attributes().filter_map(|a| a.ok()) {
+            let key = String::from_utf8_lossy(attr.key.as_ref()).to_string();
+            if key.rsplit(':').next() == Some(name) {
+                return Some(String::from_utf8_lossy(&attr.value).to_string());
+            }
+        }
+        None
+    };
+
+    let mut reader = Reader::from_str(&content);
+    reader.config_mut().trim_text(false);
+
+    let mut in_coverpage = false;
+    let mut body_depth = 0usize;
+    let mut coverpage_href: Option<String> = None;
+    let mut body_image_href: Option<String> = None;
+
+    // (id, content-type, base64 payload)
+    let mut binaries: Vec<(String, Option<String>, String)> = Vec::new();
+    let mut in_binary = false;
+    let mut binary_id = String::new();
+    let mut binary_content_type: Option<String> = None;
+    let mut binary_data = String::new();
+
+    let mut buf = Vec::new();
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(ref e)) => {
+                let name = xml_local_name(e.name().as_ref());
+                match name.as_str() {
+                    "coverpage" => in_coverpage = true,
+                    "body" => body_depth += 1,
+                    "image" => {
+                        if let Some(href) = xml_attr(e, "href") {
+                            let id = href.trim_start_matches('#').to_string();
+                            if !id.is_empty() {
+                                if in_coverpage && coverpage_href.is_none() {
+                                    coverpage_href = Some(id);
+                                } else if body_depth > 0 && body_image_href.is_none() {
+                                    body_image_href = Some(id);
+                                }
+                            }
+                        }
+                    }
+                    "binary" => {
+                        in_binary = true;
+                        binary_id = xml_attr(e, "id").unwrap_or_default();
+                        binary_content_type = xml_attr(e, "content-type");
+                        binary_data.clear();
+                    }
+                    _ => {}
+                }
+            }
+            Ok(Event::End(ref e)) => {
+                let name = xml_local_name(e.name().as_ref());
+                match name.as_str() {
+                    "coverpage" => in_coverpage = false,
+                    "body" => body_depth = body_depth.saturating_sub(1),
+                    "binary" => {
+                        if in_binary {
+                            binaries.push((
+                                binary_id.clone(),
+                                binary_content_type.clone(),
+                                binary_data.clone(),
+                            ));
+                            in_binary = false;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            Ok(Event::Text(ref e)) => {
+                if in_binary {
+                    if let Ok(t) = e.unescape() {
+                        binary_data.push_str(&t);
+                    }
+                }
+            }
+            Ok(Event::CData(ref e)) => {
+                // CDATA is raw content (no entity escaping) — take it as-is.
+                if in_binary {
+                    binary_data.push_str(&String::from_utf8_lossy(e.as_ref()));
+                }
+            }
+            Ok(Event::Eof) => break,
+            Err(_) => break,
+            _ => {}
+        }
+        buf.clear();
+    }
+
+    // Prefer the coverpage reference, then the first body image, then any
+    // image content-type binary.
+    let target_id = coverpage_href.clone().or_else(|| body_image_href.clone());
+    let picked = target_id
+        .and_then(|id| {
+            binaries
+                .iter()
+                .find(|(b_id, _, _)| b_id == &id)
+                .map(|(i, ct, b)| (i.as_str(), ct.as_deref(), b.as_str()))
+        })
+        .or_else(|| {
+            binaries
+                .iter()
+                .find(|(_, ct, _)| {
+                    ct.as_deref()
+                        .map(|c| c.starts_with("image/"))
+                        .unwrap_or(false)
+                })
+                .map(|(i, ct, b)| (i.as_str(), ct.as_deref(), b.as_str()))
+        });
+
+    let Some((_id, content_type, b64)) = picked else {
+        log::warn!("[extract_fb2_cover] No cover image found");
+        return Ok(None);
+    };
+
+    // Base64 payloads may be wrapped across lines — strip whitespace first.
+    let compact: String = b64.chars().filter(|c| !c.is_whitespace()).collect();
+    let image_bytes = match base64::engine::general_purpose::STANDARD.decode(compact.as_bytes()) {
+        Ok(b) => b,
+        Err(e) => {
+            log::warn!("[extract_fb2_cover] Failed to decode base64 binary: {}", e);
+            return Ok(None);
+        }
+    };
+
+    let ext = content_type
+        .map(|ct| match ct.to_ascii_lowercase().as_str() {
+            "image/jpeg" | "image/jpg" => "jpg",
+            "image/png" => "png",
+            "image/gif" => "gif",
+            "image/webp" => "webp",
+            "image/bmp" => "bmp",
+            _ => detect_image_format(&image_bytes)
+                .map(|(e, _)| e)
+                .unwrap_or("jpg"),
+        })
+        .unwrap_or_else(|| {
+            detect_image_format(&image_bytes)
+                .map(|(e, _)| e)
+                .unwrap_or("jpg")
+        });
+
+    let cover_path = save_raw_cover(covers_dir, book_uuid, ext, &image_bytes)?;
+    log::info!("[extract_fb2_cover] ✅ Cover extracted to: {}", cover_path);
+    Ok(Some(cover_path))
+}
+
 fn extract_cbz_metadata(file_path: &str) -> Result<Metadata> {
     let path = Path::new(file_path);
     let mut metadata = Metadata::default_from_filename(path);
-    
+
     // Attempt to open the archive and count valid images
     if let Ok(file_data) = fs::read(file_path) {
         let cursor = Cursor::new(&file_data);
@@ -631,16 +1030,17 @@ fn extract_cbz_metadata(file_path: &str) -> Result<Metadata> {
                     if file.is_file() {
                         let name = file.name().to_string();
                         let lower = name.to_lowercase();
-                        if !name.starts_with('.') && !name.starts_with("__MACOSX") && (
-                            lower.ends_with(".jpg")
-                            || lower.ends_with(".jpeg")
-                            || lower.ends_with(".png")
-                            || lower.ends_with(".webp")
-                            || lower.ends_with(".gif")
-                            || lower.ends_with(".bmp")
-                            || lower.ends_with(".avif")
-                            || lower.ends_with(".heic")
-                        ) {
+                        if !name.starts_with('.')
+                            && !name.starts_with("__MACOSX")
+                            && (lower.ends_with(".jpg")
+                                || lower.ends_with(".jpeg")
+                                || lower.ends_with(".png")
+                                || lower.ends_with(".webp")
+                                || lower.ends_with(".gif")
+                                || lower.ends_with(".bmp")
+                                || lower.ends_with(".avif")
+                                || lower.ends_with(".heic"))
+                        {
                             image_count += 1;
                         }
                     }
@@ -651,7 +1051,7 @@ fn extract_cbz_metadata(file_path: &str) -> Result<Metadata> {
             }
         }
     }
-    
+
     Ok(metadata)
 }
 
@@ -701,7 +1101,7 @@ fn extract_epub_metadata(file_path: &str) -> Result<Metadata> {
     }
     let estimated_pages = ((total_words + 249) / 250) as i32;
     let fallback_pages = spine_len as i32;
-    
+
     metadata.page_count = Some(estimated_pages.max(fallback_pages));
 
     Ok(metadata)
@@ -1165,15 +1565,18 @@ fn extract_docx_metadata(file_path: &str) -> Result<Metadata> {
 
 impl Metadata {
     fn default_from_filename(path: &Path) -> Self {
-        let title_str = path.file_stem().and_then(|s| s.to_str()).unwrap_or("Unknown Title");
+        let title_str = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("Unknown Title");
         let mut title = Some(title_str.to_string());
         let mut series = None;
         let mut series_index = None;
-        
+
         if let Some((s_name, c_name)) = title_str.rsplit_once(" - ") {
             series = Some(s_name.trim().to_string());
             title = Some(c_name.trim().to_string());
-            
+
             let lower_c = c_name.to_lowercase();
             let num_str = if lower_c.starts_with("chapter ") {
                 lower_c.strip_prefix("chapter ").unwrap()
@@ -1184,7 +1587,7 @@ impl Metadata {
             } else {
                 c_name
             };
-            
+
             if let Ok(idx) = num_str.trim().parse::<f64>() {
                 series_index = Some(idx);
             }
