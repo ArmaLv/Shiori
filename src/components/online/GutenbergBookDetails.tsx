@@ -6,6 +6,8 @@ import { useState } from 'react';
 import { downloadAndImportGutenberg } from '@/online-books/gutenberg/importer';
 import { useToast } from '@/store/toastStore';
 import { useBookOpen } from '@/hooks/useBookOpen';
+import { useOnlineDownloadStore } from '@/store/onlineDownloadStore';
+import { DownloadProgressBar } from './DownloadProgressBar';
 
 interface Props {
   book: GutendexBook | null;
@@ -18,11 +20,14 @@ export function GutenbergBookDetails({ book, open, onOpenChange }: Props) {
   const [isReading, setIsReading] = useState(false);
   const { success: showSuccessToast, error: showErrorToast } = useToast();
   const { handleOpenBook } = useBookOpen();
+  // Backend emits progress keyed by target_id = the epub URL passed to the download command.
+  const downloads = useOnlineDownloadStore((state) => state.downloads);
 
   if (!book) return null;
 
   const epubFormatUrl = book.formats['application/epub+zip'];
   const hasEpub = !!epubFormatUrl;
+  const downloadProgress = epubFormatUrl ? downloads[epubFormatUrl] : undefined;
 
   const handleDownload = async () => {
     if (!epubFormatUrl) return;
@@ -136,6 +141,8 @@ export function GutenbergBookDetails({ book, open, onOpenChange }: Props) {
                 This book is not available in EPUB format and cannot be read directly in the app.
               </div>
             )}
+
+            <DownloadProgressBar bookTitle={book.title} progress={downloadProgress} />
           </div>
 
           <div className="flex-none p-6 border-t border-border/50 bg-muted/30 flex justify-end gap-3 backdrop-blur-md">

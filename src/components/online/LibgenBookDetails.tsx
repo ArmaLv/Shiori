@@ -6,6 +6,8 @@ import { useState, useEffect } from 'react';
 import { downloadAndImportLibgen } from '@/online-books/libgen/importer';
 import { useToast } from '@/store/toastStore';
 import { useBookOpen } from '@/hooks/useBookOpen';
+import { useOnlineDownloadStore } from '@/store/onlineDownloadStore';
+import { DownloadProgressBar } from './DownloadProgressBar';
 import { pluginApi } from '@/lib/pluginSources';
 import { logger } from '@/lib/logger';
 import { api } from '@/lib/tauri';
@@ -21,8 +23,13 @@ export function LibgenBookDetails({ book, open, onOpenChange }: Props) {
   const [isDownloading, setIsDownloading] = useState(false);
   const [isReading, setIsReading] = useState(false);
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
+  const [activeDownloadUrl, setActiveDownloadUrl] = useState<string | null>(null);
   const { success: showSuccessToast, error: showErrorToast } = useToast();
   const { handleOpenBook } = useBookOpen();
+
+  // Backend emits progress keyed by target_id = first mirror URL (the epubUrl we pass in).
+  const downloads = useOnlineDownloadStore((state) => state.downloads);
+  const downloadProgress = activeDownloadUrl ? downloads[activeDownloadUrl] : undefined;
 
   useEffect(() => {
     if (!book || !open) return;
@@ -123,6 +130,7 @@ export function LibgenBookDetails({ book, open, onOpenChange }: Props) {
       }
 
       const directUrls = await resolveDirectUrls();
+      setActiveDownloadUrl(epubUrl);
       const result = await downloadAndImportLibgen(
         epubUrl,
         book.title,
@@ -274,6 +282,8 @@ export function LibgenBookDetails({ book, open, onOpenChange }: Props) {
                 LibGen links are retrieved dynamically from mirror sites. The download might take a few moments to resolve and fetch. Thank you for your patience!
               </p>
             </div>
+
+            <DownloadProgressBar bookTitle={book.title} progress={downloadProgress} />
           </div>
 
           <div className="flex-none p-6 border-t border-border/50 bg-muted/30 flex justify-end gap-3 backdrop-blur-md">
