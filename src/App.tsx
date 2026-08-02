@@ -11,6 +11,7 @@ import { useLibraryStore, countActiveFilterCriteria } from "./store/libraryStore
 import { useReaderStore } from "./store/readerStore"
 import { useUIStore } from "./store/uiStore"
 import { useConversionStore } from "./store/conversionStore"
+import { useOnlineDownloadStore } from "./store/onlineDownloadStore"
 import { listen } from '@tauri-apps/api/event'
 
 import { useOnboardingStore } from "./store/onboardingStore"
@@ -134,6 +135,11 @@ function App() {
     let unlisten: (() => void) | undefined
     useConversionStore.getState().initEventListeners().then(fn => { unlisten = fn })
     return () => { unlisten?.() }
+  }, [])
+
+  useEffect(() => {
+    // Online book/manga download progress events (LibGen, Gutenberg).
+    useOnlineDownloadStore.getState().initializeListeners()
   }, [])
 
   useEffect(() => {
