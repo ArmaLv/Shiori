@@ -8,6 +8,7 @@ use docx_rs::*;
 use std::path::Path;
 use tokio::fs;
 
+use crate::services::docx_adapter::parse_docx_zip;
 use crate::services::format_adapter::*;
 
 pub struct DocxFormatAdapter;
@@ -89,14 +90,27 @@ impl BookFormatAdapter for DocxFormatAdapter {
         let metadata = fs::metadata(path).await?;
         let file_size = metadata.len();
 
-        // Parse DOCX
-        let doc = read_docx(&file_data)
-            .map_err(|e| FormatError::ValidationError(format!("Invalid DOCX file: {}", e)))?;
+        // Parse DOCX, falling back to a direct ZIP parse for minimal files
+        // that docx-rs 0.4 cannot handle (missing styles.xml etc.). For the
+        // fallback, a readable ZIP containing word/document.xml is enough.
+        let (text, para_count, heading_count) = match read_docx(&file_data) {
+            Ok(doc) => {
+                let text = Self::extract_text_from_document(&doc);
+                let (para_count, heading_count) = Self::count_structure(&doc);
+                (text, para_count, heading_count)
+            }
+            Err(e) => {
+                let fallback = parse_docx_zip(&file_data).ok_or_else(|| {
+                    FormatError::ValidationError(format!("Invalid DOCX file: {}", e))
+                })?;
+                let para_count = fallback.text.lines().count() as u32;
+                (fallback.text, para_count, 0)
+            }
+        };
 
         let mut result = ValidationResult::valid(file_size);
 
         // Extract text and count words
-        let text = Self::extract_text_from_document(&doc);
         let word_count = text.split_whitespace().count() as u32;
         result.word_count = Some(word_count);
 
@@ -104,7 +118,6 @@ impl BookFormatAdapter for DocxFormatAdapter {
         result.page_count = Some((word_count + 249) / 250);
 
         // Count structure
-        let (para_count, heading_count) = Self::count_structure(&doc);
         result.chapter_count = Some(heading_count);
 
         // Validation checks
@@ -128,8 +141,17 @@ impl BookFormatAdapter for DocxFormatAdapter {
         let metadata = fs::metadata(path).await?;
         let file_size = metadata.len();
 
-        let doc = read_docx(&file_data)
-            .map_err(|e| FormatError::MetadataError(format!("Failed to load DOCX: {}", e)))?;
+        // Parse DOCX, falling back to a direct ZIP parse for minimal files
+        // that docx-rs 0.4 cannot handle.
+        let (text, core_title) = match read_docx(&file_data) {
+            Ok(doc) => (Self::extract_text_from_document(&doc), None),
+            Err(e) => {
+                let fallback = parse_docx_zip(&file_data).ok_or_else(|| {
+                    FormatError::MetadataError(format!("Failed to load DOCX: {}", e))
+                })?;
+                (fallback.text, fallback.title)
+            }
+        };
 
         let mut book_meta = BookMetadata {
             file_format: "docx".to_string(),
@@ -137,12 +159,11 @@ impl BookFormatAdapter for DocxFormatAdapter {
             ..Default::default()
         };
 
-        // Extract metadata from core properties
-        // Note: docx-rs 0.4.19 doesn't expose config field publicly
-        // We'll use filename as title and extract text for word count
+        if let Some(title) = core_title {
+            book_meta.title = title;
+        }
 
         // Extract text for word count
-        let text = Self::extract_text_from_document(&doc);
         let word_count = text.split_whitespace().count() as u32;
         book_meta.word_count = Some(word_count);
         book_meta.page_count = Some((word_count + 249) / 250);
@@ -160,8 +181,20 @@ impl BookFormatAdapter for DocxFormatAdapter {
     async fn extract_cover(&self, path: &Path) -> FormatResult<Option<CoverImage>> {
         let file_data = fs::read(path).await?;
 
-        let doc = read_docx(&file_data)
-            .map_err(|e| FormatError::CoverError(format!("Failed to load DOCX: {}", e)))?;
+        let doc = match read_docx(&file_data) {
+            Ok(doc) => doc,
+            Err(e) => {
+                // Minimal DOCX files that docx-rs cannot parse have no
+                // embedded images to extract; a plain ZIP check suffices.
+                if parse_docx_zip(&file_data).is_some() {
+                    return Ok(None);
+                }
+                return Err(FormatError::CoverError(format!(
+                    "Failed to load DOCX: {}",
+                    e
+                )));
+            }
+        };
 
         // Try to find first image in document as cover
         for child in &doc.document.children {

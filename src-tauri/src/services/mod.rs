@@ -10,6 +10,7 @@ pub mod library_service;
 pub mod markdown_reader_adapter;
 pub mod metadata_service;
 pub mod mobi_adapter;
+pub mod mobi_huff;
 pub mod online_cover;
 pub mod pdf_adapter;
 pub mod reader_service;

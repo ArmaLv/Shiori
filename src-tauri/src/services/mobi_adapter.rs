@@ -713,7 +713,7 @@ impl MobiAdapter {
         record[..trimmed_end].to_vec()
     }
 
-    fn palm_doc_decompress(data: &[u8]) -> Option<Vec<u8>> {
+    pub fn palm_doc_decompress(data: &[u8]) -> Option<Vec<u8>> {
         let mut out = Vec::with_capacity(data.len() * 2);
         let mut i = 0usize;
 
@@ -723,17 +723,18 @@ impl MobiAdapter {
             match c {
                 0x00 => out.push(0x00),
                 0x01..=0x08 => {
-                    let count = c as usize;
-                    if i + count > data.len() {
-                        return None;
-                    }
+                    // Trailing literal runs may overrun the record (records
+                    // are padded to even sizes); truncate instead of failing.
+                    let count = (c as usize).min(data.len().saturating_sub(i));
                     out.extend_from_slice(&data[i..i + count]);
                     i += count;
                 }
                 0x09..=0x7F => out.push(c),
                 0x80..=0xBF => {
+                    // A lone pair byte at the end of the record is padding
+                    // (records are padded to even sizes) — stop, keep output.
                     if i >= data.len() {
-                        return None;
+                        break;
                     }
                     let c2 = data[i];
                     i += 1;
@@ -741,7 +742,9 @@ impl MobiAdapter {
                     let distance = pair >> 3;
                     let length = (pair & 0x07) + 3;
                     if distance == 0 || distance > out.len() {
-                        return None;
+                        // Invalid match (corrupt tail or exotic encoding) —
+                        // stop decoding this record, keep the valid prefix.
+                        break;
                     }
                     let start = out.len() - distance;
                     for j in 0..length {
@@ -778,15 +781,57 @@ impl MobiAdapter {
 
     fn decode_text_bytes(raw: &[u8], text_encoding: u32) -> String {
         match text_encoding {
-            65001 => String::from_utf8_lossy(raw).into_owned(),
+            65001 => Self::decode_hybrid_text(raw),
             1252 | 0 => Self::decode_cp1252(raw),
-            _ => {
-                if std::str::from_utf8(raw).is_ok() {
-                    String::from_utf8_lossy(raw).into_owned()
-                } else {
-                    Self::decode_cp1252(raw)
+            _ => Self::decode_hybrid_text(raw),
+        }
+    }
+
+    /// Tolerant text decoder for books with a broken/absent encoding header
+    /// (seen in the wild: 0xFFFFFFFF). Keeps valid UTF-8 sequences intact and
+    /// maps stray single bytes >= 0x80 through the cp1252 table — mixed-encoding
+    /// books (UTF-8 prose with cp1252 punctuation) decode cleanly.
+    fn decode_hybrid_text(raw: &[u8]) -> String {
+        let mut out = String::with_capacity(raw.len());
+        let mut i = 0usize;
+        while i < raw.len() {
+            let b = raw[i];
+            if b < 0x80 {
+                out.push(b as char);
+                i += 1;
+                continue;
+            }
+            let remaining = &raw[i..];
+            match std::str::from_utf8(remaining) {
+                Ok(s) => {
+                    out.push_str(s);
+                    break;
+                }
+                Err(e) => {
+                    let valid = e.valid_up_to();
+                    if valid > 0 {
+                        out.push_str(std::str::from_utf8(&remaining[..valid]).unwrap());
+                        i += valid;
+                        continue;
+                    }
+                    // Invalid lead byte — decode it as cp1252.
+                    out.push(Self::cp1252_char(b));
+                    i += 1;
                 }
             }
+        }
+        out
+    }
+
+    fn cp1252_char(b: u8) -> char {
+        const CP1252_EXT: [char; 32] = [
+            '€', '\u{0081}', '‚', 'ƒ', '„', '…', '†', '‡', 'ˆ', '‰', 'Š', '‹', 'Œ', '\u{008D}',
+            'Ž', '\u{008F}', '\u{0090}', '‘', '’', '“', '”', '•', '–', '—', '˜', '™', 'š', '›',
+            'œ', '\u{009D}', 'ž', 'Ÿ',
+        ];
+        match b {
+            0x80..=0x9F => CP1252_EXT[(b - 0x80) as usize],
+            _ => (b as char),
         }
     }
 
@@ -802,8 +847,31 @@ impl MobiAdapter {
 
         let mut candidates: Vec<String> = Vec::new();
 
+        // HUFF/CDIC records (compression == 2). The `mobi` crate cannot decode
+        // huffman-compressed books, so the vendored decoder in `mobi_huff` is
+        // used. The HUFF record comes first, then all CDIC records in order.
+        let huff_cdic_refs: Vec<&[u8]> = {
+            let mut refs: Vec<&[u8]> = Vec::new();
+            for i in 0..offsets.len().saturating_sub(1) {
+                let start = offsets[i];
+                let end = offsets[i + 1];
+                if start >= end || end > file_data.len() {
+                    continue;
+                }
+                let rec = &file_data[start..end];
+                if rec.starts_with(b"HUFF") || rec.starts_with(b"CDIC") {
+                    refs.push(rec);
+                }
+            }
+            refs
+        };
+
         let decode_with_strategy = |trim_mode: u8| -> Option<String> {
             let mut decoded = Vec::new();
+            // For compression 2 the huffman decoder needs all text records at
+            // once (each record is one compressed section); collect them and
+            // decode after the loop.
+            let mut huff_sections: Vec<Vec<u8>> = Vec::new();
             for idx in first_record..=last_record {
                 let start = offsets[idx];
                 let end = offsets.get(idx + 1).copied().unwrap_or(file_data.len());
@@ -822,10 +890,34 @@ impl MobiAdapter {
                 match compression {
                     1 => decoded.extend_from_slice(&rec),
                     2 => {
-                        let dec = Self::palm_doc_decompress(&rec)?;
-                        decoded.extend_from_slice(&dec);
+                        if !huff_cdic_refs.is_empty() {
+                            // Genuine huffman book: collect records and decode
+                            // them all after the loop.
+                            huff_sections.push(rec);
+                        } else {
+                            // Header claims huffman (compression == 2) but no
+                            // HUFF/CDIC tables exist — seen in the wild (e.g.
+                            // converted books): the text records are actually
+                            // PalmDOC-compressed. Decode them that way.
+                            if let Some(dec) = Self::palm_doc_decompress(&rec) {
+                                decoded.extend_from_slice(&dec);
+                            }
+                        }
                     }
                     _ => return None,
+                }
+            }
+
+            if compression == 2 && !huff_sections.is_empty() {
+                if huff_cdic_refs.is_empty() {
+                    return None;
+                }
+                let sections: Vec<&[u8]> =
+                    huff_sections.iter().map(|r| r.as_slice()).collect();
+                let outs = crate::services::mobi_huff::decompress(&huff_cdic_refs, &sections)
+                    .ok()?;
+                for out in outs {
+                    decoded.extend_from_slice(&out);
                 }
             }
 
@@ -1521,6 +1613,30 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
+    fn temp_dump_real_mobi_strategies() {
+        let path = "/home/zura/Personal/coding_cuff/Shiori/broken-files/1752426479_the_briar_club_-_kate_quinn.mobi";
+        let data = std::fs::read(path).unwrap();
+        let m = mobi::Mobi::from_read(&mut &data[..]).unwrap();
+
+        let s1 = MobiAdapter::extract_html_from_records(&data);
+        let s2 = m.content_as_string().ok();
+        let s3 = m.content_as_string_lossy().ok();
+
+        for (name, s) in [("custom", s1), ("strict", s2), ("lossy", s3)] {
+            match s {
+                Some(c) => eprintln!(
+                    "=== {} len={} head={:?}",
+                    name,
+                    c.len(),
+                    &c[..c.len().min(400)]
+                ),
+                None => eprintln!("=== {} None", name),
+            }
+        }
+    }
+
+    #[test]
     fn readability_scoring_prefers_clean_candidate() {
         let clean =
             "<html><body><p>This is readable text with words and structure.</p></body></html>";
@@ -1531,3 +1647,4 @@ mod tests {
         assert_eq!(chosen, clean);
     }
 }
+
