@@ -7,7 +7,7 @@ use crate::models::{
 };
 use chrono::Utc;
 use rusqlite::{params, Connection};
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 
 pub struct ReaderService;
 
