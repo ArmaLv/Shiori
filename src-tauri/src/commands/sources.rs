@@ -412,6 +412,24 @@ pub struct MangaDownloadProgress {
     pub total_pages: usize,
 }
 
+/// Per-source Referer header, kept in lockstep with the shiori-proxy referer
+/// map in lib.rs — the backend downloader must authenticate against the same
+/// hotlink-protected image hosts as the UI's image proxy.
+fn download_referer_for(source_id: &str) -> Option<&'static str> {
+    match source_id {
+        "toongod" => Some("https://www.toongod.org/"),
+        "toonily" => Some("https://toonily.com/"),
+        "toontop" => Some("https://toontop.io/"),
+        "manhwaread" => Some("https://manhwaread.com/"),
+        "mangadex" => Some("https://mangadex.org/"),
+        "weebrook" => Some("https://weebrook.com/"),
+        "manhwahub" => Some("https://manhwahub.net/"),
+        "mangafire" => Some("https://mangafire.to/"),
+        "libgen" => Some("https://libgen.li/"),
+        _ => None,
+    }
+}
+
 #[tauri::command]
 pub async fn download_manga_chapter_as_cbz(
     app_handle: tauri::AppHandle,
@@ -480,16 +498,8 @@ pub async fn download_manga_chapter_as_cbz(
     let mut downloaded = 0;
     let total = pages.len();
 
-    let user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
-    let referer = match source_id.as_str() {
-        "toongod" => Some("https://www.toongod.org/"),
-        "mangadex" => Some("https://mangadex.org/"),
-        "weebrook" => Some("https://weebrook.com/"),
-        "manhwahub" => Some("https://manhwahub.net/"),
-        "libgen" => Some("https://libgen.li/"),
-        "mangafire" => Some("https://mangafire.to/"),
-        _ => None,
-    };
+    let user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36";
+    let referer = download_referer_for(&source_id);
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
@@ -497,7 +507,26 @@ pub async fn download_manga_chapter_as_cbz(
         .map_err(|e| ShioriError::Other(format!("Failed to build client: {}", e)))?;
 
     for (idx, page) in pages.iter().enumerate() {
-        let mut req = client.get(&page.url).header("User-Agent", user_agent);
+        // SSRF guard — same check as the shiori-proxy handler in lib.rs; never
+        // fetch private/loopback hosts even if a source returns a bad URL.
+        if !crate::is_safe_url(&page.url) {
+            return Err(ShioriError::Other(format!(
+                "Refusing to download image from unsafe URL: {}",
+                page.url
+            )));
+        }
+
+        let mut req = client
+            .get(&page.url)
+            .header("User-Agent", user_agent)
+            .header(
+                "Accept",
+                "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+            )
+            .header("Accept-Language", "en-US,en;q=0.9")
+            .header("Sec-Fetch-Dest", "image")
+            .header("Sec-Fetch-Mode", "no-cors")
+            .header("Sec-Fetch-Site", "cross-site");
         if let Some(ref_url) = referer {
             req = req.header("Referer", ref_url);
         }

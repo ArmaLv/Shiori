@@ -1,13 +1,13 @@
 use async_trait::async_trait;
+use futures::future::BoxFuture;
 use serde::Deserialize;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 
 #[cfg(target_os = "android")]
 use tauri_plugin_android_saf::AndroidSafExt;
-
-
 
 use crate::cloudflare::client::CfClient;
 use crate::error::{Result, ShioriError};
@@ -15,9 +15,22 @@ use crate::sources::{Chapter, ContentType, Page, SearchResult, Source, SourceMet
 
 const BASE_URL: &str = "https://mangafire.to";
 
+/// How long chapter lists are served from the in-memory cache before a refresh.
+const CHAPTER_CACHE_TTL: Duration = Duration::from_secs(10 * 60);
+/// How long chapter page lists are served from the in-memory cache before a refresh.
+const PAGES_CACHE_TTL: Duration = Duration::from_secs(30 * 60);
+/// Max number of chapter-list pages fetched concurrently. Every page is a
+/// Cloudflare-browser RPC round-trip, so a small cap keeps the webview sane
+/// while still cutting wall-clock time by ~4x on multi-page series.
+const PAGE_FETCH_CONCURRENCY: usize = 4;
+
 pub struct MangaFireSource {
     cf_client: RwLock<Option<Arc<CfClient>>>,
     app_handle: RwLock<Option<tauri::AppHandle>>,
+    /// content_id -> (cached_at, chapters); TTL [`CHAPTER_CACHE_TTL`].
+    chapter_cache: Mutex<HashMap<String, (Instant, Vec<Chapter>)>>,
+    /// chapter_id -> (cached_at, pages); TTL [`PAGES_CACHE_TTL`].
+    pages_cache: Mutex<HashMap<String, (Instant, Vec<Page>)>>,
 }
 
 impl MangaFireSource {
@@ -25,6 +38,8 @@ impl MangaFireSource {
         Self {
             cf_client: RwLock::new(None),
             app_handle: RwLock::new(None),
+            chapter_cache: Mutex::new(HashMap::new()),
+            pages_cache: Mutex::new(HashMap::new()),
         }
     }
 
@@ -32,8 +47,6 @@ impl MangaFireSource {
         *self.cf_client.write().await = Some(cf);
         *self.app_handle.write().await = Some(app_handle);
     }
-
-
 
     async fn wait_for_init(&self) -> Result<()> {
         for _ in 0..50 {
@@ -46,7 +59,9 @@ impl MangaFireSource {
             }
             tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
         }
-        Err(ShioriError::Other("MangaFire source client not initialized (timeout)".into()))
+        Err(ShioriError::Other(
+            "MangaFire source client not initialized (timeout)".into(),
+        ))
     }
 
     async fn evaluate_js_on_site(&self, js_script: &str) -> Result<String> {
@@ -149,54 +164,62 @@ impl MangaFireSource {
 
             use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 
-            let _window = WebviewWindowBuilder::new(&app, &window_label, WebviewUrl::External("https://mangafire.to/filter".parse().unwrap()))
-                .visible(false)
-                .initialization_script(&js)
-                .on_document_title_changed(move |window, title| {
-                    if title.starts_with("SHIORI_CHUNK|") {
-                        if let Ok(mut buf) = html_buffer_clone.lock() {
-                            let raw = title.trim_start_matches("SHIORI_CHUNK|");
-                            let decoded = urlencoding::decode(raw).unwrap_or(std::borrow::Cow::Borrowed(raw));
-                            buf.push_str(&decoded);
-                        }
-                        let _ = window.eval("window.__CHUNK_ACK = true;");
-                    } else if title.starts_with("SHIORI_DONE|") {
-                        if let Ok(mut lock) = tx_clone.lock() {
-                            if let Some(sender) = lock.take() {
-                                let buf = html_buffer_clone.lock().unwrap().clone();
-                                let _ = sender.send(Ok(buf));
-                            }
-                        }
-                        let w_label = window_label_clone.clone();
-                        let a = app_clone.clone();
-                        tauri::async_runtime::spawn(async move {
-                            if let Some(w) = a.get_webview_window(&w_label) {
-                                let _ = w.close();
-                            }
-                        });
-                    } else if title.starts_with("SHIORI_ERROR|") {
-                        if let Ok(mut lock) = tx_clone.lock() {
-                            if let Some(sender) = lock.take() {
-                                let err = title.trim_start_matches("SHIORI_ERROR|").to_string();
-                                let _ = sender.send(Err(err));
-                            }
-                        }
-                        let w_label = window_label_clone.clone();
-                        let a = app_clone.clone();
-                        tauri::async_runtime::spawn(async move {
-                            if let Some(w) = a.get_webview_window(&w_label) {
-                                let _ = w.close();
-                            }
-                        });
+            let _window = WebviewWindowBuilder::new(
+                &app,
+                &window_label,
+                WebviewUrl::External("https://mangafire.to/filter".parse().unwrap()),
+            )
+            .visible(false)
+            .initialization_script(&js)
+            .on_document_title_changed(move |window, title| {
+                if title.starts_with("SHIORI_CHUNK|") {
+                    if let Ok(mut buf) = html_buffer_clone.lock() {
+                        let raw = title.trim_start_matches("SHIORI_CHUNK|");
+                        let decoded =
+                            urlencoding::decode(raw).unwrap_or(std::borrow::Cow::Borrowed(raw));
+                        buf.push_str(&decoded);
                     }
-                })
-                .build()
-                .map_err(|e| ShioriError::Other(format!("Failed to build rpc webview: {}", e)))?;
+                    let _ = window.eval("window.__CHUNK_ACK = true;");
+                } else if title.starts_with("SHIORI_DONE|") {
+                    if let Ok(mut lock) = tx_clone.lock() {
+                        if let Some(sender) = lock.take() {
+                            let buf = html_buffer_clone.lock().unwrap().clone();
+                            let _ = sender.send(Ok(buf));
+                        }
+                    }
+                    let w_label = window_label_clone.clone();
+                    let a = app_clone.clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Some(w) = a.get_webview_window(&w_label) {
+                            let _ = w.close();
+                        }
+                    });
+                } else if title.starts_with("SHIORI_ERROR|") {
+                    if let Ok(mut lock) = tx_clone.lock() {
+                        if let Some(sender) = lock.take() {
+                            let err = title.trim_start_matches("SHIORI_ERROR|").to_string();
+                            let _ = sender.send(Err(err));
+                        }
+                    }
+                    let w_label = window_label_clone.clone();
+                    let a = app_clone.clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Some(w) = a.get_webview_window(&w_label) {
+                            let _ = w.close();
+                        }
+                    });
+                }
+            })
+            .build()
+            .map_err(|e| ShioriError::Other(format!("Failed to build rpc webview: {}", e)))?;
 
             let result = match tokio::time::timeout(std::time::Duration::from_secs(60), rx).await {
                 Ok(Ok(Ok(res))) => res,
                 Ok(Ok(Err(err))) => {
-                    return Err(ShioriError::Other(format!("MangaFire RPC JS error: {}", err)));
+                    return Err(ShioriError::Other(format!(
+                        "MangaFire RPC JS error: {}",
+                        err
+                    )));
                 }
                 _ => {
                     let w_label = window_label.clone();
@@ -212,7 +235,9 @@ impl MangaFireSource {
 
             return Ok(result);
         }
-        Err(ShioriError::Other("Browser RPC not initialized for MangaFire".into()))
+        Err(ShioriError::Other(
+            "Browser RPC not initialized for MangaFire".into(),
+        ))
     }
 
     async fn fetch_rpc(&self, url: &str) -> Result<String> {
@@ -298,13 +323,18 @@ impl MangaFireSource {
                     }
                 };
 
-                let res = app.android_saf().evaluate_javascript(format!("{}/filter", BASE_URL), js, user_agent)
+                let res = app
+                    .android_saf()
+                    .evaluate_javascript(format!("{}/filter", BASE_URL), js, user_agent)
                     .map_err(|e| ShioriError::Other(e.to_string()))?;
-                
+
                 // Check if the response is an error JSON from our catch block
                 if let Ok(v) = serde_json::from_str::<serde_json::Value>(&res) {
                     if let Some(err_msg) = v.get("error").and_then(|e| e.as_str()) {
-                        return Err(ShioriError::Other(format!("MangaFire JS error: {}", err_msg)));
+                        return Err(ShioriError::Other(format!(
+                            "MangaFire JS error: {}",
+                            err_msg
+                        )));
                     }
                 }
                 return Ok(res);
@@ -313,7 +343,8 @@ impl MangaFireSource {
 
         #[cfg(not(target_os = "android"))]
         {
-            let js = format!(r#"
+            let js = format!(
+                r#"
                 const [path, queryString] = '{}'.split('?');
                 const queryParams = {{}};
                 if (queryString) {{
@@ -324,12 +355,16 @@ impl MangaFireSource {
                 }}
                 let res = await window.myAxios.get(path, {{ params: queryParams }});
                 return res.data;
-            "#, url);
+            "#,
+                url
+            );
             return self.evaluate_js_on_site(&js).await;
         }
 
         #[allow(unreachable_code)]
-        Err(ShioriError::Other("Browser RPC not initialized for MangaFire".into()))
+        Err(ShioriError::Other(
+            "Browser RPC not initialized for MangaFire".into(),
+        ))
     }
 }
 
@@ -388,6 +423,118 @@ struct MfPageItem {
     url: String,
 }
 
+/// Returns a cached value while it is fresh (within `ttl`); otherwise runs
+/// `fetch`, stores the result keyed by `key`, and returns it. Errors from
+/// `fetch` are propagated untouched and never cached.
+async fn cache_get_or_fetch<T, F>(
+    cache: &Mutex<HashMap<String, (Instant, T)>>,
+    key: &str,
+    ttl: Duration,
+    fetch: F,
+) -> Result<T>
+where
+    T: Clone,
+    F: std::future::Future<Output = Result<T>>,
+{
+    {
+        let guard = cache.lock().unwrap_or_else(|p| p.into_inner());
+        if let Some((cached_at, value)) = guard.get(key) {
+            if cached_at.elapsed() < ttl {
+                return Ok(value.clone());
+            }
+        }
+    }
+    let value = fetch.await?;
+    cache
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .insert(key.to_string(), (Instant::now(), value.clone()));
+    Ok(value)
+}
+
+/// Fetches every chapter page for a title by calling `fetch_one(page)`.
+///
+/// Page 1 is fetched first because its `meta.lastPage` reveals the page count;
+/// the remaining pages are then fetched concurrently in chunks of
+/// [`PAGE_FETCH_CONCURRENCY`], preserving page order. Error behavior mirrors the
+/// original sequential loop: a page-1 fetch error is fatal, while a later-page
+/// fetch error stops pagination and returns whatever was collected so far.
+async fn fetch_all_chapter_items<'a, F>(fetch_one: F) -> Result<Vec<MfChapterItem>>
+where
+    F: Fn(u32) -> BoxFuture<'a, Result<String>> + 'a,
+{
+    let first_json = fetch_one(1).await?;
+    let first: MfChaptersResponse = serde_json::from_str(&first_json).map_err(|e| {
+        ShioriError::Other(format!("Failed to parse MangaFire chapters JSON: {}", e))
+    })?;
+
+    let mut all_items = first.items;
+    let last_page = first.meta.as_ref().map(|m| m.last_page).unwrap_or(1).max(1);
+    if last_page <= 1 {
+        return Ok(all_items);
+    }
+
+    let pages: Vec<u32> = (2..=last_page).collect();
+    for chunk in pages.chunks(PAGE_FETCH_CONCURRENCY) {
+        let futs: Vec<BoxFuture<'a, Result<String>>> =
+            chunk.iter().map(|&p| fetch_one(p)).collect();
+        let results = futures::future::join_all(futs).await;
+        for result in results {
+            let json = match result {
+                Ok(j) => j,
+                // Later-page fetch error: keep what we already have (original behavior).
+                Err(_) => return Ok(all_items),
+            };
+            let res: MfChaptersResponse = serde_json::from_str(&json).map_err(|e| {
+                ShioriError::Other(format!("Failed to parse MangaFire chapters JSON: {}", e))
+            })?;
+            all_items.extend(res.items);
+        }
+    }
+
+    Ok(all_items)
+}
+
+/// Converts raw chapter items into `Chapter`s (EN-only, deduplicated by number).
+fn build_chapters(content_id: &str, items: Vec<MfChapterItem>) -> Vec<Chapter> {
+    let mut chapters = Vec::new();
+    for item in items {
+        if item.language != "en" {
+            continue;
+        }
+
+        let chap_id = item.id.to_string();
+        let title = if item.name.trim().is_empty() {
+            format!("Chapter {}", item.number)
+        } else {
+            item.name
+        };
+
+        chapters.push(Chapter {
+            id: chap_id,
+            title,
+            number: item.number,
+            volume: None,
+            uploaded_at: None, // Could parse if needed, but not critical
+            source_id: "mangafire".to_string(),
+            content_id: content_id.to_string(),
+        });
+    }
+
+    // Return deduplicated chapters (sometimes multiple groups upload same number)
+    let mut unique_chapters: Vec<Chapter> = Vec::new();
+    let mut seen_numbers = std::collections::HashSet::new();
+    for ch in chapters {
+        let num_str = ch.number.to_string();
+        if !seen_numbers.contains(&num_str) {
+            seen_numbers.insert(num_str);
+            unique_chapters.push(ch);
+        }
+    }
+
+    unique_chapters
+}
+
 #[async_trait]
 impl Source for MangaFireSource {
     fn as_any(&self) -> &dyn std::any::Any {
@@ -414,8 +561,12 @@ impl Source for MangaFireSource {
         let url = format!("/api/titles?keyword={}&page=1&limit=50", encoded_query);
 
         let json_str = self.fetch_rpc(&url).await?;
-        let res: MfSearchResponse = serde_json::from_str(&json_str)
-            .map_err(|e| ShioriError::Other(format!("Failed to parse MangaFire search JSON: {} - raw: {}", e, json_str)))?;
+        let res: MfSearchResponse = serde_json::from_str(&json_str).map_err(|e| {
+            ShioriError::Other(format!(
+                "Failed to parse MangaFire search JSON: {} - raw: {}",
+                e, json_str
+            ))
+        })?;
 
         let mut results = Vec::new();
         for item in res.items {
@@ -445,21 +596,36 @@ impl Source for MangaFireSource {
         _types: Option<Vec<String>>,
     ) -> Result<Vec<SearchResult>> {
         let mut base_url = match mode {
-            "popular" => format!("/api/titles?order[chapter_updated_at]=desc&hot=1&page={}&limit=30", page),
-            "latest" | "recent" => format!("/api/titles?order[chapter_updated_at]=desc&page={}&limit=30", page),
-            _ => format!("/api/titles?order[chapter_updated_at]=desc&page={}&limit=30", page),
+            "popular" => format!(
+                "/api/titles?order[chapter_updated_at]=desc&hot=1&page={}&limit=30",
+                page
+            ),
+            "latest" | "recent" => format!(
+                "/api/titles?order[chapter_updated_at]=desc&page={}&limit=30",
+                page
+            ),
+            _ => format!(
+                "/api/titles?order[chapter_updated_at]=desc&page={}&limit=30",
+                page
+            ),
         };
 
         if let Some(genres) = _genres {
             if !genres.is_empty() {
-                let slugs: Vec<String> = genres.into_iter().map(|g| g.to_lowercase().replace(" ", "-")).collect();
+                let slugs: Vec<String> = genres
+                    .into_iter()
+                    .map(|g| g.to_lowercase().replace(" ", "-"))
+                    .collect();
                 base_url.push_str(&format!("&genre={}", slugs.join(",")));
             }
         }
 
         if let Some(types) = _types {
             if !types.is_empty() {
-                let slugs: Vec<String> = types.into_iter().map(|t| t.to_lowercase().replace(" ", "-")).collect();
+                let slugs: Vec<String> = types
+                    .into_iter()
+                    .map(|t| t.to_lowercase().replace(" ", "-"))
+                    .collect();
                 base_url.push_str(&format!("&type={}", slugs.join(",")));
             }
         }
@@ -467,8 +633,12 @@ impl Source for MangaFireSource {
         let url = base_url;
 
         let json_str = self.fetch_rpc(&url).await?;
-        let res: MfSearchResponse = serde_json::from_str(&json_str)
-            .map_err(|e| ShioriError::Other(format!("Failed to parse MangaFire browse JSON: {} - raw: {}", e, json_str)))?;
+        let res: MfSearchResponse = serde_json::from_str(&json_str).map_err(|e| {
+            ShioriError::Other(format!(
+                "Failed to parse MangaFire browse JSON: {} - raw: {}",
+                e, json_str
+            ))
+        })?;
 
         let mut results = Vec::new();
         for item in res.items {
@@ -491,96 +661,286 @@ impl Source for MangaFireSource {
     async fn get_chapters(&self, content_id: &str) -> Result<Vec<Chapter>> {
         let parts: Vec<&str> = content_id.split('|').collect();
         if parts.len() != 2 {
-            return Err(ShioriError::Other("Invalid MangaFire content ID".to_string()));
+            return Err(ShioriError::Other(
+                "Invalid MangaFire content ID".to_string(),
+            ));
         }
-        let hid = parts[0];
-        let _slug = parts[1];
+        let hid = parts[0].to_string();
 
-        let mut all_items = Vec::new();
-        let mut current_page = 1;
-        let mut last_page = 1;
-
-        loop {
-            let url = format!("/api/titles/{}/chapters?language=en&sort=number&order=desc&page={}&limit=200", hid, current_page);
-            let json_str = match self.fetch_rpc(&url).await {
-                Ok(s) => s,
-                Err(e) => {
-                    if current_page == 1 {
-                        return Err(e);
-                    }
-                    break;
-                }
-            };
-            
-            let res: MfChaptersResponse = serde_json::from_str(&json_str)
-                .map_err(|e| ShioriError::Other(format!("Failed to parse MangaFire chapters JSON: {}", e)))?;
-                
-            all_items.extend(res.items);
-            
-            if let Some(meta) = res.meta {
-                last_page = meta.last_page;
-            }
-            
-            if current_page >= last_page {
-                break;
-            }
-            current_page += 1;
-        }
-
-        let mut chapters = Vec::new();
-        for item in all_items {
-            if item.language != "en" {
-                continue;
-            }
-
-            let chap_id = item.id.to_string();
-            let title = if item.name.trim().is_empty() {
-                format!("Chapter {}", item.number)
-            } else {
-                item.name
-            };
-
-            chapters.push(Chapter {
-                id: chap_id,
-                title,
-                number: item.number,
-                volume: None,
-                uploaded_at: None, // Could parse if needed, but not critical
-                source_id: "mangafire".to_string(),
-                content_id: content_id.to_string(),
-            });
-        }
-
-        // Return deduplicated chapters (sometimes multiple groups upload same number)
-        let mut unique_chapters: Vec<Chapter> = Vec::new();
-        let mut seen_numbers = std::collections::HashSet::new();
-        for ch in chapters {
-            let num_str = ch.number.to_string();
-            if !seen_numbers.contains(&num_str) {
-                seen_numbers.insert(num_str);
-                unique_chapters.push(ch);
-            }
-        }
-
-        Ok(unique_chapters)
+        cache_get_or_fetch(&self.chapter_cache, content_id, CHAPTER_CACHE_TTL, async {
+            let items = fetch_all_chapter_items(|page| {
+                let url = format!(
+                    "/api/titles/{}/chapters?language=en&sort=number&order=desc&page={}&limit=200",
+                    hid, page
+                );
+                Box::pin(async move { self.fetch_rpc(&url).await })
+            })
+            .await?;
+            Ok(build_chapters(content_id, items))
+        })
+        .await
     }
 
     async fn get_pages(&self, chapter_id: &str) -> Result<Vec<Page>> {
-        // chapter_id is just the id (e.g., 7285952)
-        let url = format!("/api/chapters/{}", chapter_id);
+        cache_get_or_fetch(&self.pages_cache, chapter_id, PAGES_CACHE_TTL, async {
+            // chapter_id is just the id (e.g., 7285952)
+            let url = format!("/api/chapters/{}", chapter_id);
 
-        let json_str = self.fetch_rpc(&url).await?;
-        let res: MfPageResponse = serde_json::from_str(&json_str)
-            .map_err(|e| ShioriError::Other(format!("Failed to parse MangaFire pages JSON: {} - raw: {}", e, json_str)))?;
+            let json_str = self.fetch_rpc(&url).await?;
+            let res: MfPageResponse = serde_json::from_str(&json_str).map_err(|e| {
+                ShioriError::Other(format!(
+                    "Failed to parse MangaFire pages JSON: {} - raw: {}",
+                    e, json_str
+                ))
+            })?;
 
-        let mut pages = Vec::new();
-        for (i, p) in res.data.pages.into_iter().enumerate() {
-            pages.push(Page {
-                index: i as u32,
-                url: p.url,
-            });
+            let mut pages = Vec::new();
+            for (i, p) in res.data.pages.into_iter().enumerate() {
+                pages.push(Page {
+                    index: i as u32,
+                    url: p.url,
+                });
+            }
+
+            Ok(pages)
+        })
+        .await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    fn chapter(id: &str, title: &str) -> Chapter {
+        Chapter {
+            id: id.to_string(),
+            title: title.to_string(),
+            number: 1.0,
+            volume: None,
+            uploaded_at: None,
+            source_id: "mangafire".to_string(),
+            content_id: "hid|slug".to_string(),
         }
+    }
 
-        Ok(pages)
+    fn page_body(page: u32, last_page: Option<u32>) -> String {
+        match last_page {
+            Some(lp) => format!(
+                r#"{{"items":[{{"id":{},"number":{},"name":"ch{}","language":"en"}}],"meta":{{"lastPage":{}}}}}"#,
+                page, page, page, lp
+            ),
+            None => format!(
+                r#"{{"items":[{{"id":{},"number":{},"name":"ch{}","language":"en"}}]}}"#,
+                page, page, page
+            ),
+        }
+    }
+
+    #[tokio::test]
+    async fn fetch_all_chapter_items_fetches_all_pages_in_order() {
+        let items = fetch_all_chapter_items(|page| {
+            let body = page_body(page, Some(3));
+            Box::pin(async move { Ok(body) })
+        })
+        .await
+        .unwrap();
+
+        let ids: Vec<u64> = items.iter().map(|i| i.id).collect();
+        assert_eq!(ids, vec![1, 2, 3]);
+    }
+
+    #[tokio::test]
+    async fn fetch_all_chapter_items_fetches_pages_concurrently() {
+        let in_flight = Arc::new(AtomicUsize::new(0));
+        let max_in_flight = Arc::new(AtomicUsize::new(0));
+
+        let items = fetch_all_chapter_items(|page| {
+            let in_flight = in_flight.clone();
+            let max_in_flight = max_in_flight.clone();
+            Box::pin(async move {
+                let now = in_flight.fetch_add(1, Ordering::SeqCst) + 1;
+                max_in_flight.fetch_max(now, Ordering::SeqCst);
+                tokio::time::sleep(Duration::from_millis(30)).await;
+                in_flight.fetch_sub(1, Ordering::SeqCst);
+                Ok(page_body(page, Some(4)))
+            })
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(items.len(), 4);
+        assert!(
+            max_in_flight.load(Ordering::SeqCst) >= 2,
+            "expected concurrent page fetches, max in-flight was {}",
+            max_in_flight.load(Ordering::SeqCst)
+        );
+    }
+
+    #[tokio::test]
+    async fn fetch_all_chapter_items_page_one_error_is_fatal() {
+        let res = fetch_all_chapter_items(|page| {
+            Box::pin(async move {
+                if page == 1 {
+                    Err(ShioriError::Other("boom".into()))
+                } else {
+                    Ok(page_body(page, Some(2)))
+                }
+            })
+        })
+        .await;
+
+        assert!(res.is_err());
+    }
+
+    #[tokio::test]
+    async fn fetch_all_chapter_items_later_page_error_keeps_earlier_pages() {
+        let items = fetch_all_chapter_items(|page| {
+            Box::pin(async move {
+                match page {
+                    1 => Ok(page_body(1, Some(3))),
+                    2 => Ok(page_body(2, Some(3))),
+                    _ => Err(ShioriError::Other("later page failed".into())),
+                }
+            })
+        })
+        .await
+        .unwrap();
+
+        let ids: Vec<u64> = items.iter().map(|i| i.id).collect();
+        assert_eq!(ids, vec![1, 2]);
+    }
+
+    #[tokio::test]
+    async fn fetch_all_chapter_items_single_page_when_meta_missing() {
+        let pages_fetched = Arc::new(AtomicUsize::new(0));
+
+        let items = fetch_all_chapter_items(|page| {
+            let pages_fetched = pages_fetched.clone();
+            Box::pin(async move {
+                pages_fetched.fetch_add(1, Ordering::SeqCst);
+                Ok(page_body(page, None))
+            })
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(items.len(), 1);
+        assert_eq!(pages_fetched.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn cache_fresh_hit_returns_cached_without_refetch() {
+        let cache: Mutex<HashMap<String, (Instant, Vec<Chapter>)>> = Mutex::new(HashMap::new());
+        let fetch_calls = Arc::new(AtomicUsize::new(0));
+
+        let calls = fetch_calls.clone();
+        let v = cache_get_or_fetch(&cache, "a", CHAPTER_CACHE_TTL, async move {
+            calls.fetch_add(1, Ordering::SeqCst);
+            Ok(vec![chapter("1", "One")])
+        })
+        .await
+        .unwrap();
+        assert_eq!(v.len(), 1);
+
+        // Second call within TTL must hit the cache, not refetch.
+        let calls = fetch_calls.clone();
+        let v2 = cache_get_or_fetch(&cache, "a", CHAPTER_CACHE_TTL, async move {
+            calls.fetch_add(1, Ordering::SeqCst);
+            Ok(vec![])
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(v2.len(), 1, "stale fetch must not run on a fresh cache hit");
+        assert_eq!(v2[0].title, "One");
+        assert_eq!(fetch_calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn cache_expired_entry_is_refetched() {
+        let cache: Mutex<HashMap<String, (Instant, Vec<Chapter>)>> = Mutex::new(HashMap::new());
+        cache.lock().unwrap().insert(
+            "a".to_string(),
+            (
+                Instant::now() - CHAPTER_CACHE_TTL - Duration::from_secs(1),
+                vec![chapter("1", "Stale")],
+            ),
+        );
+
+        let fetch_calls = Arc::new(AtomicUsize::new(0));
+        let calls = fetch_calls.clone();
+        let v = cache_get_or_fetch(&cache, "a", CHAPTER_CACHE_TTL, async move {
+            calls.fetch_add(1, Ordering::SeqCst);
+            Ok(vec![chapter("2", "Fresh")])
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(
+            fetch_calls.load(Ordering::SeqCst),
+            1,
+            "expired entry must refetch"
+        );
+        assert_eq!(v[0].title, "Fresh");
+
+        // And the refreshed value is now served from cache.
+        let calls = fetch_calls.clone();
+        let v2 = cache_get_or_fetch(&cache, "a", CHAPTER_CACHE_TTL, async move {
+            calls.fetch_add(1, Ordering::SeqCst);
+            Ok(vec![])
+        })
+        .await
+        .unwrap();
+        assert_eq!(v2[0].title, "Fresh");
+        assert_eq!(fetch_calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn cache_keys_do_not_collide() {
+        let cache: Mutex<HashMap<String, (Instant, Vec<Chapter>)>> = Mutex::new(HashMap::new());
+
+        let v = cache_get_or_fetch(&cache, "id-a", CHAPTER_CACHE_TTL, async {
+            Ok(vec![chapter("1", "A")])
+        })
+        .await
+        .unwrap();
+        assert_eq!(v[0].title, "A");
+
+        // Different key must fetch its own value, not see "id-a"'s entry.
+        let v_b = cache_get_or_fetch(&cache, "id-b", CHAPTER_CACHE_TTL, async {
+            Ok(vec![chapter("2", "B")])
+        })
+        .await
+        .unwrap();
+        assert_eq!(v_b[0].title, "B");
+
+        // "id-a" is still cached under its own key.
+        let fetch_calls = Arc::new(AtomicUsize::new(0));
+        let calls = fetch_calls.clone();
+        let v_a_again = cache_get_or_fetch(&cache, "id-a", CHAPTER_CACHE_TTL, async move {
+            calls.fetch_add(1, Ordering::SeqCst);
+            Ok(vec![])
+        })
+        .await
+        .unwrap();
+        assert_eq!(v_a_again[0].title, "A");
+        assert_eq!(fetch_calls.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn cache_errors_are_not_cached() {
+        let cache: Mutex<HashMap<String, (Instant, Vec<Chapter>)>> = Mutex::new(HashMap::new());
+
+        let res = cache_get_or_fetch(&cache, "a", CHAPTER_CACHE_TTL, async {
+            Err(ShioriError::Other("fetch failed".into()))
+        })
+        .await;
+        assert!(res.is_err());
+        assert!(
+            cache.lock().unwrap().is_empty(),
+            "failed fetches must not be cached"
+        );
     }
 }
