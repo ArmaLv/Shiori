@@ -6,7 +6,7 @@ use crate::{
     AppState,
 };
 use serde::Serialize;
-use tauri::{Emitter, State};
+use tauri::{Emitter, Manager, State};
 use walkdir::WalkDir;
 
 #[derive(Clone, Serialize)]
@@ -760,10 +760,7 @@ pub async fn download_libgen_epub(
     title_hint: String,
     format_ext: Option<String>,
 ) -> Result<String> {
-    use futures::StreamExt;
-    use std::io::Write;
     use std::time::Duration;
-    use tauri::Manager;
 
     let all_mirrors: Vec<String> = serde_json::from_str(&url).unwrap_or_else(|_| vec![url.clone()]);
 
@@ -773,25 +770,57 @@ pub async fn download_libgen_epub(
         .build()
         .map_err(|e| crate::error::ShioriError::Other(e.to_string()))?;
 
-    let mut resp_opt: Option<reqwest::Response> = None;
-
-    // Helper to try and extract md5
+    // Helper to try and extract md5 (mirrors libgen.rs extract_md5_from_url)
     let extract_md5 = |url: &str| -> Option<String> {
         if let Ok(re) = regex::Regex::new(r#"(?i)md5=([a-f0-9]{32})"#) {
             if let Some(caps) = re.captures(url) {
                 return Some(caps.get(1).unwrap().as_str().to_string());
             }
         }
-        if let Ok(re) = regex::Regex::new(r#"(?i)/main/([a-f0-9]{32})"#) {
+        if let Ok(re) = regex::Regex::new(r#"(?i)/main/(?:[0-9]+/)?([a-f0-9]{32})"#) {
             if let Some(caps) = re.captures(url) {
-                return Some(caps.get(1).unwrap().as_str().to_string());
+                return Some(caps.get(1).unwrap().as_str().to_ascii_lowercase());
             }
         }
         None
     };
 
+    let safe_title = title_hint
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == ' ' || *c == '-')
+        .collect::<String>();
+    let ext = format_ext
+        .unwrap_or_else(|| "epub".to_string())
+        .replace(".", "")
+        .to_lowercase();
+    let file_name = format!("{}.{}", safe_title.trim(), ext);
+
+    let state = app_handle.state::<AppState>();
+    let prefs = crate::commands::preferences::get_user_preferences(state.clone()).await?;
+    let downloads_dir = if !prefs.default_import_path.is_empty()
+        && !prefs.default_import_path.starts_with("content://")
+    {
+        std::path::PathBuf::from(&prefs.default_import_path).join("Online Books")
+    } else {
+        app_handle
+            .path()
+            .app_data_dir()
+            .map_err(|e| crate::error::ShioriError::Other(format!("Failed to get app dir: {}", e)))?
+            .join("downloads")
+    };
+    std::fs::create_dir_all(&downloads_dir)
+        .map_err(|e| crate::error::ShioriError::Other(e.to_string()))?;
+
+    let file_path = downloads_dir.join(file_name);
+    let target_id = all_mirrors.first().cloned().unwrap_or(url);
+
+    let _download_guard =
+        crate::ActiveDownloads::increment(app_handle.state::<crate::ActiveDownloads>());
+
+    let mut resp_opt: Option<reqwest::Response> = None;
+    let mut bad_download_reason: Option<String> = None;
+
     // Attempt 1: Try get.php from libgen.li (bypasses Cloudflare entirely)
-    let mut get_php_url = None;
     if let Some(md5) = extract_md5(&all_mirrors.first().cloned().unwrap_or_default()) {
         let ads_url = format!("https://libgen.li/ads.php?md5={}", md5);
         if let Ok(ads_resp) = client.get(&ads_url).send().await {
@@ -801,29 +830,61 @@ pub async fn download_libgen_epub(
                 {
                     if let Some(caps) = re.captures(&text) {
                         let href = caps.get(1).unwrap().as_str();
-                        if href.starts_with("http") {
-                            get_php_url = Some(href.to_string());
+                        let direct_url = if href.starts_with("http") {
+                            href.to_string()
                         } else if href.starts_with("/") {
-                            get_php_url = Some(format!("https://libgen.li{}", href));
+                            format!("https://libgen.li{}", href)
                         } else {
-                            get_php_url = Some(format!("https://libgen.li/{}", href));
+                            format!("https://libgen.li/{}", href)
+                        };
+
+                        if let Ok(file_resp) = client.get(&direct_url).send().await {
+                            if file_resp.status().is_success() {
+                                let content_type = file_resp
+                                    .headers()
+                                    .get(reqwest::header::CONTENT_TYPE)
+                                    .and_then(|v| v.to_str().ok())
+                                    .unwrap_or("");
+                                if !content_type.contains("text/html") {
+                                    // Stream to disk, then verify magic bytes. If the
+                                    // served content doesn't match the advertised
+                                    // format, fall through to the mirror loop below.
+                                    match stream_response_to_file(
+                                        file_resp,
+                                        &file_path,
+                                        &app_handle,
+                                        &target_id,
+                                    )
+                                    .await
+                                    {
+                                        Ok(()) => {
+                                            match verify_downloaded_file(&file_path, &ext) {
+                                                Ok(()) => {
+                                                    emit_download_completed(
+                                                        &app_handle,
+                                                        &target_id,
+                                                        &file_path,
+                                                    );
+                                                    return Ok(file_path
+                                                        .to_string_lossy()
+                                                        .to_string());
+                                                }
+                                                Err(reason) => {
+                                                    bad_download_reason = Some(reason);
+                                                    let _ =
+                                                        std::fs::remove_file(&file_path);
+                                                }
+                                            }
+                                        }
+                                        Err(e) => {
+                                            bad_download_reason = Some(e.to_string());
+                                            let _ = std::fs::remove_file(&file_path);
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
-                }
-            }
-        }
-    }
-
-    if let Some(direct_url) = get_php_url {
-        if let Ok(file_resp) = client.get(&direct_url).send().await {
-            if file_resp.status().is_success() {
-                let content_type = file_resp
-                    .headers()
-                    .get(reqwest::header::CONTENT_TYPE)
-                    .and_then(|v| v.to_str().ok())
-                    .unwrap_or("");
-                if !content_type.contains("text/html") {
-                    resp_opt = Some(file_resp);
                 }
             }
         }
@@ -926,48 +987,125 @@ pub async fn download_libgen_epub(
 
     let resp = match resp_opt {
         Some(r) => r,
-        None => return Err(crate::error::ShioriError::Other("All Libgen mirrors failed or were blocked by Cloudflare/ISP. Try downloading from another source like Gutenberg.".to_string())),
+        None => {
+            let _ = std::fs::remove_file(&file_path);
+            let mut msg = "All Libgen mirrors failed or were blocked by Cloudflare/ISP. Try downloading from another source like Gutenberg.".to_string();
+            if let Some(reason) = bad_download_reason {
+                msg.push_str(&format!(" ({})", reason));
+            }
+            return Err(crate::error::ShioriError::Other(msg));
+        }
     };
+
+    stream_response_to_file(resp, &file_path, &app_handle, &target_id).await?;
+
+    // Final format verification: a mirror may serve an HTML error page or a
+    // different format than the entry advertised.
+    if let Err(reason) = verify_downloaded_file(&file_path, &ext) {
+        let _ = std::fs::remove_file(&file_path);
+        return Err(crate::error::ShioriError::Other(reason));
+    }
+
+    emit_download_completed(&app_handle, &target_id, &file_path);
+
+    Ok(file_path.to_string_lossy().to_string())
+}
+
+/// Detect book format from magic bytes (cheap prefix scan — no full parse).
+/// Returns a lowercase format name: `pdf`, `epub`, `mobi`, `fb2`, `html`,
+/// `txt` — or `None` when the content is unrecognized/binary.
+fn detect_book_format(data: &[u8]) -> Option<&'static str> {
+    if data.starts_with(b"%PDF") {
+        return Some("pdf");
+    }
+    if data.starts_with(b"PK\x03\x04") {
+        // ZIP-based container: EPUB (also DOCX/CBZ — all fine for libgen books)
+        return Some("epub");
+    }
+    if data.len() >= 68 {
+        let palm_magic = &data[60..68];
+        // PalmDB record 0 magic: MOBI/AZW use BOOKMOBI; PalmDOC uses TEXtREAd
+        if palm_magic == b"BOOKMOBI" || palm_magic == b"TEXtREAd" {
+            return Some("mobi");
+        }
+    }
+    // Raw \xe3\x8b\xb6 marker seen at offset 60 on some MOBI variants
+    if data.len() >= 63 && data[60] == 0xe3 && data[61] == 0x8b && data[62] == 0xb6 {
+        return Some("mobi");
+    }
+    // XML-ish content: FB2 / XHTML. Skip a UTF-8 BOM if present.
+    let head = if data.starts_with(b"\xEF\xBB\xBF") { &data[3..] } else { data };
+    let head = &head[..head.len().min(512)];
+    let lower = String::from_utf8_lossy(head).to_ascii_lowercase();
+    if lower.contains("<fictionbook") {
+        return Some("fb2");
+    }
+    if lower.starts_with("<!doctype html") || lower.starts_with("<html") {
+        return Some("html");
+    }
+    if std::str::from_utf8(head).is_ok() {
+        return Some("txt");
+    }
+    None
+}
+
+/// Whether a detected format satisfies the advertised (requested) extension.
+/// Unknown advertised formats (djvu, rar, ...) are never blocked — we can't
+/// cheaply verify them and don't want to reject valid downloads.
+fn format_satisfies(expected: &str, actual: Option<&str>) -> bool {
+    match expected {
+        "pdf" => actual == Some("pdf"),
+        "epub" => actual == Some("epub"),
+        "mobi" | "azw" | "azw3" => matches!(actual, Some("mobi")),
+        "fb2" => actual == Some("fb2"),
+        "txt" | "text" => actual == Some("txt"),
+        "html" | "htm" | "xhtml" => actual == Some("html"),
+        _ => true,
+    }
+}
+
+/// Verify a downloaded file's magic bytes match the requested format.
+fn verify_downloaded_file(
+    file_path: &std::path::Path,
+    expected_ext: &str,
+) -> std::result::Result<(), String> {
+    use std::io::Read;
+
+    let mut buf = [0u8; 512];
+    let mut f = std::fs::File::open(file_path)
+        .map_err(|e| format!("Failed to open downloaded file for verification: {}", e))?;
+    let n = f
+        .read(&mut buf)
+        .map_err(|e| format!("Failed to read downloaded file for verification: {}", e))?;
+
+    let actual = detect_book_format(&buf[..n]);
+    if format_satisfies(expected_ext, actual) {
+        Ok(())
+    } else {
+        Err(format!(
+            "Downloaded file looks like '{}' but the LibGen entry advertised '{}'. The mirror served an error page or a different format — try again or pick another entry.",
+            actual.unwrap_or("unknown"),
+            expected_ext
+        ))
+    }
+}
+
+/// Stream a response body to disk, emitting progress events along the way.
+async fn stream_response_to_file(
+    resp: reqwest::Response,
+    file_path: &std::path::Path,
+    app_handle: &tauri::AppHandle,
+    target_id: &str,
+) -> Result<()> {
+    use futures::StreamExt;
+    use std::io::Write;
 
     let total_bytes = resp.content_length();
-    let _download_guard =
-        crate::ActiveDownloads::increment(app_handle.state::<crate::ActiveDownloads>());
-
-    let safe_title = title_hint
-        .chars()
-        .filter(|c| c.is_ascii_alphanumeric() || *c == ' ' || *c == '-')
-        .collect::<String>();
-    let ext = format_ext
-        .unwrap_or_else(|| "epub".to_string())
-        .replace(".", "")
-        .to_lowercase();
-    let file_name = format!("{}.{}", safe_title.trim(), ext);
-
-    let state = app_handle.state::<AppState>();
-    let prefs = crate::commands::preferences::get_user_preferences(state.clone()).await?;
-    let downloads_dir = if !prefs.default_import_path.is_empty()
-        && !prefs.default_import_path.starts_with("content://")
-    {
-        std::path::PathBuf::from(&prefs.default_import_path).join("Online Books")
-    } else {
-        app_handle
-            .path()
-            .app_data_dir()
-            .map_err(|e| crate::error::ShioriError::Other(format!("Failed to get app dir: {}", e)))?
-            .join("downloads")
-    };
-    std::fs::create_dir_all(&downloads_dir)
-        .map_err(|e| crate::error::ShioriError::Other(e.to_string()))?;
-
-    let file_path = downloads_dir.join(file_name);
-
-    let mut file = std::fs::File::create(&file_path)
+    let mut file = std::fs::File::create(file_path)
         .map_err(|e| crate::error::ShioriError::Other(e.to_string()))?;
 
     let mut downloaded_bytes = 0u64;
     let mut stream = resp.bytes_stream();
-    let target_id = all_mirrors.first().cloned().unwrap_or(url);
-
     let mut last_emit = std::time::Instant::now();
 
     while let Some(chunk_result) = stream.next().await {
@@ -981,21 +1119,28 @@ pub async fn download_libgen_epub(
                 "target_id": target_id,
                 "status": "downloading",
                 "downloaded_bytes": downloaded_bytes,
-                "total_bytes": total_bytes,
+                "total_bytes": total_bytes
             });
             let _ = app_handle.emit("online-book-download-progress", payload);
             last_emit = std::time::Instant::now();
         }
     }
 
+    Ok(())
+}
+
+/// Emit the completed progress event for a finished download.
+fn emit_download_completed(
+    app_handle: &tauri::AppHandle,
+    target_id: &str,
+    file_path: &std::path::Path,
+) {
     let payload = serde_json::json!({
         "target_id": target_id,
         "status": "completed",
         "file_path": file_path.to_string_lossy(),
     });
     let _ = app_handle.emit("online-book-download-progress", payload);
-
-    Ok(file_path.to_string_lossy().to_string())
 }
 
 #[tauri::command]
@@ -1150,4 +1295,84 @@ pub async fn import_online_manga_chapters(
     })
     .await
     .map_err(|e| crate::error::ShioriError::Other(e.to_string()))?
+}
+
+#[cfg(test)]
+mod download_format_tests {
+    use super::*;
+
+    fn detect(data: &[u8]) -> Option<&'static str> {
+        detect_book_format(data)
+    }
+
+    #[test]
+    fn detect_pdf() {
+        assert_eq!(detect(b"%PDF-1.4\n%\xE2\xE3\xCF\xD3\n"), Some("pdf"));
+    }
+
+    #[test]
+    fn detect_epub() {
+        assert_eq!(detect(b"PK\x03\x04mimetypeapplication/epub+zip"), Some("epub"));
+    }
+
+    #[test]
+    fn detect_mobi_variants() {
+        // BOOKMOBI at offset 60
+        let mut mobi = vec![0u8; 68];
+        mobi[60..68].copy_from_slice(b"BOOKMOBI");
+        assert_eq!(detect(&mobi), Some("mobi"));
+
+        // TEXtREAd at offset 60 (PalmDOC)
+        let mut palm = vec![0u8; 68];
+        palm[60..68].copy_from_slice(b"TEXtREAd");
+        assert_eq!(detect(&palm), Some("mobi"));
+
+        // \xe3\x8b\xb6 marker at offset 60
+        let mut raw = vec![0u8; 63];
+        raw[60] = 0xe3;
+        raw[61] = 0x8b;
+        raw[62] = 0xb6;
+        assert_eq!(detect(&raw), Some("mobi"));
+    }
+
+    #[test]
+    fn detect_fb2_with_bom_and_xml_decl() {
+        let fb2 = b"\xEF\xBB\xBF<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<FictionBook xmlns=\"http://www.gribuser.ru/xml/fictionbook/2.0\">";
+        assert_eq!(detect(fb2), Some("fb2"));
+    }
+
+    #[test]
+    fn detect_html_and_txt() {
+        assert_eq!(detect(b"<!DOCTYPE html><html><body>error</body></html>"), Some("html"));
+        assert_eq!(detect(b"<html><body>error</body></html>"), Some("html"));
+        assert_eq!(detect(b"Once upon a time...\nThe end."), Some("txt"));
+    }
+
+    #[test]
+    fn detect_unknown_binary() {
+        assert_eq!(detect(&[0x00, 0x01, 0x02, 0xFF, 0xFE, 0xFD]), None);
+    }
+
+    #[test]
+    fn format_satisfies_matching_and_mismatching() {
+        assert!(format_satisfies("pdf", Some("pdf")));
+        assert!(format_satisfies("epub", Some("epub")));
+        assert!(format_satisfies("mobi", Some("mobi")));
+        assert!(format_satisfies("azw3", Some("mobi")));
+        assert!(format_satisfies("azw", Some("mobi")));
+        assert!(format_satisfies("txt", Some("txt")));
+        assert!(format_satisfies("html", Some("html")));
+        assert!(format_satisfies("fb2", Some("fb2")));
+
+        // Mismatches — the error path
+        assert!(!format_satisfies("pdf", Some("epub")));
+        assert!(!format_satisfies("epub", Some("html")));
+        assert!(!format_satisfies("pdf", Some("txt")));
+        assert!(!format_satisfies("pdf", None));
+
+        // Unknown advertised formats are never blocked
+        assert!(format_satisfies("djvu", Some("html")));
+        assert!(format_satisfies("djvu", None));
+        assert!(format_satisfies("rar", Some("txt")));
+    }
 }

@@ -87,23 +87,31 @@ export function LibgenBookDetails({ book, open, onOpenChange }: Props) {
   const format = extra.format || 'EPUB';
   const fileSize = extra.file_size;
 
-  const resolveEpubUrl = async (): Promise<string | null> => {
+  /** All direct (get.php) download URLs for this book, in page order. */
+  const resolveDirectUrls = async (): Promise<string[]> => {
     try {
-      // 1. Fetch pages (which are download links) from libgen backend
       const pages = await pluginApi.getPages('libgen', book.id);
-      
-      // 2. Find first direct download link containing get.php
-      const directPage = pages.find(p => p.url.startsWith('direct|'));
-      if (directPage) {
-        // Strip direct| prefix
-        return directPage.url.replace(/^direct\|/, '');
-      }
-      
-      return null;
+      return pages
+        .filter(p => p.url.startsWith('direct|'))
+        .map(p => p.url.replace(/^direct\|/, ''));
     } catch (err) {
-      logger.error('Failed to resolve LibGen download link:', err);
-      return null;
+      logger.error('Failed to resolve LibGen download links:', err);
+      return [];
     }
+  };
+
+  const resolveEpubUrl = async (): Promise<string | null> => {
+    const urls = await resolveDirectUrls();
+    return urls[0] ?? null;
+  };
+
+  /** Mirrors for the backend fallback chain: remaining direct links first,
+   *  then the raw mirror links from the search row. */
+  const collectMirrors = (directUrls: string[]): string[] => {
+    const rawMirrors = book.extra
+      ? Object.keys(book.extra).filter(k => k.startsWith('mirror_')).map(k => book.extra![k] as string)
+      : [];
+    return [...directUrls.slice(1), ...rawMirrors];
   };
 
   const handleDownload = async () => {
@@ -114,10 +122,11 @@ export function LibgenBookDetails({ book, open, onOpenChange }: Props) {
         throw new Error('No direct download links found for this book on LibGen.');
       }
 
+      const directUrls = await resolveDirectUrls();
       const result = await downloadAndImportLibgen(
-        epubUrl, 
-        book.title, 
-        book.extra ? Object.keys(book.extra).filter(k => k.startsWith('mirror_')).map(k => book.extra![k] as string) : [],
+        epubUrl,
+        book.title,
+        collectMirrors(directUrls),
         format.toLowerCase()
       );
       if (result.success.length > 0 || result.duplicates.length > 0) {
@@ -141,11 +150,12 @@ export function LibgenBookDetails({ book, open, onOpenChange }: Props) {
         throw new Error('No direct download links found for this book on LibGen.');
       }
 
-      // 1. Download and import directly
+      // 1. Download and import directly (all direct links as fallback mirrors)
+      const directUrls = await resolveDirectUrls();
       const result = await downloadAndImportLibgen(
-        epubUrl, 
-        book.title, 
-        book.extra ? Object.keys(book.extra).filter(k => k.startsWith('mirror_')).map(k => book.extra![k] as string) : [],
+        epubUrl,
+        book.title,
+        collectMirrors(directUrls),
         format.toLowerCase()
       );
       const path = result.success[0] || result.duplicates[0];

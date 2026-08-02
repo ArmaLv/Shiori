@@ -9,6 +9,30 @@ use crate::sources::{
 };
 
 const LIBGEN_BASE_URL: &str = "https://libgen.li";
+
+/// Extract an md5 hash from a LibGen URL. Handles every mirror shape found in
+/// the wild: `md5=` query params (`ads.php?md5=...`, `get.php?md5=...`),
+/// `/main/<md5>` path segments (`http://62.182.86.140/main/123/<md5>/file.pdf`)
+/// and bare path forms. Returns `None` when the URL carries no md5.
+fn extract_md5_from_url(url: &str) -> Option<String> {
+    // 1. md5= query parameter anywhere in the URL (?md5= or &md5=).
+    //    The trailing (?:[^a-f0-9]|$) boundary rejects partial matches of
+    //    longer hex runs (the regex crate has no look-around).
+    if let Ok(re) = regex::Regex::new(r"(?i)[?&]md5=([a-f0-9]{32})(?:[^a-f0-9]|$)") {
+        if let Some(caps) = re.captures(url) {
+            return Some(caps.get(1).unwrap().as_str().to_ascii_lowercase());
+        }
+    }
+    // 2. /main/<md5> path segment, optionally with a numeric id prefix
+    //    (`/main/<id>/<md5>/<filename>` — the id prefix would otherwise break
+    //    the 32-char run because it is also hex and ends at a `/`).
+    if let Ok(re) = regex::Regex::new(r"(?i)/main/(?:[0-9]+/)?([a-f0-9]{32})(?:[^a-f0-9]|$)") {
+        if let Some(caps) = re.captures(url) {
+            return Some(caps.get(1).unwrap().as_str().to_ascii_lowercase());
+        }
+    }
+    None
+}
 const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 const MAX_LIMIT: u32 = 75;
 
@@ -139,13 +163,7 @@ impl LibgenSource {
 
         let detail_id = mirror_links
             .iter()
-            .find_map(|url| {
-                reqwest::Url::parse(url).ok().and_then(|u| {
-                    u.query_pairs()
-                        .find(|(k, _)| k == "md5")
-                        .map(|(_, v)| v.to_string())
-                })
-            })
+            .find_map(|url| extract_md5_from_url(url))
             .unwrap_or_else(|| format!("libgen-{}", uuid::Uuid::new_v4()));
 
         let mut extra = HashMap::new();
@@ -428,5 +446,95 @@ impl Source for LibgenSource {
         }
 
         Ok(pages)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extract_md5_from_query_param() {
+        assert_eq!(
+            extract_md5_from_url("https://libgen.li/ads.php?md5=1c135c86623d4e6e2af8d7fa0d44d3c4"),
+            Some("1c135c86623d4e6e2af8d7fa0d44d3c4".to_string())
+        );
+    }
+
+    #[test]
+    fn extract_md5_from_get_php() {
+        assert_eq!(
+            extract_md5_from_url("https://libgen.li/get.php?md5=5369befdffea0a854262e22c9d616dde&key=BZUS555TSDVXZI7E"),
+            Some("5369befdffea0a854262e22c9d616dde".to_string())
+        );
+    }
+
+    #[test]
+    fn extract_md5_from_main_path() {
+        // Direct file mirror without any query params
+        assert_eq!(
+            extract_md5_from_url("http://62.182.86.140/main/89000/ebdc52b16339ea134fbc27279d1a0d0f/The_History_of_the_Hobbit.azw3"),
+            Some("ebdc52b16339ea134fbc27279d1a0d0f".to_string())
+        );
+        // /main/ path with a query string appended
+        assert_eq!(
+            extract_md5_from_url("http://62.182.86.140/main/89000/ebdc52b16339ea134fbc27279d1a0d0f/book.mobi?download=1"),
+            Some("ebdc52b16339ea134fbc27279d1a0d0f".to_string())
+        );
+    }
+
+    #[test]
+    fn extract_md5_uppercase_hex() {
+        assert_eq!(
+            extract_md5_from_url("https://libgen.li/get.php?md5=1C135C86623D4E6E2AF8D7FA0D44D3C4"),
+            Some("1c135c86623d4e6e2af8d7fa0d44d3c4".to_string())
+        );
+    }
+
+    #[test]
+    fn extract_md5_returns_none_without_md5() {
+        assert_eq!(extract_md5_from_url("https://randombook.org/book/12345"), None);
+        assert_eq!(extract_md5_from_url("https://libgen.li/ads.php?id=42"), None);
+        assert_eq!(extract_md5_from_url("https://libgen.li/main/89000/nothex/book.pdf"), None);
+        assert_eq!(extract_md5_from_url(""), None);
+    }
+
+    #[test]
+    fn extract_md5_rejects_short_or_long_hex() {
+        // 31 hex chars — too short
+        assert_eq!(
+            extract_md5_from_url("https://libgen.li/ads.php?md5=1c135c86623d4e6e2af8d7fa0d44d3c"),
+            None
+        );
+        // 33 hex chars — too long
+        assert_eq!(
+            extract_md5_from_url("https://libgen.li/ads.php?md5=1c135c86623d4e6e2af8d7fa0d44d3c4a"),
+            None
+        );
+    }
+
+    #[test]
+    fn normalize_href_forms() {
+        assert_eq!(
+            LibgenSource::normalize_href("/ads.php?md5=abc"),
+            "https://libgen.li/ads.php?md5=abc"
+        );
+        assert_eq!(
+            LibgenSource::normalize_href("ads.php?md5=abc"),
+            "https://libgen.li/ads.php?md5=abc"
+        );
+        assert_eq!(
+            LibgenSource::normalize_href("http://62.182.86.140/main/1/abc/book.pdf"),
+            "http://62.182.86.140/main/1/abc/book.pdf"
+        );
+    }
+
+    #[test]
+    fn parse_size_to_bytes_units() {
+        assert_eq!(LibgenSource::parse_size_to_bytes("1.5 MB"), Some(1572864));
+        assert_eq!(LibgenSource::parse_size_to_bytes("512 KB"), Some(524288));
+        assert_eq!(LibgenSource::parse_size_to_bytes("2 GB"), Some(2147483648));
+        assert_eq!(LibgenSource::parse_size_to_bytes(""), None);
+        assert_eq!(LibgenSource::parse_size_to_bytes("n/a"), None);
     }
 }
