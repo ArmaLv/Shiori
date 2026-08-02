@@ -20,6 +20,7 @@ import { DoodleToolbar } from './DoodleToolbar';
 import { useDoodleStore } from '@/store/doodleStore';
 import { sanitizeBookContent } from '@/lib/sanitize';
 import { applyHighlightsToDOM } from '@/lib/highlightAnnotations';
+import { handleExternalLinkClick } from '@/lib/externalLinks';
 import { resolveReadingFontCss } from '@/lib/readingFonts';
 import { BookOpen, Highlighter, Search } from '@/components/icons';
 import '@/styles/premium-reader.css';
@@ -521,6 +522,13 @@ export function GenericHtmlReader({ bookPath, bookId, format, readerContent, onC
                     <div className="premium-chapter-page" style={{ height: 'auto', minHeight: '100%' }}>
                         <div
                             ref={contentRef}
+                            onClick={(e) => {
+                                // External links (http/https/mailto) → system
+                                // browser; internal links (anchors, relative
+                                // chapter links) bubble on untouched so the
+                                // existing double-click handler still works.
+                                handleExternalLinkClick(e.nativeEvent, contentRef.current);
+                            }}
                             className="premium-chapter-content"
                             style={{
                                 fontFamily: resolveReadingFontCss(fontFamily),

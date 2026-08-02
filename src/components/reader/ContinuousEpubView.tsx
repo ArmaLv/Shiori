@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef, useLayoutEffect, useCallback } from
 import { api, type BookMetadata } from '@/lib/tauri';
 import { ChapterHtml, processEpubHtml } from './PremiumEpubReader';
 import { applyHighlightsToDOM } from '@/lib/highlightAnnotations';
+import { handleExternalLinkClick } from '@/lib/externalLinks';
 import { useDoodleStore } from '@/store/doodleStore';
 import DoodleCanvas from './DoodleCanvas';
 
@@ -344,6 +345,11 @@ export function ContinuousEpubView({
     >
       <div 
         ref={contentRef}
+        onClick={(e) => {
+          // External links → system browser; internal links stay untouched so
+          // hash/relative navigation keeps working inside the reader.
+          handleExternalLinkClick(e.nativeEvent, contentRef?.current ?? null);
+        }}
         className={`premium-content-container premium-content-container--${widthClass}`}
       >
         

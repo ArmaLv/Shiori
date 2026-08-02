@@ -238,10 +238,9 @@ export function useBookOpen() {
 
       // Non-EPUB local formats: offer "Convert to EPUB / Open as-is" once per
       // book per session (the user's choice is remembered in nativeOpenedRef).
-      // Android: skip the Radix-portal dialog (touch events are unreliable in
-      // Android WebView portals — same reason the resume dialog is skipped)
-      // and open natively; conversion stays available via the menu.
-      if (!isAndroid && CONVERTIBLE_FORMATS.has(format) && !nativeOpenedRef.current.has(bookId)) {
+      // On Android the dialog renders a plain fixed overlay (no Radix portal)
+      // so touch events stay reliable — see ConvertOrOpenDialog.
+      if (CONVERTIBLE_FORMATS.has(format) && !nativeOpenedRef.current.has(bookId)) {
         setConvertChoice({
           book: { id: bookId, title: book.title, format: book.file_format },
           openNative: () => {

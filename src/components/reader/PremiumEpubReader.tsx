@@ -16,6 +16,7 @@ import { TextSelectionToolbar } from './TextSelectionToolbar';
 import { ChevronLeft, ChevronRight, Loader2, AlertCircle, Search, BookOpen, Highlighter } from '@/components/icons';
 import { sanitizeBookContent } from '@/lib/sanitize';
 import { applyHighlightsToDOM } from '@/lib/highlightAnnotations';
+import { handleExternalLinkClick } from '@/lib/externalLinks';
 import { useToastStore } from '@/store/toastStore';
 import { ReaderTopBar } from './ReaderTopBar';
 import { ReadingProgressIndicator } from './ReadingProgressIndicator';
@@ -1173,6 +1174,11 @@ export function PremiumEpubReader({ bookPath, bookId, readerContent, onClose }: 
         >
           <div
             ref={contentContainerRef}
+            onClick={(e) => {
+              // External links (http/https/mailto) → system browser; internal
+              // links (anchors, epubcfi, relative) bubble on untouched.
+              handleExternalLinkClick(e.nativeEvent, contentContainerRef.current);
+            }}
             className={`premium-content-container premium-content-container--${width} ${twoPageView ? 'premium-content-container--two-page' : ''} ${isPaginated ? 'premium-content-container--paginated' : ''}`}
           >
             {twoPageView && adjacentChapter ? (

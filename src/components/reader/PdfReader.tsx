@@ -12,6 +12,7 @@ import {
 } from '@/store/premiumReaderStore';
 import { useDoodleStore } from '@/store/doodleStore';
 import { useToastStore } from '@/store/toastStore';
+import { handleExternalLinkClick } from '@/lib/externalLinks';
 import { ReaderTopBar } from './ReaderTopBar';
 import { PremiumSidebar } from './PremiumSidebar';
 import { DoodleCanvas } from './DoodleCanvas';
@@ -964,6 +965,11 @@ export function PdfReader({ bookPath, bookId, readerContent, onClose }: PdfReade
 
       <div
         ref={containerRef}
+        onClick={(e) => {
+          // PDF link annotations render as real <a> elements in react-pdf's
+          // text layer — route external ones to the system browser.
+          handleExternalLinkClick(e.nativeEvent, containerRef.current);
+        }}
         className={`premium-reading-canvas ${isFocusMode ? 'premium-reading-canvas--focus-mode' : ''} pdf-reading-canvas pdf-reading-canvas--${viewMode}`}
         style={{
           backgroundColor: resolvedBackgroundColor,
