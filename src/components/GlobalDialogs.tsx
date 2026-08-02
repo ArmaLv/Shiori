@@ -16,6 +16,7 @@ const AdvancedFilterDialog = lazy(() => import("./library/AdvancedFilterDialog")
 const ShortcutsDialog = lazy(() => import("./dialogs/ShortcutsDialog").then(m => ({ default: m.ShortcutsDialog })))
 const CommandPalette = lazy(() => import("./CommandPalette").then(m => ({ default: m.CommandPalette })))
 const ResumeReadingDialog = lazy(() => import("./reader/ResumeReadingDialog").then(m => ({ default: m.ResumeReadingDialog })))
+const ConvertOrOpenDialog = lazy(() => import("./conversion/ConvertOrOpenDialog").then(m => ({ default: m.ConvertOrOpenDialog })))
 const ShelfSelectDialog = lazy(() => import("./library/ShelfSelectDialog").then(m => ({ default: m.ShelfSelectDialog })))
 const TagSelectDialog = lazy(() => import("./library/TagSelectDialog").then(m => ({ default: m.TagSelectDialog })))
 const UpdateDialog = lazy(() => import("./UpdateDialog").then(m => ({ default: m.UpdateDialog })))
@@ -24,6 +25,8 @@ export interface GlobalDialogsProps {
   books: Book[]
   dialogs: any
   resumeReading: any
+  convertChoice: { book: import('./conversion/ConvertOrOpenDialog').ConvertOrOpenBook; openNative: () => void } | null
+  closeConvertChoice: () => void
   handleOpenBook: (id: number, location?: string) => void
   handleViewDetails: (id: number) => void
   handleEditBook: (id: number) => void
@@ -36,6 +39,8 @@ export function GlobalDialogs({
   books,
   dialogs,
   resumeReading,
+  convertChoice,
+  closeConvertChoice,
   handleOpenBook,
   handleViewDetails,
   handleEditBook,
@@ -108,6 +113,16 @@ export function GlobalDialogs({
       <Suspense fallback={null}>
         <SettingsDialog open={dialogs.settingsDialogOpen} onOpenChange={dialogs.setSettingsDialogOpen} />
       </Suspense>
+
+      {convertChoice && (
+        <Suspense fallback={null}>
+          <ConvertOrOpenDialog
+            book={convertChoice.book}
+            onOpenNative={convertChoice.openNative}
+            onClose={closeConvertChoice}
+          />
+        </Suspense>
+      )}
 
       {resumeReading.pendingResume && (
         <Suspense fallback={null}>

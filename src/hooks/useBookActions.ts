@@ -107,6 +107,9 @@ export function useBookActions(books: Book[]) {
       onStartOver: bookOpen.handleStartOver,
       onDialogOpenChange: bookOpen.handleResumeDialogOpenChange,
     },
+    // Convert-or-open choice for non-EPUB local formats
+    convertChoice: bookOpen.convertChoice,
+    closeConvertChoice: bookOpen.closeConvertChoice,
   };
 
 }

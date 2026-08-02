@@ -10,6 +10,15 @@ interface ConversionProgressPayload {
   percent: number;
 }
 
+/** Payload of the job-queue `conversion:progress` events (convert_book). */
+interface JobProgressPayload {
+  id?: string;
+  book_id?: number | null;
+  progress?: number;
+  message?: string;
+  status?: string;
+}
+
 interface ConversionProgressProps {
   /** Show the overlay — controlled by the parent */
   visible: boolean;
@@ -61,16 +70,33 @@ export function ConversionProgress({
 
     let active = true;
 
+    // Legacy `conversion-progress` (dash) — {stage, percent}, emitted by the
+    // old auto-convert-on-open pipeline.
     listen<ConversionProgressPayload>('conversion-progress', (event) => {
       if (!active) return;
       const { stage: s, percent: p } = event.payload;
       setStage(s);
       setPercent(Math.min(100, Math.max(0, p)));
-      if (p >= 100) {
-        onComplete?.();
-      }
+      if (p >= 100) onComplete?.();
     }).then((fn) => {
       unlistenRef.current = fn;
+    });
+
+    // Job-queue `conversion:progress` (colon) — {progress, message, status},
+    // emitted by convert_book / the conversion engine.
+    listen<JobProgressPayload>('conversion:progress', (event) => {
+      if (!active) return;
+      const p = event.payload.progress ?? 0;
+      setStage(event.payload.message || event.payload.status || 'Converting…');
+      setPercent(Math.min(100, Math.max(0, p)));
+      if (p >= 100) onComplete?.();
+    }).then((fn) => {
+      // Keep both listeners; unlisten both on cleanup.
+      const prev = unlistenRef.current;
+      unlistenRef.current = () => {
+        prev?.();
+        fn();
+      };
     });
 
     return () => {

@@ -39,6 +39,11 @@ interface ConvertToEpubMenuItemProps {
   reopenOnSuccess?: boolean;
   /** Called when the conversion finishes (success or failure) */
   onDone?: () => void;
+  /** Start the conversion automatically on mount (used by dialogs) */
+  autoStart?: boolean;
+  /** Called after the converted EPUB is imported + the original removed,
+   *  with the new library book id (null when import/trash was skipped). */
+  onImported?: (newBookId: number | null) => void;
 }
 
 /** Formats that are already EPUB (or not local files) — no conversion offered. */
@@ -55,6 +60,8 @@ export function ConvertToEpubMenuItem({
   variant = 'menu',
   reopenOnSuccess = false,
   onDone,
+  autoStart = false,
+  onImported,
 }: ConvertToEpubMenuItemProps) {
   const [isConverting, setIsConverting] = useState(false);
 
@@ -63,24 +70,46 @@ export function ConvertToEpubMenuItem({
   const finishedRef = useRef(false);
   const graceTimerRef = useRef<number | null>(null);
 
-  const finishSuccess = useCallback(() => {
+  const finishSuccess = useCallback(async () => {
     if (finishedRef.current) return;
     finishedRef.current = true;
     setIsConverting(false);
+    const resultPath = resultPathRef.current;
+
+    // Auto-import the converted EPUB and remove the original (recycle bin
+    // when enabled) so the library holds a single EPUB copy — no duplicates.
+    let newBookId: number | null = null;
+    if (resultPath) {
+      try {
+        const imported = await api.importBooks([resultPath]);
+        const importedPath = imported.success[0];
+        if (importedPath) {
+          await api.deleteBooks([bookId]);
+          await useLibraryStore.getState().loadInitialBooks().catch?.(() => {});
+          const books = useLibraryStore.getState().books;
+          newBookId = books.find((b) => b.file_path === importedPath)?.id ?? null;
+        }
+      } catch (err) {
+        logger.warn('[ConvertToEpub] import/trash step failed:', err);
+      }
+    }
+
     useToastStore.getState().addToast({
       title: 'Converted to EPUB',
-      description: 'The EPUB file is ready.',
+      description: newBookId !== null
+        ? 'Imported to your library — the original was removed.'
+        : 'The EPUB file is ready.',
       variant: 'success',
       duration: 3000,
     });
-    if (reopenOnSuccess && resultPathRef.current) {
-      // Swap the open reader to the freshly converted EPUB.
+    if (reopenOnSuccess && newBookId !== null && resultPath) {
+      // Swap the open reader to the freshly imported EPUB.
       useReaderStore.getState().setStartFromBeginning(false);
-      useReaderStore.getState().openBook(bookId, resultPathRef.current, 'epub');
+      useReaderStore.getState().openBook(newBookId, resultPath, 'epub');
     }
-    useLibraryStore.getState().loadInitialBooks().catch?.(() => {});
+    onImported?.(newBookId);
     onDone?.();
-  }, [bookId, onDone, reopenOnSuccess]);
+  }, [bookId, onDone, onImported, reopenOnSuccess]);
 
   const finishError = useCallback((message: string) => {
     if (finishedRef.current) return;
@@ -171,6 +200,15 @@ export function ConvertToEpubMenuItem({
     }
   }, [bookId, isConverting, finishSuccess, finishError]);
 
+  // Dialogs may start the conversion automatically (autoStart).
+  const startedRef = useRef(false);
+  useEffect(() => {
+    if (autoStart && !startedRef.current) {
+      startedRef.current = true;
+      void handleConvert();
+    }
+  }, [autoStart, handleConvert]);
+
   const handleProgressComplete = useCallback(() => {
     // Fired by <ConversionProgress> when a `conversion-progress` event hits 100%.
     if (!finishedRef.current) finishSuccess();
@@ -216,7 +254,7 @@ export function ConvertToEpubMenuItem({
         type="button"
         onClick={handleConvert}
         disabled={isConverting}
-        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium text-foreground/90 hover:bg-primary hover:text-primary-foreground transition-colors duration-150 disabled:opacity-50"
+        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium text-foreground/90 hover:bg-accent hover:text-accent-foreground transition-colors duration-150 disabled:opacity-50"
         title="Create an EPUB copy of this book (the original file is kept)"
       >
         {isConverting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileOutput className="w-4 h-4" />}

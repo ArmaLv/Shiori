@@ -1,9 +1,13 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { api, isAndroid, type ReadingProgress } from '@/lib/tauri';
 import { useUIStore } from '@/store/uiStore';
 import { useReaderStore, type ResumeTarget } from '@/store/readerStore';
 import { useToastStore } from '@/store/toastStore';
 import { logger } from '@/lib/logger';
+import type { ConvertOrOpenBook } from '@/components/conversion/ConvertOrOpenDialog';
+
+/** Local formats worth offering EPUB conversion for (manga/comics excluded). */
+const CONVERTIBLE_FORMATS = new Set(['pdf', 'mobi', 'azw', 'azw3', 'docx', 'fb2', 'txt', 'html', 'htm', 'md', 'markdown']);
 
 /**
  * Small floor to ignore untouched books.
@@ -120,6 +124,9 @@ export function useBookOpen() {
   // ── Resume-reading prompt state ─────────────────────────────────────────
   const [showResumeDialog, setShowResumeDialog] = useState(false);
   const [pendingResume, setPendingResume] = useState<PendingResume | null>(null);
+  // Convert-or-open choice for non-EPUB local formats.
+  const [convertChoice, setConvertChoice] = useState<{ book: ConvertOrOpenBook; openNative: () => void } | null>(null);
+  const nativeOpenedRef = useRef<Set<number>>(new Set());
 
   // ── Internal helpers ────────────────────────────────────────────────────
 
@@ -229,9 +236,22 @@ export function useBookOpen() {
         }
       }
 
+      // Non-EPUB local formats: offer "Convert to EPUB / Open as-is" once per
+      // book per session (the user's choice is remembered in nativeOpenedRef).
+      if (CONVERTIBLE_FORMATS.has(format) && !nativeOpenedRef.current.has(bookId)) {
+        setConvertChoice({
+          book: { id: bookId, title: book.title, format: book.file_format },
+          openNative: () => {
+            nativeOpenedRef.current.add(bookId);
+            useReaderStore.getState().setStartFromBeginning(false);
+            setExplicitResumeTarget(null);
+            openBook(bookId, filePath, book.file_format);
+          },
+        });
+        return bookId;
+      }
+
       // Every format opens natively — the backend returns the original file.
-      // No auto-conversion, no dialog. (Explicit conversion lives in the
-      // "Convert to EPUB" menu actions.)
       useReaderStore.getState().setStartFromBeginning(false);
       setExplicitResumeTarget(null);
       openBook(bookId, filePath, book.file_format);
@@ -283,6 +303,10 @@ export function useBookOpen() {
   return {
     // Actions
     handleOpenBook,
+
+    // Convert-or-open dialog (non-EPUB local formats)
+    convertChoice,
+    closeConvertChoice: () => setConvertChoice(null),
 
     // Resume-reading dialog
     showResumeDialog,
