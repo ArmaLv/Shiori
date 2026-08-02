@@ -931,13 +931,18 @@ pub fn looks_like_heading(text: &str) -> bool {
         "volume",
     ];
     let first_lower = words[0].to_lowercase();
-    
-    // Check if the first word is exactly the keyword, OR if it's the keyword followed by a number/punctuation (handled by checking exact match of the first word, since `words[0]` is split by whitespace)
-    // Actually, sometimes the word might have punctuation attached if we didn't strip it, but `first_lower` is just `words[0]`.
-    // Wait, let's just check if `keywords.contains(&first_lower.as_str())`
     let stripped_first = first_lower.trim_matches(|c: char| !c.is_alphanumeric());
     if keywords.contains(&stripped_first) {
-        return true;
+        if words.len() == 1 {
+            // A bare keyword: "Chapter" alone is a heading, but "Scene."
+            // (lowercase scene-break marker) is body text. Reject bare
+            // keywords ending in sentence punctuation or starting lowercase.
+            return t.len() <= 60
+                && !t.ends_with(['.', '!', '?', ':'])
+                && t.chars().any(|c| c.is_uppercase() || !c.is_alphabetic());
+        }
+        // "Scene 2", "Part One", "Chapter III: The End" — short only.
+        return t.len() <= 60;
     }
 
     // All-caps short phrase
@@ -948,14 +953,15 @@ pub fn looks_like_heading(text: &str) -> bool {
         }
     }
 
-    // Numbered chapter pattern: "1.", "1)", "I.", "IV.", etc.
+    // Bare numeral headings: "1.", "1)", "I.", "IV." etc. The WHOLE line
+    // must be the numeral — checking only the first word turns every
+    // sentence starting with "I" (a valid roman numeral!) into a heading.
     if words.len() <= 2 {
-        let first = words[0];
-        let is_numeral = first
-            .chars()
-            .all(|c| c.is_numeric() || c == '.' || c == ')')
-            || is_roman_numeral(first.trim_end_matches(&['.', ')'] as &[char]));
-        if is_numeral {
+        let is_numeral_line = words.iter().all(|w| {
+            let cleaned = w.trim_end_matches(&['.', ')', ':', ','] as &[char]);
+            cleaned.chars().all(|c| c.is_numeric()) || is_roman_numeral(cleaned)
+        });
+        if is_numeral_line {
             return true;
         }
     }

@@ -425,9 +425,12 @@ fn post_process_pdf_html(html: &str, warnings: &mut Vec<String>) -> String {
             continue;
         }
 
-        // Check if this paragraph is a chapter/section title candidate
+        // Check if this paragraph is a chapter/section title candidate.
+        // Keep it short (≤ 60 chars): longer paragraphs are body text, even
+        // when they start with "Chapter" (prevents heading + body merges
+        // from pdftohtml's tag-stripping from becoming TOC titles).
         let is_heading = utils::looks_like_heading(plain)
-            && plain.len() <= 120
+            && plain.len() <= 60
             && !plain.contains('@')
             && !plain.contains("://");
 
@@ -501,7 +504,9 @@ fn split_pdf_chapters(html: &str) -> Vec<(String, String)> {
             }
         } else if let Some(cap) = PARA_RE.captures(line) {
             let candidate = utils::strip_html_tags(&cap[1]).trim().to_string();
-            if utils::looks_like_heading(&candidate) {
+            // Short-only: a long paragraph that merely starts with a keyword
+            // is body text, not a heading.
+            if utils::looks_like_heading(&candidate) && candidate.len() <= 60 {
                 heading_title = Some(candidate.clone());
                 heading_line = Some(format!("  <h2>{}</h2>", super::oeb::escape_xml(&candidate)));
             }

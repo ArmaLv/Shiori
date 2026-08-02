@@ -3,7 +3,7 @@
 
 mod cloudflare;
 mod commands;
-mod conversion;
+pub mod conversion;
 pub mod db;
 pub mod error;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]

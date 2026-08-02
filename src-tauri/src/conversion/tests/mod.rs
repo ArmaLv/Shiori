@@ -10,6 +10,7 @@ pub mod tests {
         epub_builder, formats,
         oeb::{OebBook, OebChapter},
     };
+    use std::io::Read;
     use std::path::{Path, PathBuf};
 
     /// Absolute path to a fixture in `broken-files/samples/`.
@@ -147,6 +148,172 @@ pub mod tests {
         assert_chapter_text(&mut book, &["Chapter One", "Once upon a time"]);
     }
 
+    /// Extract TOC link labels from the generated EPUB's nav.xhtml.
+    fn toc_titles(epub_path: &Path) -> Vec<String> {
+        let file = std::fs::File::open(epub_path).expect("open epub");
+        let mut archive = zip::ZipArchive::new(file).expect("zip open");
+        let mut nav = String::new();
+        archive
+            .by_name("OEBPS/nav.xhtml")
+            .expect("nav.xhtml")
+            .read_to_string(&mut nav)
+            .expect("read nav");
+        let mut titles = Vec::new();
+        for line in nav.lines() {
+            let t = line.trim();
+            if !t.contains("<a href=") {
+                continue;
+            }
+            if let Some(end) = t.find("</a>") {
+                if let Some(open) = t[..end].rfind('>') {
+                    titles.push(t[open + 1..end].to_string());
+                }
+            }
+        }
+        titles
+    }
+
+    #[test]
+    fn test_pdf_fixture_exact_chapters() {
+        let path = fixture("book.pdf");
+        if !path.exists() {
+            eprintln!("SKIP: pdf fixture not present");
+            return;
+        }
+        let mut book = formats::pdf::parse(&path).expect("pdf parse failed");
+        // The 3-page fixture has exactly three "Chapter …" headings — the
+        // title page must not become a chapter and body text must never be
+        // swallowed into a TOC title (regression: "Chapter TwoSed do
+        // eiusmod tempor …" junk titles and 6 chapters).
+        assert_eq!(
+            book.chapters.len(),
+            3,
+            "expected exactly 3 chapters, got {}: {:?}",
+            book.chapters.len(),
+            book.chapters
+                .iter()
+                .map(|c| c.title.clone().unwrap_or_default())
+                .collect::<Vec<_>>()
+        );
+        let titles: Vec<&str> = book
+            .chapters
+            .iter()
+            .filter_map(|c| c.title.as_deref())
+            .collect();
+        assert_eq!(
+            titles,
+            vec!["Chapter One", "Chapter Two", "Chapter Three"],
+            "TOC titles must be the three chapter headings"
+        );
+
+        let (tmp, _full_text) = build_and_read(&mut book);
+
+        // dc:title must come from the PDF Info dict, not the filename stem.
+        // The libreoffice-generated fixture has no PDF Info title, so the
+        // filename-stem fallback applies.
+        assert_eq!(
+            read_opf_tag(&tmp, "dc:title").as_deref(),
+            Some("book"),
+            "EPUB dc:title must be the filename fallback for a title-less PDF"
+        );
+
+        let file = std::fs::File::open(&tmp).expect("open epub");
+        let mut archive = zip::ZipArchive::new(file).expect("zip open");
+        let mut chapter_files = 0usize;
+        for i in 0..archive.len() {
+            let f = archive.by_index(i).expect("zip entry");
+            let name = f.name().to_string();
+            if name.starts_with("OEBPS/Text/chapter_") && name.ends_with(".xhtml") {
+                chapter_files += 1;
+            }
+        }
+        assert_eq!(
+            chapter_files, 3,
+            "expected exactly 3 chapter XHTML files, got {chapter_files}"
+        );
+
+        let titles = toc_titles(&tmp);
+        for t in &titles {
+            assert!(t.len() <= 80, "TOC title longer than 80 chars: {t:?}");
+        }
+        assert!(
+            titles.iter().any(|t| t == "Chapter One"),
+            "nav must list Chapter One, got {titles:?}"
+        );
+        assert!(
+            titles.iter().any(|t| t == "Chapter Two"),
+            "nav must list Chapter Two, got {titles:?}"
+        );
+        assert!(
+            titles.iter().any(|t| t == "Chapter Three"),
+            "nav must list Chapter Three, got {titles:?}"
+        );
+        std::fs::remove_file(tmp).unwrap();
+    }
+
+    #[test]
+    fn test_pdf_real_novel_chapters() {
+        let path =
+            broken_fixture("Teachers_Pet_The_Shadows_of_Darkness_Universe_Book_2_Katerina_St.pdf");
+        if !path.exists() {
+            eprintln!("SKIP: real pdf fixture not present");
+            return;
+        }
+        let mut book = formats::pdf::parse(&path).expect("pdf parse failed");
+        // The 236-page novel has 40 real "Chapter N" headings (plus front
+        // matter sections) — a sane TOC needs at least 10 entries.
+        assert!(
+            book.chapters.len() >= 10,
+            "expected ≥10 chapters, got {}",
+            book.chapters.len()
+        );
+        assert!(
+            !book.title.trim().is_empty() && book.title != "Untitled",
+            "title must not be empty, got {:?}",
+            book.title
+        );
+        // The real file's Info dict title is a UTF-16 artifact ("1. Chapter
+        // 1") — filename fallback is fine; only chapter structure matters.
+        // The real file's Info dict has no Author entry either — the legacy
+        // pipeline yields an empty author list; that's acceptable (the
+        // front matter contains it as text, not metadata).
+
+        let (tmp, _full_text) = build_and_read(&mut book);
+
+        let file = std::fs::File::open(&tmp).expect("open epub");
+        let mut archive = zip::ZipArchive::new(file).expect("zip open");
+        for i in 0..archive.len() {
+            let f = archive.by_index(i).expect("zip entry");
+            let name = f.name().to_string();
+            if name.starts_with("OEBPS/Text/") && name.ends_with(".xhtml") {
+                assert!(
+                    f.size() <= 400 * 1024,
+                    "chapter {name} too large: {} bytes",
+                    f.size()
+                );
+            }
+        }
+
+        let titles = toc_titles(&tmp);
+        for t in &titles {
+            assert!(t.len() <= 80, "TOC title too long: {t:?}");
+            assert!(!t.contains("dolor"), "TOC title contains body text: {t:?}");
+            assert!(
+                !t.contains("pokehaven") && !t.contains("University"),
+                "TOC title contains first-paragraph body text: {t:?}"
+            );
+        }
+        assert!(
+            titles.iter().any(|t| t == "Chapter 1"),
+            "nav must list Chapter 1, got {titles:?}"
+        );
+        assert!(
+            titles.iter().any(|t| t == "Chapter 40"),
+            "nav must list the last chapter, got {titles:?}"
+        );
+        std::fs::remove_file(tmp).unwrap();
+    }
+
     #[test]
     fn test_docx_roundtrip() {
         let mut book = formats::docx::parse(&fixture("book.docx")).expect("docx parse failed");
@@ -216,6 +383,107 @@ pub mod tests {
         }
     }
 
+    /// Read a metadata element (e.g. `dc:title`) from the generated EPUB's
+    /// content.opf.
+    fn read_opf_tag(epub_path: &Path, tag: &str) -> Option<String> {
+        let file = std::fs::File::open(epub_path).ok()?;
+        let mut archive = zip::ZipArchive::new(file).ok()?;
+        let mut opf = archive.by_name("OEBPS/content.opf").ok()?;
+        let mut s = String::new();
+        std::io::Read::read_to_string(&mut opf, &mut s).ok()?;
+        let open = format!("<{}>", tag);
+        let close = format!("</{}>", tag);
+        let start = s.find(&open)? + open.len();
+        let end = s[start..].find(&close)? + start;
+        Some(s[start..end].to_string())
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // DOCX / TXT — title and chapter-structure fixes
+    // ──────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_docx_title_not_first_heading() {
+        let path = fixture("book.docx");
+        if !path.exists() {
+            eprintln!("SKIP: docx fixture not present");
+            return;
+        }
+        let mut book = formats::docx::parse(&path).expect("docx parse failed");
+        assert_eq!(
+            book.title, "Sample Book",
+            "docx title must come from the first-paragraph heuristic, not 'Chapter 1'"
+        );
+        assert!(
+            book.chapters.len() >= 2,
+            "docx should keep ≥2 chapters, got {}",
+            book.chapters.len()
+        );
+        let (tmp, full_text) = build_and_read(&mut book);
+        assert_eq!(
+            read_opf_tag(&tmp, "dc:title").as_deref(),
+            Some("Sample Book"),
+            "EPUB dc:title must be 'Sample Book'"
+        );
+        assert!(
+            full_text.contains("Chapter One"),
+            "chapter text must contain 'Chapter One'"
+        );
+        std::fs::remove_file(tmp).unwrap();
+    }
+
+    #[test]
+    fn test_txt_title_and_exact_chapters() {
+        let path = fixture("book.txt");
+        if !path.exists() {
+            eprintln!("SKIP: txt fixture not present");
+            return;
+        }
+        let mut book = formats::txt::parse(&path).expect("txt parse failed");
+        assert_eq!(
+            book.title, "Sample Book",
+            "txt title must come from the first-line heuristic, not the filename stem"
+        );
+        assert_eq!(
+            book.chapters.len(),
+            3,
+            "exactly 3 chapters expected, got {}",
+            book.chapters.len()
+        );
+        let titles: Vec<&str> = book
+            .chapters
+            .iter()
+            .filter_map(|c| c.title.as_deref())
+            .collect();
+        assert_eq!(
+            titles,
+            vec!["Chapter One", "Chapter Two", "Chapter Three"],
+            "TOC titles must be the three chapter headings"
+        );
+        assert!(
+            !book.chapters[0]
+                .html
+                .trim_start()
+                .starts_with("<p>Sample Book</p>"),
+            "title must not be duplicated as the first chapter body paragraph"
+        );
+        let (tmp, full_text) = build_and_read(&mut book);
+        assert_eq!(
+            read_opf_tag(&tmp, "dc:title").as_deref(),
+            Some("Sample Book"),
+            "EPUB dc:title must be 'Sample Book'"
+        );
+        assert!(
+            !full_text.contains("Sample Book"),
+            "front-matter title must not appear in any chapter body"
+        );
+        assert!(
+            !full_text.contains("by Test Author"),
+            "author line must not appear in any chapter body"
+        );
+        std::fs::remove_file(tmp).unwrap();
+    }
+
     // ──────────────────────────────────────────────────────────────────────
     // MOBI — stub fixture errors gracefully, real fixture round-trips
     // ──────────────────────────────────────────────────────────────────────
@@ -228,6 +496,174 @@ pub mod tests {
             result.is_err(),
             "corrupt/missing mobi must produce a conversion error"
         );
+    }
+
+    #[test]
+    #[ignore]
+    fn probe_mobi_adapter() {
+        let real = broken_fixture("1752426479_the_briar_club_-_kate_quinn.mobi");
+        if !real.exists() {
+            eprintln!("SKIP: real mobi fixture not present");
+            return;
+        }
+        let data = std::fs::read(&real).unwrap();
+        let m = mobi::Mobi::from_read(&mut &data[..]).unwrap();
+        eprintln!(
+            "title={:?} author={:?} publisher={:?} lang={:?}",
+            m.title(),
+            m.author(),
+            m.publisher(),
+            m.language()
+        );
+        let mut adapter = crate::services::mobi_adapter::MobiAdapter::new();
+        use crate::services::renderer::BookReaderAdapter;
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        rt.block_on(adapter.load(&real.to_string_lossy())).unwrap();
+        let meta = adapter.get_metadata().unwrap();
+        eprintln!("meta={:?} chapters={}", meta.title, adapter.chapter_count());
+        let toc = adapter.get_toc().unwrap();
+        for t in toc.iter().take(40) {
+            eprintln!("toc: {:?} @ {:?}", t.label, t.location);
+        }
+        for i in 0..adapter.chapter_count() {
+            let ch = adapter.get_chapter(i).unwrap();
+            eprintln!(
+                "ch[{}] title={:?} len={} has_datauri={} has_mbp={} has_img={} has_filepos={}",
+                i,
+                ch.title,
+                ch.content.len(),
+                ch.content.contains("data:image"),
+                ch.content.contains("mbp:"),
+                ch.content.contains("<img"),
+                ch.content.contains("filepos")
+            );
+            if ch.content.contains("<img") || ch.content.contains("mbp:") {
+                let idx = ch
+                    .content
+                    .find("<img")
+                    .or_else(|| ch.content.find("mbp:"))
+                    .unwrap();
+                let start = idx.saturating_sub(50);
+                eprintln!(
+                    "    ...{:?}...",
+                    &ch.content[start..(idx + 150).min(ch.content.len())]
+                );
+            }
+        }
+    }
+
+    #[test]
+    #[ignore]
+    fn probe_mobi_images() {
+        let real = broken_fixture("1752426479_the_briar_club_-_kate_quinn.mobi");
+        if !real.exists() {
+            eprintln!("SKIP");
+            return;
+        }
+        let data = std::fs::read(&real).unwrap();
+        fn be_u16(d: &[u8], o: usize) -> Option<u16> {
+            d.get(o..o + 2).map(|b| u16::from_be_bytes([b[0], b[1]]))
+        }
+        fn be_u32(d: &[u8], o: usize) -> Option<u32> {
+            d.get(o..o + 4)
+                .map(|b| u32::from_be_bytes([b[0], b[1], b[2], b[3]]))
+        }
+        let num = be_u16(&data, 76).unwrap() as usize;
+        let mut offs = Vec::new();
+        for i in 0..num {
+            offs.push(be_u32(&data, 78 + i * 8).unwrap() as usize);
+        }
+        let mobi_start = offs[0] + 16;
+        let fii = be_u32(&data, mobi_start + 92).unwrap_or(0) as usize;
+        eprintln!("fii={fii} num={num}");
+        let mut found = 0usize;
+        for idx in fii..offs.len() {
+            let s = offs[idx];
+            let e = offs.get(idx + 1).copied().unwrap_or(data.len());
+            let rec = &data[s..e];
+            let is_img = (0..rec.len().min(32)).any(|st| {
+                let t = &rec[st..];
+                (t.len() >= 3 && t[0..3] == [0xFF, 0xD8, 0xFF])
+                    || (t.len() >= 8 && t[0..8] == [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
+            });
+            if is_img {
+                found += 1;
+            }
+        }
+        eprintln!("image records found: {found}");
+    }
+
+    #[test]
+    #[ignore]
+    fn probe_mobi_parse() {
+        let real = broken_fixture("1752426479_the_briar_club_-_kate_quinn.mobi");
+        if !real.exists() {
+            eprintln!("SKIP");
+            return;
+        }
+        let mut book = formats::mobi::parse(&real).expect("parse failed");
+        eprintln!(
+            "title={:?} authors={:?} publisher={:?} lang={:?}",
+            book.title, book.authors, book.publisher, book.language
+        );
+        eprintln!(
+            "chapters={} toc={} images={} cover={:?}",
+            book.chapters.len(),
+            book.toc.len(),
+            book.images.len(),
+            book.cover_image
+                .as_ref()
+                .map(|c| (c.filename.clone(), c.data.len()))
+        );
+        let mut max_len = 0usize;
+        for (i, ch) in book.chapters.iter().enumerate() {
+            max_len = max_len.max(ch.html.len());
+            if ch.html.contains("data:image") || ch.html.contains("<img") {
+                eprintln!(
+                    "ch[{i}] {:?} len={} img_ref: {:?}",
+                    ch.title,
+                    ch.html.len(),
+                    ch.html.chars().filter(|c| *c == '<').count()
+                );
+                let idx = ch.html.find("<img").unwrap();
+                eprintln!(
+                    "    ...{:?}...",
+                    &ch.html[idx..(idx + 120).min(ch.html.len())]
+                );
+            }
+        }
+        eprintln!("max chapter len={}", max_len);
+        book.sanitize_html();
+        let tmp = std::env::temp_dir().join(format!("probe_mobi_{}.epub", uuid::Uuid::new_v4()));
+        epub_builder::build_epub(&book, &tmp).unwrap();
+        let f = std::fs::File::open(&tmp).unwrap();
+        let mut z = zip::ZipArchive::new(f).unwrap();
+        for i in 0..z.len() {
+            let e = z.by_index(i).unwrap();
+            eprintln!("entry: {} ({} bytes)", e.name(), e.size());
+        }
+        use std::io::Read;
+        let mut opf = String::new();
+        z.by_name("OEBPS/content.opf")
+            .unwrap()
+            .read_to_string(&mut opf)
+            .unwrap();
+        eprintln!("opf has cover meta: {}", opf.contains("name=\"cover\""));
+        eprintln!(
+            "opf has cover-image prop: {}",
+            opf.contains("properties=\"cover-image\"")
+        );
+        eprintln!("opf title: {}", opf.contains("dc:title>The Briar Club<"));
+        let mut ncx = String::new();
+        z.by_name("OEBPS/toc.ncx")
+            .unwrap()
+            .read_to_string(&mut ncx)
+            .unwrap();
+        eprintln!("ncx navPoints: {}", ncx.matches("<navPoint").count());
+        std::fs::remove_file(tmp).unwrap();
     }
 
     #[test]

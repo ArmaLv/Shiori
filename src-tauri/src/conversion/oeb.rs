@@ -175,10 +175,13 @@ fn remove_tag_block(html: &str, tag: &str) -> String {
 }
 
 /// Remove `<?...?>` processing instructions.
+///
+/// IMPORTANT: iterates by full UTF-8 character — byte-wise pushes (`byte as
+/// char`) mangle every multibyte character in the chapter (â€™/Â© mojibake).
 fn remove_processing_instructions(html: &str) -> String {
     let mut result = String::with_capacity(html.len());
-    let mut pos = 0;
     let bytes = html.as_bytes();
+    let mut pos = 0;
     while pos < bytes.len() {
         if pos + 1 < bytes.len() && bytes[pos] == b'<' && bytes[pos + 1] == b'?' {
             if let Some(end) = html[pos..].find("?>") {
@@ -187,8 +190,10 @@ fn remove_processing_instructions(html: &str) -> String {
                 pos = html.len();
             }
         } else {
-            result.push(bytes[pos] as char);
-            pos += 1;
+            // Copy one full UTF-8 character (never a lone byte).
+            let ch = html[pos..].chars().next().unwrap_or('\u{FFFD}');
+            result.push(ch);
+            pos += ch.len_utf8();
         }
     }
     result
