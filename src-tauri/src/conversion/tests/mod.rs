@@ -20,6 +20,20 @@ pub mod tests {
             .join(name)
     }
 
+    /// True when all external fixture files exist (they live in broken-files/
+    /// which is not part of the repo). Callers: `if !require_fixtures(&[…]) {
+    /// return; }` to skip fixture-dependent tests gracefully.
+    fn require_fixtures(names: &[&str]) -> bool {
+        for name in names {
+            let p = fixture(name);
+            if !p.exists() {
+                eprintln!("SKIP: fixture missing: {}", p.display());
+                return false;
+            }
+        }
+        true
+    }
+
     /// Absolute path to a fixture in `broken-files/`.
     fn broken_fixture(name: &str) -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -143,6 +157,7 @@ pub mod tests {
 
     #[test]
     fn test_pdf_roundtrip() {
+        if !require_fixtures(&["book.pdf"]) { return; }
         let mut book = formats::pdf::parse(&fixture("book.pdf")).expect("pdf parse failed");
         assert!(!book.chapters.is_empty(), "pdf produced no chapters");
         assert_chapter_text(&mut book, &["Chapter One", "Once upon a time"]);
@@ -316,6 +331,7 @@ pub mod tests {
 
     #[test]
     fn test_docx_roundtrip() {
+        if !require_fixtures(&["book.docx"]) { return; }
         let mut book = formats::docx::parse(&fixture("book.docx")).expect("docx parse failed");
         assert!(!book.chapters.is_empty(), "docx produced no chapters");
         assert_chapter_text(&mut book, &["Chapter One", "docx content"]);
@@ -323,6 +339,7 @@ pub mod tests {
 
     #[test]
     fn test_fb2_roundtrip() {
+        if !require_fixtures(&["book.fb2"]) { return; }
         let mut book = formats::fb2::parse(&fixture("book.fb2")).expect("fb2 parse failed");
         assert!(!book.chapters.is_empty(), "fb2 produced no chapters");
         assert_eq!(book.title, "Sample Book", "fb2 title from metadata");
@@ -331,6 +348,7 @@ pub mod tests {
 
     #[test]
     fn test_txt_roundtrip() {
+        if !require_fixtures(&["book.txt"]) { return; }
         let mut book = formats::txt::parse(&fixture("book.txt")).expect("txt parse failed");
         assert!(!book.chapters.is_empty(), "txt produced no chapters");
         assert_chapter_text(&mut book, &["Chapter One", "Once upon a time"]);
@@ -338,6 +356,7 @@ pub mod tests {
 
     #[test]
     fn test_html_roundtrip() {
+        if !require_fixtures(&["book.html"]) { return; }
         let mut book = formats::html::parse(&fixture("book.html")).expect("html parse failed");
         assert!(!book.chapters.is_empty(), "html produced no chapters");
         // First h1 is the title; h2s become chapters.
@@ -347,6 +366,7 @@ pub mod tests {
 
     #[test]
     fn test_markdown_roundtrip() {
+        if !require_fixtures(&["book.md"]) { return; }
         let mut book = formats::markdown::parse(&fixture("book.md")).expect("md parse failed");
         assert!(!book.chapters.is_empty(), "md produced no chapters");
         assert_eq!(book.title, "Sample Book", "md title from first heading");
@@ -360,6 +380,7 @@ pub mod tests {
 
     #[test]
     fn test_convert_to_epub_new_markdown() {
+        if !require_fixtures(&["book.md"]) { return; }
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../broken-files/samples/book.md");
         let out = crate::conversion::convert_to_epub_new(&path, None, None);
