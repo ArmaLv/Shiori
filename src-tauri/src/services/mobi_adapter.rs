@@ -912,10 +912,9 @@ impl MobiAdapter {
                 if huff_cdic_refs.is_empty() {
                     return None;
                 }
-                let sections: Vec<&[u8]> =
-                    huff_sections.iter().map(|r| r.as_slice()).collect();
-                let outs = crate::services::mobi_huff::decompress(&huff_cdic_refs, &sections)
-                    .ok()?;
+                let sections: Vec<&[u8]> = huff_sections.iter().map(|r| r.as_slice()).collect();
+                let outs =
+                    crate::services::mobi_huff::decompress(&huff_cdic_refs, &sections).ok()?;
                 for out in outs {
                     decoded.extend_from_slice(&out);
                 }
@@ -1146,14 +1145,24 @@ impl MobiAdapter {
             })
             .to_string();
 
-        let recindex_only_re = Regex::new(r#"(?is)<img\b((?:(?!\bsrc\s*=)[^>])*)>"#).ok();
+        let recindex_only_re = Regex::new(r#"(?i)<img\b([^>]*)>"#).ok();
         let Some(recindex_only_re) = recindex_only_re else {
             return with_src_replaced;
         };
+        let src_attr_re = Regex::new(r#"(?i)\bsrc\s*="#).ok();
 
         recindex_only_re
             .replace_all(&with_src_replaced, |caps: &regex::Captures| {
                 let attrs = caps.get(1).map(|m| m.as_str()).unwrap_or_default();
+                // Post-filter: skip tags that already carry a src attribute
+                // (the original look-around regex rejected those).
+                if src_attr_re.as_ref().is_some_and(|re| re.is_match(attrs)) {
+                    return caps
+                        .get(0)
+                        .map(|m| m.as_str())
+                        .unwrap_or_default()
+                        .to_string();
+                }
                 let Ok(rec_re) = Regex::new(r#"(?i)\brecindex\s*=\s*[\"']?(\d+)"#) else {
                     return caps
                         .get(0)
@@ -1647,4 +1656,3 @@ mod tests {
         assert_eq!(chosen, clean);
     }
 }
-
