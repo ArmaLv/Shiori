@@ -167,10 +167,6 @@ fn split_pages_into_chapters(pages: &[String]) -> Vec<(String, String)> {
             }
 
             let blank_after = lines.get(i + 1).is_some_and(|l| l.trim().is_empty());
-            let content_after = lines[i + 1..]
-                .iter()
-                .filter(|l| !l.trim().is_empty())
-                .count();
 
             let next_nonempty = next_nonempty_line(&lines, i + 1);
             if is_heading_line(t, page_idx, blank_after, next_nonempty) {
@@ -196,10 +192,6 @@ fn split_pages_into_chapters(pages: &[String]) -> Vec<(String, String)> {
             while i < n && !lines[i].trim().is_empty() {
                 let nt = lines[i].trim();
                 let n_blank_after = lines.get(i + 1).is_some_and(|l| l.trim().is_empty());
-                let n_content_after = lines[i + 1..]
-                    .iter()
-                    .filter(|l| !l.trim().is_empty())
-                    .count();
                 let n_next = next_nonempty_line(&lines, i + 1);
                 if is_heading_line(nt, page_idx, n_blank_after, n_next) {
                     break;
