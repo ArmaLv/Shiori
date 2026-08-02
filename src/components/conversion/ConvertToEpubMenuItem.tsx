@@ -49,10 +49,6 @@ interface ConvertToEpubMenuItemProps {
 /** Formats that are already EPUB (or not local files) — no conversion offered. */
 const NON_CONVERTIBLE_FORMATS = new Set(['epub', 'online-manga']);
 
-/** Grace period after `convert_book` resolves: if the backend ran synchronously
- *  (no job events), finish the flow with the returned path. */
-const SYNC_RESULT_GRACE_MS = 2500;
-
 export function ConvertToEpubMenuItem({
   bookId,
   bookTitle,
@@ -68,7 +64,6 @@ export function ConvertToEpubMenuItem({
   const jobIdRef = useRef<string | null>(null);
   const resultPathRef = useRef<string | null>(null);
   const finishedRef = useRef(false);
-  const graceTimerRef = useRef<number | null>(null);
 
   const finishSuccess = useCallback(async () => {
     if (finishedRef.current) return;
@@ -82,12 +77,14 @@ export function ConvertToEpubMenuItem({
     if (resultPath) {
       try {
         const imported = await api.importBooks([resultPath]);
-        const importedPath = imported.success[0];
-        if (importedPath) {
+        // Resolve the library row for the converted file — covers both the
+        // fresh import and the duplicate case (already converted before).
+        const importedBooks = await api.getBooksByPaths([resultPath]).catch(() => []);
+        newBookId = importedBooks[0]?.id ?? null;
+        const reallyImported = imported.success.length > 0 || imported.duplicates.includes(resultPath);
+        if (reallyImported) {
           await api.deleteBooks([bookId]);
           await useLibraryStore.getState().loadInitialBooks().catch?.(() => {});
-          const books = useLibraryStore.getState().books;
-          newBookId = books.find((b) => b.file_path === importedPath)?.id ?? null;
         }
       } catch (err) {
         logger.warn('[ConvertToEpub] import/trash step failed:', err);
@@ -175,11 +172,6 @@ export function ConvertToEpubMenuItem({
     };
   }, [isConverting, bookId, finishSuccess, finishError]);
 
-  // Cleanup the grace timer on unmount.
-  useEffect(() => () => {
-    if (graceTimerRef.current !== null) window.clearTimeout(graceTimerRef.current);
-  }, []);
-
   const handleConvert = useCallback(async () => {
     if (isConverting) return;
     finishedRef.current = false;
@@ -189,11 +181,11 @@ export function ConvertToEpubMenuItem({
     try {
       const result = await api.convertBook(bookId);
       resultPathRef.current = result.new_path;
-      // If the backend completed synchronously (no job events will arrive),
-      // finish after a short grace period.
-      graceTimerRef.current = window.setTimeout(() => {
-        if (!finishedRef.current) finishSuccess();
-      }, SYNC_RESULT_GRACE_MS);
+      // The 100% progress event may have fired before the invoke resolved
+      // (handleProgressComplete skips while resultPathRef is unset) — finish
+      // now if the event path hasn't already. When the event arrives later,
+      // its finishSuccess call is a no-op (finishedRef).
+      if (!finishedRef.current) finishSuccess();
     } catch (err) {
       logger.error('[ConvertToEpub] convert_book failed:', err);
       finishError(err instanceof Error ? err.message : String(err));
@@ -210,8 +202,11 @@ export function ConvertToEpubMenuItem({
   }, [autoStart, handleConvert]);
 
   const handleProgressComplete = useCallback(() => {
-    // Fired by <ConversionProgress> when a `conversion-progress` event hits 100%.
-    if (!finishedRef.current) finishSuccess();
+    // Fired by <ConversionProgress> when a progress event hits 100%. The
+    // converted path may not be known yet (the event races the invoke result)
+    // — never finalize without it; finishSuccess then runs from the
+    // handleConvert await instead.
+    if (!finishedRef.current && resultPathRef.current) finishSuccess();
   }, [finishSuccess]);
 
   if (!format || NON_CONVERTIBLE_FORMATS.has(format.toLowerCase())) return null;

@@ -1213,8 +1213,17 @@ pub async fn convert_book_to_epub(
         )));
     }
 
-    // Fresh temp output dir — never collides with the library or the original.
-    let temp_dir = std::env::temp_dir().join(format!("shiori_conv_{}", uuid::Uuid::new_v4()));
+    // Durable output dir under the app-data "converted" folder — the
+    // converted EPUB is auto-imported into the library, so it must survive
+    // reboots (unlike /tmp). Unique subfolder per run to avoid collisions.
+    let app_data = app_handle
+        .map(|h| h.path().app_data_dir().ok())
+        .flatten()
+        .unwrap_or_else(std::env::temp_dir);
+    let converted_root = app_data.join("converted");
+    std::fs::create_dir_all(&converted_root)
+        .map_err(|e| ShioriError::Other(e.to_string()))?;
+    let temp_dir = converted_root.join(format!("conv_{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&temp_dir).map_err(|e| ShioriError::Other(e.to_string()))?;
 
     let target = temp_dir
