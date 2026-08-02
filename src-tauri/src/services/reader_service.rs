@@ -6,7 +6,7 @@ use crate::models::{
     ReadingProgress, ReadingSession, ReadingStreak,
 };
 use chrono::Utc;
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use tauri::{Emitter, Manager};
 
 pub struct ReaderService;
@@ -695,6 +695,12 @@ impl ReaderService {
         let id = uuid::Uuid::new_v4().to_string();
         let now = Utc::now().to_rfc3339();
 
+        // Backfill pages_start from the book's latest reading progress when not provided.
+        let pages_start = match pages_start {
+            Some(p) => Some(p),
+            None => Self::latest_progress_page(conn, book_id)?,
+        };
+
         conn.execute(
             "INSERT INTO reading_sessions (id, book_id, started_at, duration_seconds, pages_start, created_at)
              VALUES (?1, ?2, ?3, 0, ?4, ?5)",
@@ -720,12 +726,42 @@ impl ReaderService {
     ) -> Result<()> {
         let now = Utc::now().to_rfc3339();
 
+        // Backfill pages_end from the session's book's latest reading progress when not provided.
+        let pages_end = match pages_end {
+            Some(p) => Some(p),
+            None => {
+                let book_id: Option<i64> = conn
+                    .query_row(
+                        "SELECT book_id FROM reading_sessions WHERE id = ?1",
+                        params![session_id],
+                        |row| row.get(0),
+                    )
+                    .optional()?;
+                match book_id {
+                    Some(bid) => Self::latest_progress_page(conn, bid)?,
+                    None => None,
+                }
+            }
+        };
+
         conn.execute(
             "UPDATE reading_sessions SET ended_at = ?1, pages_end = ?2 WHERE id = ?3 AND ended_at IS NULL",
             params![now, pages_end, session_id],
         )?;
 
         Ok(())
+    }
+
+    /// Returns the latest `current_page` from reading_progress for a book, or None.
+    fn latest_progress_page(conn: &Connection, book_id: i64) -> Result<Option<i32>> {
+        let page: Option<i32> = conn
+            .query_row(
+                "SELECT current_page FROM reading_progress WHERE book_id = ?1",
+                params![book_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        Ok(page)
     }
 
     pub fn heartbeat_reading_session(
@@ -744,14 +780,21 @@ impl ReaderService {
     pub fn get_daily_reading_stats(conn: &Connection, days: i32) -> Result<Vec<DailyReadingStats>> {
         let sql = r#"
             SELECT
-                date(started_at) as read_date,
-                SUM(duration_seconds) as total_seconds,
-                COUNT(DISTINCT book_id) as books_count,
-                COUNT(*) as sessions_count
-            FROM reading_sessions
-            WHERE started_at >= date('now', ?1 || ' days')
-              AND duration_seconds > 0
-            GROUP BY date(started_at)
+                date(s.started_at) as read_date,
+                SUM(s.duration_seconds) as total_seconds,
+                COUNT(DISTINCT s.book_id) as books_count,
+                COUNT(*) as sessions_count,
+                SUM(CASE WHEN b.domain != 'manga'
+                    THEN MAX(0, COALESCE(s.pages_end, 0) - COALESCE(s.pages_start, 0))
+                    ELSE 0 END) as book_pages_read,
+                SUM(CASE WHEN b.domain = 'manga'
+                    THEN MAX(0, COALESCE(s.pages_end, 0) - COALESCE(s.pages_start, 0))
+                    ELSE 0 END) as manga_pages_read
+            FROM reading_sessions s
+            JOIN books b ON b.id = s.book_id
+            WHERE s.started_at >= date('now', ?1 || ' days')
+              AND s.duration_seconds > 0
+            GROUP BY date(s.started_at)
             ORDER BY read_date ASC
         "#;
 
@@ -764,8 +807,8 @@ impl ReaderService {
                     total_seconds: row.get(1)?,
                     books_count: row.get(2)?,
                     sessions_count: row.get(3)?,
-                    book_pages_read: 0,
-                    manga_pages_read: 0,
+                    book_pages_read: row.get(4)?,
+                    manga_pages_read: row.get(5)?,
                 })
             })?
             .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -1221,8 +1264,7 @@ pub async fn convert_book_to_epub(
         .flatten()
         .unwrap_or_else(std::env::temp_dir);
     let converted_root = app_data.join("converted");
-    std::fs::create_dir_all(&converted_root)
-        .map_err(|e| ShioriError::Other(e.to_string()))?;
+    std::fs::create_dir_all(&converted_root).map_err(|e| ShioriError::Other(e.to_string()))?;
     let temp_dir = converted_root.join(format!("conv_{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&temp_dir).map_err(|e| ShioriError::Other(e.to_string()))?;
 
