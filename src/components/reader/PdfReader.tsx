@@ -264,6 +264,13 @@ export function PdfReader({ bookPath, bookId, readerContent, onClose }: PdfReade
   const programmaticScrollTimerRef = useRef<number | null>(null);
   const saveProgressTimerRef = useRef<number | null>(null);
   const pendingResumeScrollRatioRef = useRef<number | null>(null);
+  // The mount effect must NOT depend on flushProgressNow's identity (it changes
+  // on every page/scale/zoom change — depending on it re-ran the effect, which
+  // closed + re-opened the renderer in a loop: endless 'Rendering PDF
+  // Document...'). Keep the latest flush via a ref; only unmount/bookId changes
+  // re-run the effect. loadedBookIdRef prevents duplicate opens on re-render.
+  const flushProgressNowRef = useRef<() => void>(() => {});
+  const loadedBookIdRef = useRef<number | null>(null);
 
   // ── Reader Theme ──
   useReaderTheme(readerContainerRef, theme);
@@ -485,6 +492,10 @@ export function PdfReader({ bookPath, bookId, readerContent, onClose }: PdfReade
   }, [docBaseWidth, scale]);
 
   const loadBook = useCallback(async () => {
+    // Never re-open a book this mount already loaded (success or failure) —
+    // prevents the close/reopen churn that looped the loading overlay.
+    if (loadedBookIdRef.current === bookId) return;
+    loadedBookIdRef.current = bookId;
     try {
       setIsLoading(true);
       setError(null);
@@ -540,15 +551,24 @@ export function PdfReader({ bookPath, bookId, readerContent, onClose }: PdfReade
   }, [bookId, bookPath]);
 
   useEffect(() => {
+    // Keep the latest flushProgressNow reachable from the mount effect's
+    // cleanup without listing it in the deps (its identity changes on every
+    // page/scale/zoom change; depending on it re-ran the mount effect and
+    // looped the reader).
+    flushProgressNowRef.current = flushProgressNow;
+  }, [flushProgressNow]);
+
+  useEffect(() => {
     const task = window.setTimeout(() => {
       void loadBook();
     }, 0);
     return () => {
       window.clearTimeout(task);
-      flushProgressNow();
+      flushProgressNowRef.current();
       api.closeBookRenderer(bookId).catch(logger.error);
+      loadedBookIdRef.current = null;
     };
-  }, [bookId, flushProgressNow, loadBook]);
+  }, [bookId, loadBook]);
 
   useEffect(() => {
     const onResize = () => {
