@@ -64,6 +64,14 @@ export function GenericHtmlReader({ bookPath, bookId, format, readerContent, onC
     const readerContainerRef = useRef<HTMLDivElement>(null);
     const saveProgressTimerRef = useRef<number | null>(null);
 
+    // Guards against open/close churn: the bookId this mount already attempted
+    // to load, plus a monotonic token so stale chapter responses (rapid chapter
+    // changes) are discarded.
+    const loadedBookIdRef = useRef<number | null>(null);
+    const chapterRequestRef = useRef(0);
+    const lastAnnotatedContentRef = useRef<string | null>(null);
+    const flushProgressNowRef = useRef<() => void>(() => {});
+
     const isMobiFamilyFormat = format === 'mobi' || format === 'azw' || format === 'azw3';
     const locationPrefix = isMobiFamilyFormat ? 'mobi' : 'generic';
     const progressPrefix = `${locationPrefix}-progress-`;
@@ -140,6 +148,13 @@ export function GenericHtmlReader({ bookPath, bookId, format, readerContent, onC
     }, [bookId, supportedProgressPrefixes]);
 
     const loadBook = useCallback(async () => {
+        // Never re-open a book this mount already loaded (success or failure) —
+        // effect identity churn used to close + reopen the renderer on every
+        // chapter navigation, causing flicker and "Book N not opened" errors.
+        if (loadedBookIdRef.current === bookId) return;
+        loadedBookIdRef.current = bookId;
+
+        const requestToken = ++chapterRequestRef.current;
         try {
             setIsLoading(true);
             setError(null);
@@ -169,6 +184,7 @@ export function GenericHtmlReader({ bookPath, bookId, format, readerContent, onC
             setCurrentChapter(initialChapter);
 
             const chapter = await api.getBookChapter(bookId, initialChapter);
+            if (requestToken !== chapterRequestRef.current) return; // superseded by a newer chapter request
             setContent(chapter.content);
 
             setIsLoading(false);
@@ -204,6 +220,14 @@ export function GenericHtmlReader({ bookPath, bookId, format, readerContent, onC
         ).catch(e => logger.error('[GenericHtmlReader] Error saving progress:', e));
     }, [bookId, currentChapter, progressPrefix, totalChapters]);
 
+    // Keep the latest flushProgressNow reachable from the mount effect's cleanup
+    // without listing it in the deps — its identity changes on every chapter
+    // navigation, and re-running this effect used to close + reopen the book
+    // renderer mid-read (the flicker / error loop).
+    useEffect(() => {
+        flushProgressNowRef.current = flushProgressNow;
+    }, [flushProgressNow]);
+
     useEffect(() => {
         // eslint-disable-next-line react-hooks/set-state-in-effect
         loadBook();
@@ -212,11 +236,14 @@ export function GenericHtmlReader({ bookPath, bookId, format, readerContent, onC
                 clearTimeout(saveProgressTimerRef.current);
                 saveProgressTimerRef.current = null;
             }
-            flushProgressNow();
+            flushProgressNowRef.current();
             // Cleanup
             api.closeBookRenderer(bookId).catch(logger.error);
+            loadedBookIdRef.current = null;
         };
-    }, [loadBook, bookId, flushProgressNow]);
+        // flushProgressNow intentionally excluded — see the ref sync effect above.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [loadBook, bookId]);
 
     const handleClose = useCallback(() => {
         if (saveProgressTimerRef.current) {
@@ -229,8 +256,10 @@ export function GenericHtmlReader({ bookPath, bookId, format, readerContent, onC
 
     const goToChapter = async (index: number, searchTerm?: string | null) => {
         if (index < 0 || index >= totalChapters) return;
+        const requestToken = ++chapterRequestRef.current;
         try {
             const chapter = await api.getBookChapter(bookId, index);
+            if (requestToken !== chapterRequestRef.current) return; // stale response — discard
             setContent(chapter.content);
             setCurrentChapter(index);
             // Scroll to top of new chapter
@@ -310,6 +339,13 @@ export function GenericHtmlReader({ bookPath, bookId, format, readerContent, onC
     // ────────────────────────────────────────────────────────────
     useEffect(() => {
         if (!content || isLoading) return;
+
+        // Skip when only currentChapter changed but the rendered content is
+        // identical — re-walking the DOM 80ms after every navigation churned
+        // the chapter and caused visible flicker. Highlights only need
+        // re-applying when the content actually changes.
+        if (lastAnnotatedContentRef.current === content) return;
+        lastAnnotatedContentRef.current = content;
 
         let cancelled = false;
 

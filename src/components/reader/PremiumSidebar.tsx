@@ -51,6 +51,18 @@ function escapeHtml(str: string): string {
     .replace(/"/g, '&quot;');
 }
 
+/** True when a TOC fetch failed because the book renderer isn't open yet (retryable). */
+function isRetryableTocError(err: unknown): boolean {
+  if (typeof err === 'string') {
+    return err.toLowerCase().includes('not opened');
+  }
+  if (err instanceof Error) {
+    const msg = err.message.toLowerCase();
+    return msg.includes('not opened') || msg.includes('not_found');
+  }
+  return (err as { kind?: string } | null)?.kind === 'not_found';
+}
+
 export function PremiumSidebar({ bookId, currentIndex, onNavigate }: PremiumSidebarProps) {
   const isSidebarOpen = useReaderUIStore(state => state.isSidebarOpen);
   const sidebarTab = useReaderUIStore(state => state.sidebarTab);
@@ -68,7 +80,46 @@ export function PremiumSidebar({ bookId, currentIndex, onNavigate }: PremiumSide
   const [isSearching, setIsSearching] = useState(false);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  
+  const tocRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tocAbortRef = useRef(false);
+
+   // openBookRenderer may still be in flight when the sidebar mounts, so a
+   // single TOC fetch can fail with "Book N not opened". Retry briefly with
+   // backoff, then give up silently (TOC is non-critical).
+   const loadToc = useCallback(async () => {
+     tocAbortRef.current = false;
+     const MAX_ATTEMPTS = 3;
+     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+       try {
+         const tocData = await api.getBookToc(bookId);
+         if (tocAbortRef.current) return;
+         setToc(tocData);
+         return;
+       } catch (err) {
+         if (tocAbortRef.current) return;
+         if (attempt === MAX_ATTEMPTS - 1 || !isRetryableTocError(err)) {
+           logger.debug('[PremiumSidebar] Failed to load TOC:', err);
+           return;
+         }
+         await new Promise<void>((resolve) => {
+           tocRetryTimerRef.current = setTimeout(() => {
+             tocRetryTimerRef.current = null;
+             resolve();
+           }, 400 * (attempt + 1));
+         });
+       }
+     }
+   }, [bookId]);
+
+   const loadAnnotations = useCallback(async () => {
+     try {
+       const annotationsData = await api.getAnnotations(bookId);
+       setAnnotations(annotationsData);
+     } catch (err) {
+       logger.error('[PremiumSidebar] Failed to load annotations:', err);
+     }
+   }, [bookId]);
+
   // Load TOC on mount
   useEffect(() => {
      if (bookId) {
@@ -76,18 +127,25 @@ export function PremiumSidebar({ bookId, currentIndex, onNavigate }: PremiumSide
        loadAnnotations();
        api.getAnnotationCategories().then(setCategories).catch(logger.error);
      }
-    // loadToc and loadAnnotations are recreated each render - would cause infinite loop if added
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bookId]);
+  }, [bookId, loadToc, loadAnnotations]);
+
+  // Clear any in-flight TOC retry on unmount
+  useEffect(() => {
+    return () => {
+      tocAbortRef.current = true;
+      if (tocRetryTimerRef.current) {
+        clearTimeout(tocRetryTimerRef.current);
+        tocRetryTimerRef.current = null;
+      }
+    };
+  }, []);
 
   // Reload annotations when sidebar opens (to see newly created ones from TextSelectionToolbar)
   useEffect(() => {
     if (isSidebarOpen && bookId) {
       loadAnnotations();
     }
-    // loadAnnotations is recreated each render - would cause infinite loop if added
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSidebarOpen, bookId]);
+  }, [isSidebarOpen, bookId, loadAnnotations]);
 
   // Listen for annotation-changed events to refresh the list in real-time
   useEffect(() => {
@@ -101,8 +159,7 @@ export function PremiumSidebar({ bookId, currentIndex, onNavigate }: PremiumSide
     return () => {
       window.removeEventListener('annotation-changed', handleAnnotationChanged);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bookId]);
+  }, [bookId, loadAnnotations]);
 
   // Auto-focus search input when switching to search tab
   useEffect(() => {
@@ -111,24 +168,6 @@ export function PremiumSidebar({ bookId, currentIndex, onNavigate }: PremiumSide
     }
   }, [sidebarTab]);
   
-   const loadToc = async () => {
-     try {
-       const tocData = await api.getBookToc(bookId);
-       setToc(tocData);
-     } catch (err) {
-       logger.error('[PremiumSidebar] Failed to load TOC:', err);
-     }
-   };
-   
-    const loadAnnotations = async () => {
-      try {
-        const annotationsData = await api.getAnnotations(bookId);
-        setAnnotations(annotationsData);
-      } catch (err) {
-        logger.error('[PremiumSidebar] Failed to load annotations:', err);
-      }
-    };
-   
   const handleExportAnnotations = useCallback(async () => {
     if (annotations.length === 0) {
       useToastStore.getState().addToast({ title: 'No annotations to export', variant: 'info' });

@@ -29,8 +29,8 @@ import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 import { resolveReadingFontCss } from '@/lib/readingFonts';
 
-import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
-pdfjs.GlobalWorkerOptions.workerSrc = pdfWorker;
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?worker';
+pdfjs.GlobalWorkerOptions.workerPort = new pdfWorker();
 
 // ── Friendly page-level error (replaces react-pdf's default English string) ──
 function PdfPageError({ message, onRetry }: { message: string; onRetry?: () => void }) {
@@ -294,6 +294,28 @@ export function PdfReader({ bookPath, bookId, readerContent, onClose }: PdfReade
   }, [textColor]);
 
   const readerFontCss = useMemo(() => resolveReadingFontCss(fontFamily), [fontFamily]);
+
+  // Theme-adaptive rendering for the PDF page surfaces. The canvas keeps the
+  // PDF's own colors; dark/black themes invert it (standard PDF dark mode) so
+  // a white-background book doesn't glare in a dark reader. Sepia/paper themes
+  // get a gentle warm tint. Applied to .react-pdf__Page only — the reader
+  // chrome (topbar/sidebar) is themed by useReaderTheme, unaffected here.
+  const pageThemeFilter = useMemo(() => {
+    switch (theme) {
+      case 'dark':
+        return 'invert(0.92) hue-rotate(180deg) brightness(0.92)';
+      case 'black':
+        return 'invert(0.88) hue-rotate(180deg) brightness(0.85)';
+      case 'sepia':
+        return 'sepia(0.25) brightness(0.98)';
+      case 'paper':
+        return 'sepia(0.12) brightness(1.02)';
+      case 'paper-dark':
+        return 'sepia(0.2) brightness(0.88)';
+      default:
+        return 'none';
+    }
+  }, [theme]);
 
   const getViewportMetrics = useCallback(() => {
     const container = containerRef.current;
@@ -820,11 +842,17 @@ export function PdfReader({ bookPath, bookId, readerContent, onClose }: PdfReade
           font-size: ${fontSize}px !important;
           line-height: ${lineHeight} !important;
         }
+        /* Theme + user-brightness adaptation for the page surfaces only.
+           Inverted in dark/black themes so white PDFs read like EPUB dark
+           mode; the reader chrome is never filtered. */
+        .pdf-reading-canvas .react-pdf__Page {
+          filter: ${pageThemeFilter} brightness(${brightness});
+        }
       `}</style>
       <ReaderTopBar
         bookId={bookId}
         title={metadata?.title || readerContent?.title || 'Loading...'}
-        subtitle={numPages > 0 ? '' : 'Loading...'}
+        subtitle={numPages > 0 ? `Page ${pageNumber} of ${numPages}` : 'Loading...'}
         progress={Math.round((pageNumber / numPages) * 100 || 0)}
         format="pdf"
         onClose={handleClose}
@@ -905,7 +933,6 @@ export function PdfReader({ bookPath, bookId, readerContent, onClose }: PdfReade
         style={{
           backgroundColor: resolvedBackgroundColor,
           color: resolvedTextColor,
-          filter: `brightness(${brightness})`,
           paddingLeft: `${margin + 24}px`,
           paddingRight: `${margin + 24}px`,
           scrollBehavior: 'smooth',
