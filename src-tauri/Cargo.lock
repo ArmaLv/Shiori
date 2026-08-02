@@ -1827,7 +1827,7 @@ dependencies = [
 
 [[package]]
 name = "epub"
-version = "2.2.0"
+version = "2.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "95518004c0a638e03a17589d2d336b7c936d92184d81bf1e66d3b1555de89f2d"
 dependencies = [
