@@ -831,7 +831,7 @@ impl MobiAdapter {
         ];
         match b {
             0x80..=0x9F => CP1252_EXT[(b - 0x80) as usize],
-            _ => (b as char),
+            _ => b as char,
         }
     }
 
