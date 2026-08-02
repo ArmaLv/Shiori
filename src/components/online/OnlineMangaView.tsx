@@ -43,6 +43,15 @@ import { listen } from "@tauri-apps/api/event";
 import { open as shellOpen } from "@tauri-apps/plugin-shell";
 import { MobileFilterSheet } from "./MobileFilterSheet";
 import { isAndroid, isTauri } from "@/lib/tauri";
+import { MangaDownloadDock } from "./MangaDownloadDock";
+import { MangaDownloadConfirmDialog } from "./MangaDownloadConfirmDialog";
+import {
+  buildChapterDownloadTitle,
+  countChapterStatuses,
+  sortChaptersAscending,
+  type ChapterDownloadStatus,
+  type ChapterDownloadStatusMap,
+} from "./mangaDownloadUtils";
 
 let onlineMangaSearchTimeout: number | undefined;
 const SUPPORTED_QUEUE_FORMATS = [
@@ -277,6 +286,10 @@ export function OnlineMangaView() {
     chapterIndex?: number;
     totalChapters?: number;
   } | null>(null);
+  const [chapterDownloadStatus, setChapterDownloadStatus] =
+    useState<ChapterDownloadStatusMap>({});
+  const [downloadAllConfirmOpen, setDownloadAllConfirmOpen] =
+    useState(false);
 
   useEffect(() => {
     const unlisten = listen<{
@@ -651,6 +664,7 @@ export function OnlineMangaView() {
       setChapters([]);
       setChaptersLoading(true);
       setPluginError(null);
+      setChapterDownloadStatus({});
 
       try {
         const chapterList = await getChapters(manga.id);
@@ -678,6 +692,7 @@ export function OnlineMangaView() {
     setSelectedPluginManga(manga);
     setPluginChapters([]);
     setChaptersLoading(true);
+    setChapterDownloadStatus({});
 
     try {
       const chapterList = await pluginApi.getChapters(
@@ -946,7 +961,11 @@ export function OnlineMangaView() {
   );
 
   const unifiedChapters = useMemo((): UnifiedChapter[] => {
-    if (selectedManga && isMangaDexEnabled) {
+    // Gate on what is actually selected, not on which source is currently
+    // "active": a manga opened from the library (e.g. a ToonGod series while
+    // MangaDex is the active source) must still list chapters and offer
+    // downloads. selectedManga / selectedPluginManga are mutually exclusive.
+    if (selectedManga) {
       return chapters.map((c) => ({
         id: c.id,
         volume: c.volume || "None",
@@ -960,7 +979,7 @@ export function OnlineMangaView() {
           : undefined,
       }));
     }
-    if (selectedPluginManga && isPluginMangaSource) {
+    if (selectedPluginManga) {
       return pluginChapters.map((c) => ({
         id: c.id,
         volume: c.volume ? String(c.volume) : "None",
@@ -978,8 +997,6 @@ export function OnlineMangaView() {
     pluginChapters,
     selectedManga,
     selectedPluginManga,
-    isMangaDexEnabled,
-    isPluginMangaSource,
   ]);
 
   const handleReadUnifiedChapter = async (unifiedCh: UnifiedChapter) => {
@@ -1072,14 +1089,19 @@ export function OnlineMangaView() {
     const downloadFailures: { chapter: string; reason: string }[] = [];
     showInfoToast(`Started downloading ${selectedChapters.length} chapters...`);
 
+    // Mark the whole batch as queued so the dock can show per-chapter status.
+    setChapterDownloadStatus(
+      Object.fromEntries(
+        selectedChapters.map((ch) => [ch.id, "queued" as ChapterDownloadStatus]),
+      ),
+    );
+
     let i = 0;
     for (const ch of selectedChapters) {
       i++;
       try {
-        const uniqueChapterTitle = ch.title 
-          ? (ch.title.toLowerCase().includes('chapter') ? ch.title : `Chapter ${ch.chapter} - ${ch.title}`)
-          : `Chapter ${ch.chapter}`;
-          
+        const uniqueChapterTitle = buildChapterDownloadTitle(ch);
+
         setDownloadProgress({
           chapterTitle: uniqueChapterTitle,
           progress: 0,
@@ -1087,14 +1109,20 @@ export function OnlineMangaView() {
           chapterIndex: i,
           totalChapters: selectedChapters.length,
         });
+        setChapterDownloadStatus((prev) => ({
+          ...prev,
+          [ch.id]: "downloading",
+        }));
         const cbzPath = await invoke<string>("download_manga_chapter_as_cbz", {
           sourceId: effectiveSourceId,
           mangaTitle: mangaTitle,
           chapterId: ch.id,
           chapterTitle: uniqueChapterTitle,
         });
+        setChapterDownloadStatus((prev) => ({ ...prev, [ch.id]: "done" }));
         pathsToImport.push({ path: cbzPath, chapter: ch.chapter !== '?' ? ch.chapter : null });
       } catch (err) {
+        setChapterDownloadStatus((prev) => ({ ...prev, [ch.id]: "failed" }));
         const reason = getErrorMessage(err);
         downloadFailures.push({ chapter: String(ch.chapter), reason });
         showErrorToast(`Failed to download chapter ${ch.chapter}: ${reason}`);
@@ -1186,6 +1214,8 @@ export function OnlineMangaView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPluginManga?.id]);
 
+  const chapterStatusCounts = countChapterStatuses(chapterDownloadStatus);
+
   const downloadProgressToast = downloadProgress ? (
     <div className="fixed bottom-6 right-6 z-50 bg-background/95 backdrop-blur-2xl border border-border rounded-xl shadow-[0_0_50px_-10px_rgba(0,0,0,0.7)] p-5 w-80 animate-in fade-in slide-in-from-bottom-6 flex flex-col gap-3">
       {/* Header */}
@@ -1221,6 +1251,21 @@ export function OnlineMangaView() {
           <span>{downloadProgress.progress} / {downloadProgress.total} pages</span>
         </div>
       </div>
+
+      {/* Overall batch progress: X/Y chapters done */}
+      {downloadProgress.totalChapters && downloadProgress.totalChapters > 1 && (
+        <div className="flex items-center justify-between text-[10px] font-medium text-muted-foreground uppercase tracking-wider border-t border-border/40 pt-2">
+          <span>
+            {chapterStatusCounts.done + chapterStatusCounts.failed} /{" "}
+            {downloadProgress.totalChapters} chapters done
+          </span>
+          {chapterStatusCounts.failed > 0 && (
+            <span className="text-red-400 normal-case">
+              {chapterStatusCounts.failed} failed
+            </span>
+          )}
+        </div>
+      )}
     </div>
   ) : null;
 
@@ -1271,6 +1316,26 @@ export function OnlineMangaView() {
           isInLibrary={!!libraryBook}
           lastReadChapterId={lastReadChapterId}
           onDownloadChapters={handleDownloadChapters}
+        />
+
+        {/* Uniform download options for every manga source: per-chapter
+            "Download Chapter" and "Download Manga" (all chapters). */}
+        {!downloadProgress && unifiedChapters.length > 0 && (
+          <MangaDownloadDock
+            chapters={unifiedChapters}
+            status={chapterDownloadStatus}
+            onDownloadChapter={(ch) => void handleDownloadChapters([ch])}
+            onDownloadAll={() => setDownloadAllConfirmOpen(true)}
+          />
+        )}
+        <MangaDownloadConfirmDialog
+          open={downloadAllConfirmOpen}
+          onOpenChange={setDownloadAllConfirmOpen}
+          title={title}
+          chapterCount={unifiedChapters.length}
+          onConfirm={() => {
+            void handleDownloadChapters(sortChaptersAscending(unifiedChapters));
+          }}
         />
       </div>
     );
