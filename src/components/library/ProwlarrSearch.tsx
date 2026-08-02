@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { X, Search, Download, Loader2, AlertCircle, ExternalLink, ArrowUpDown } from 'lucide-react'
 import { api, isTauri, type ProwlarrResult } from '../../lib/tauri'
+import { openExternal } from '@/lib/externalLinks'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { usePreferencesStore } from '../../store/preferencesStore'
@@ -252,6 +253,7 @@ export const ProwlarrSearch = ({ open, onOpenChange, bookTitle, bookAuthor }: Pr
                                   href={result.infoUrl}
                                   target="_blank"
                                   rel="noopener noreferrer"
+                                  onClick={(e) => { e.preventDefault(); void openExternal(e.currentTarget.href); }}
                                   className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 text-muted-foreground hover:text-primary"
                                   aria-label="Open info page"
                                 >

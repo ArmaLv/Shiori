@@ -4,6 +4,7 @@ import { Download, ExternalLink, Bookmark, ArrowLeft, BookOpen, ChevronDown, X, 
 import { AnilistMediaList, AnilistMediaDetails, getMediaDetails, updateMediaListEntry } from '@/lib/anilist';
 import { toast } from '@/store/toastStore';
 import { useAniListAccessToken } from '@/auth/useAniListAccessToken';
+import { openExternal } from '@/lib/externalLinks';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Select from '@radix-ui/react-select';
@@ -629,6 +630,7 @@ export function AniListMangaDetailsView({
                                 href={link.url} 
                                 target="_blank" 
                                 rel="noreferrer"
+                                onClick={(e) => { e.preventDefault(); void openExternal(link.url); }}
                                 className="bg-card hover:bg-secondary border border-border/50 px-4 py-2.5 rounded-xl text-[13px] font-medium transition-colors flex items-center gap-2"
                               >
                                 {link.site} <ExternalLink className="w-3 h-3 text-muted-foreground" />
@@ -702,7 +704,7 @@ export function AniListMangaDetailsView({
                               if (edge.node.type === 'MANGA' && onOpenMedia) {
                                 onOpenMedia(edge.node.id);
                               } else {
-                                window.open(`https://anilist.co/${edge.node.type.toLowerCase()}/${edge.node.id}`, '_blank');
+                                void openExternal(`https://anilist.co/${edge.node.type.toLowerCase()}/${edge.node.id}`);
                               }
                             }}
                           >
@@ -734,7 +736,7 @@ export function AniListMangaDetailsView({
                               if (onOpenMedia) {
                                 onOpenMedia(node.mediaRecommendation.id);
                               } else {
-                                window.open(`https://anilist.co/manga/${node.mediaRecommendation.id}`, '_blank');
+                                void openExternal(`https://anilist.co/manga/${node.mediaRecommendation.id}`);
                               }
                             }}
                           >

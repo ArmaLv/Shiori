@@ -3,6 +3,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { X, Search, Loader2, Download, ExternalLink, ImageIcon, CheckCircle, AlertTriangle, FastForward } from 'lucide-react';
 import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import { logger } from '@/lib/logger';
+import { openExternal } from '@/lib/externalLinks';
 import { Button } from '../ui/button';
 
 import { Skeleton } from '@/components/ui/skeleton';
@@ -855,9 +856,9 @@ export const MetadataSearchDialog = ({
             <div className="flex items-center justify-between p-6 border-t border-border bg-muted/30 flex-shrink-0">
               <p className="text-xs text-muted-foreground">
                 {isManga ? (
-                  <>Data from <a href="https://anilist.co" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-1">AniList<ExternalLink className="h-3 w-3" /></a></>
+                  <>Data from <a href="https://anilist.co" target="_blank" rel="noopener noreferrer" onClick={(e) => { e.preventDefault(); void openExternal('https://anilist.co'); }} className="text-primary hover:underline inline-flex items-center gap-1">AniList<ExternalLink className="h-3 w-3" /></a></>
                 ) : (
-                  <>Data from <a href="https://openlibrary.org" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-1">Open Library<ExternalLink className="h-3 w-3" /></a></>
+                  <>Data from <a href="https://openlibrary.org" target="_blank" rel="noopener noreferrer" onClick={(e) => { e.preventDefault(); void openExternal('https://openlibrary.org'); }} className="text-primary hover:underline inline-flex items-center gap-1">Open Library<ExternalLink className="h-3 w-3" /></a></>
                 )}
               </p>
               <Dialog.Close asChild>

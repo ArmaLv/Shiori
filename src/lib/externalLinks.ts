@@ -27,6 +27,22 @@ export function isExternalHref(href: string): boolean {
 }
 
 /**
+ * Shared opener for external URLs (browser links, update pages, etc.).
+ *
+ * On Tauri (Android + desktop) hands the URL to the system browser via the
+ * shell plugin — never navigates the app WebView (window.open() returns null
+ * on Android). In a plain browser falls back to a new tab with
+ * noopener,noreferrer. Failures are swallowed: callers fire-and-forget.
+ */
+export function openExternal(url: string): void | Promise<void> {
+  if (isTauri) {
+    // System browser on Android AND desktop Tauri — never navigate the app.
+    return shellOpen(url).catch(() => {});
+  }
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
+/**
  * Delegated click handler for reader content containers.
  *
  * Finds the closest <a> ancestor of the click target; if it's an external
@@ -54,11 +70,6 @@ export function handleExternalLinkClick(e: MouseEvent, container: HTMLElement | 
   e.preventDefault();
   e.stopPropagation();
 
-  if (isTauri) {
-    // System browser on Android AND desktop Tauri — never navigate the app.
-    shellOpen(href).catch(() => {});
-  } else {
-    window.open(href, '_blank', 'noopener,noreferrer');
-  }
+  void openExternal(href);
   return true;
 }

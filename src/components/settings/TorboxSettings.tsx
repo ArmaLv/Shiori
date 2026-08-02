@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api, isTauri } from '@/lib/tauri';
+import { openExternal } from '@/lib/externalLinks';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/store/toastStore';
@@ -121,6 +122,7 @@ export function TorboxSettings() {
             href="https://torbox.app"
             target="_blank"
             rel="noopener noreferrer"
+            onClick={(e) => { e.preventDefault(); void openExternal('https://torbox.app'); }}
             className="text-xs text-primary hover:underline inline-flex items-center gap-1"
           >
             Get your API key from Torbox.app →

@@ -4,7 +4,7 @@ import * as Dialog from '@radix-ui/react-dialog'
 import * as Tabs from '@radix-ui/react-tabs'
 import { Drawer } from 'vaul'
 import { motion, AnimatePresence, Variants } from 'framer-motion'
-import { open } from '@tauri-apps/plugin-shell'
+import { openExternal } from '@/lib/externalLinks'
 
 import {
   X, Moon, Sun, Palette, Shield, BookOpen, FileText,
@@ -2097,17 +2097,9 @@ const AboutSettings = () => {
             <a
               key={link.url}
               href={link.url}
-              onClick={async (e) => {
+              onClick={(e) => {
                 e.preventDefault()
-                try {
-                  await open(link.url);
-                } catch (err) {
-                  console.error('Failed to open link:', err);
-                  // Web-only fallback — never navigate Tauri app away
-                  if (!isTauri) {
-                    window.open(link.url, '_blank', 'noopener,noreferrer');
-                  }
-                }
+                void openExternal(link.url)
               }}
               className="flex items-center gap-3 p-4 rounded-xl border border-border/40 bg-card/10 hover:bg-muted/50 hover:border-border transition-all group cursor-pointer"
             >
@@ -2146,12 +2138,7 @@ const AboutSettings = () => {
               toast.error("Failed to install update.");
             }
           } else if (updateData.url) {
-            try {
-              await open(updateData.url);
-            } catch (err) {
-              console.error('Failed to open link:', err);
-              try { window.open(updateData.url, '_blank'); } catch (e) {}
-            }
+            void openExternal(updateData.url);
           }
           setUpdateData(null);
         }}

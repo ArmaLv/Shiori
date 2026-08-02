@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useRssStore, RssFeed } from '../../store/rssStore';
 import { Plus, Trash2, Edit2, RefreshCw, Power, Clock, AlertCircle, BookOpen, Rss, X, ArrowLeft, Search } from 'lucide-react';
 import { useToast } from '@/store/toastStore';
+import { openExternal } from '@/lib/externalLinks';
 
 import { DISCOVER_FEEDS } from './DiscoverFeeds';
 
@@ -538,6 +539,7 @@ const RSSFeedManager: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
                       href={feed.url}
                       target="_blank"
                       rel="noopener noreferrer"
+                      onClick={(e) => { e.preventDefault(); void openExternal(feed.url); }}
                       className="text-xs text-primary/70 hover:text-primary hover:underline truncate block"
                     >
                       {feed.url}
