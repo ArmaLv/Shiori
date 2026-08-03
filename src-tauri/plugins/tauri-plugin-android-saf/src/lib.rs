@@ -44,6 +44,8 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             commands::check_storage_permission,
             commands::request_storage_permission,
             commands::open_app_settings,
+            commands::set_keep_screen_on,
+            commands::open_url,
             commands::create_document,
             commands::write_document
         ])

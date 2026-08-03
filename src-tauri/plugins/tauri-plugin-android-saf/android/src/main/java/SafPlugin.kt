@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.Settings
+import android.view.WindowManager
 import androidx.core.content.ContextCompat
 import app.tauri.annotation.Command
 import app.tauri.annotation.TauriPlugin
@@ -525,6 +526,38 @@ class SafPlugin(private val activity: Activity): Plugin(activity) {
                     webView.destroy()
                 }
             }, 30000)
+        }
+    }
+
+    @Command
+    fun setKeepScreenOn(invoke: Invoke) {
+        val enabled = invoke.getArgs().getBoolean("enabled", false)
+        try {
+            activity.runOnUiThread {
+                if (enabled) {
+                    activity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                } else {
+                    activity.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                }
+            }
+            invoke.resolve(JSObject())
+        } catch (e: Exception) {
+            invoke.reject(e.message ?: "setKeepScreenOn failed")
+        }
+    }
+
+    @Command
+    fun openUrl(invoke: Invoke) {
+        val url = invoke.getArgs().getString("url", null)
+        if (url == null) {
+            invoke.reject("Missing url")
+            return
+        }
+        try {
+            activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+            invoke.resolve(JSObject())
+        } catch (e: Exception) {
+            invoke.reject(e.message ?: "openUrl failed")
         }
     }
 }

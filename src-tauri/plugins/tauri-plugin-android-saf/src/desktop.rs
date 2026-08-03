@@ -77,4 +77,14 @@ impl<R: Runtime> AndroidSaf<R> {
     pub fn open_app_settings(&self) -> crate::Result<()> {
         Ok(())
     }
+
+    /// No-op on desktop: the keep-screen-on hook is Android-gated.
+    pub fn set_keep_screen_on(&self, _enabled: bool) -> crate::Result<()> {
+        Ok(())
+    }
+
+    /// No-op on desktop: the shell plugin handles desktop links.
+    pub fn open_url(&self, _url: String) -> crate::Result<()> {
+        Ok(())
+    }
 }

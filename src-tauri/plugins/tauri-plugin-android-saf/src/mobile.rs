@@ -86,6 +86,20 @@ impl<R: Runtime> AndroidSaf<R> {
             .map_err(Into::into)
     }
 
+    /// Keeps the device screen awake while reading (Android only).
+    pub fn set_keep_screen_on(&self, enabled: bool) -> crate::Result<()> {
+        self.0
+            .run_mobile_plugin("setKeepScreenOn", json!({ "enabled": enabled }))
+            .map_err(Into::into)
+    }
+
+    /// Opens a URL in the system browser via an ACTION_VIEW intent.
+    pub fn open_url(&self, url: String) -> crate::Result<()> {
+        self.0
+            .run_mobile_plugin("openUrl", json!({ "url": url }))
+            .map_err(Into::into)
+    }
+
     pub fn create_document(&self, mime_type: String, file_name: String) -> crate::Result<CreateDocumentResponse> {
         self.0
             .run_mobile_plugin("createDocument", json!({ "mimeType": mime_type, "fileName": file_name }))

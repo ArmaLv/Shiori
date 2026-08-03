@@ -59,6 +59,19 @@ pub(crate) async fn open_app_settings<R: Runtime>(app: AppHandle<R>) -> Result<(
 }
 
 #[command]
+pub(crate) async fn set_keep_screen_on<R: Runtime>(
+    app: AppHandle<R>,
+    enabled: bool,
+) -> Result<()> {
+    app.android_saf().set_keep_screen_on(enabled)
+}
+
+#[command]
+pub(crate) async fn open_url<R: Runtime>(app: AppHandle<R>, url: String) -> Result<()> {
+    app.android_saf().open_url(url)
+}
+
+#[command]
 pub(crate) async fn create_document<R: Runtime>(
     app: AppHandle<R>,
     mime_type: String,
