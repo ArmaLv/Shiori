@@ -475,6 +475,7 @@ jobs:
           echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
 
       - name: Update shiorii-git (source package)
+        continue-on-error: true
         env:
           VERSION: ${{ steps.release-meta.outputs.version }}
           GIT_SSH_COMMAND: ssh -i ~/.ssh/aur_id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes
@@ -482,7 +483,7 @@ jobs:
           set -euo pipefail
 
           if ! git clone "ssh://aur@aur.archlinux.org/shiorii-git.git"; then
-            echo "AUR repo shiorii-git not initialized yet; bootstrapping local repo"
+            echo "AUR repo shiorii-git not initialized yet or AUR down; bootstrapping local repo"
             mkdir -p shiorii-git
             cd shiorii-git
             git init
@@ -516,9 +517,10 @@ jobs:
           fi
 
           git -c user.name="github-actions[bot]" -c user.email="github-actions[bot]@users.noreply.github.com" commit -m "Update to v${VERSION}"
-          git push origin HEAD:master
+          git push origin HEAD:master || echo "⚠️ Failed to push shiorii-git to AUR (AUR may be down for maintenance)."
 
       - name: Update shiorii-bin (binary package)
+        continue-on-error: true
         env:
           VERSION: ${{ steps.release-meta.outputs.version }}
           SHA256: ${{ steps.release-meta.outputs.sha256 }}
@@ -527,7 +529,7 @@ jobs:
           set -euo pipefail
 
           if ! git clone "ssh://aur@aur.archlinux.org/shiorii-bin.git"; then
-            echo "AUR repo shiorii-bin not initialized yet; bootstrapping local repo"
+            echo "AUR repo shiorii-bin not initialized yet or AUR down; bootstrapping local repo"
             mkdir -p shiorii-bin
             cd shiorii-bin
             git init
@@ -568,9 +570,10 @@ jobs:
           fi
 
           git -c user.name="github-actions[bot]" -c user.email="github-actions[bot]@users.noreply.github.com" commit -m "Update to v${VERSION}"
-          git push origin HEAD:master
+          git push origin HEAD:master || echo "⚠️ Failed to push shiorii-bin to AUR (AUR may be down for maintenance)."
 
       - name: Verify AUR metadata is updated
+        continue-on-error: true
         env:
           VERSION: ${{ steps.release-meta.outputs.version }}
         run: |
@@ -578,8 +581,8 @@ jobs:
           EXPECTED="${VERSION}-1"
 
           for attempt in {1..30}; do
-            SRC_VERSION="$(curl -fsSL "https://aur.archlinux.org/rpc/v5/info/shiorii-git" | python3 -c 'import json,sys; data=json.load(sys.stdin); results=data.get("results") or []; print(results[0].get("Version", "") if results else "")')"
-            BIN_VERSION="$(curl -fsSL "https://aur.archlinux.org/rpc/v5/info/shiorii-bin" | python3 -c 'import json,sys; data=json.load(sys.stdin); results=data.get("results") or []; print(results[0].get("Version", "") if results else "")')"
+            SRC_VERSION="$(curl -fsSL "https://aur.archlinux.org/rpc/v5/info/shiorii-git" | python3 -c 'import json,sys; data=json.load(sys.stdin); results=data.get("results") or []; print(results[0].get("Version", "") if results else "")' || true)"
+            BIN_VERSION="$(curl -fsSL "https://aur.archlinux.org/rpc/v5/info/shiorii-bin" | python3 -c 'import json,sys; data=json.load(sys.stdin); results=data.get("results") or []; print(results[0].get("Version", "") if results else "")' || true)"
 
             echo "Attempt ${attempt}/30 => shiorii-git=${SRC_VERSION}, shiorii-bin=${BIN_VERSION}, expected=${EXPECTED}"
 
@@ -591,8 +594,8 @@ jobs:
             sleep 20
           done
 
-          echo "Timed out waiting for AUR metadata to update"
-          exit 1
+          echo "⚠️ Timed out waiting for AUR metadata (AUR may be down for maintenance). Continuing workflow..."
+          exit 0
 
   # ── Step 4: Build for Android ──────────────────────────────────────
   build-android:
