@@ -6,6 +6,8 @@ import android.view.ActionMode
 import android.view.Menu
 import android.view.WindowManager
 import androidx.activity.enableEdgeToEdge
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 
 class MainActivity : TauriActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
@@ -15,6 +17,15 @@ class MainActivity : TauriActivity() {
     // clear/re-add this flag at runtime via the set_keep_screen_on command
     // when the "Keep Screen On" reading setting is toggled.
     window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
+    // Edge-to-edge is enforced on targetSdk 35+; pad the decor view below the
+    // system status bar so page content is never hidden behind it. (The WebView
+    // reports no safe-area env() insets, so CSS cannot do this.)
+    ViewCompat.setOnApplyWindowInsetsListener(window.decorView) { view, insets ->
+      val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+      view.setPadding(0, bars.top, 0, 0)
+      insets
+    }
   }
 
   override fun onNewIntent(intent: Intent) {
