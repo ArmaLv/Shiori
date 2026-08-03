@@ -63,6 +63,10 @@ export const useUIStore = create<UIStore>()(
     }),
     {
       name: "shiori-ui-settings",
+      // Only the sidebar preference survives restarts: on every fresh app
+      // launch the user lands on Home (currentView stays its "home" default;
+      // viewHistory/currentDomain are session-only).
+      partialize: (state) => ({ sidebarCollapsed: state.sidebarCollapsed }),
     }
   )
 )
