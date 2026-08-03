@@ -25,6 +25,11 @@ interface LoadedChapter {
   content: string;
 }
 
+// Chapters outside [active-KEEP_ABOVE, active+KEEP_BELOW] are unloaded to bound
+// memory (long books previously kept every scrolled chapter, OOM-crashing Android).
+const KEEP_ABOVE = 3;
+const KEEP_BELOW = 3;
+
 export function ContinuousEpubView({
   bookId,
   metadata,
@@ -117,6 +122,37 @@ export function ContinuousEpubView({
     
     return () => { active = false; };
   }, [bookId, initialChapterIndex, metadata.total_chapters, searchTerm]);
+
+  // Unload chapters outside the window around the active chapter, freeing their
+  // DOM and processed HTML strings. loadMoreChapters reloads them on demand when
+  // the user scrolls back.
+  useEffect(() => {
+    const minKeep = activeChapterIndexRef.current - KEEP_ABOVE;
+    const maxKeep = activeChapterIndexRef.current + KEEP_BELOW;
+
+    const hasOutside = chaptersRef.current.some(c => c.index < minKeep) || chaptersRef.current.some(c => c.index > maxKeep);
+
+    if (chaptersRef.current.length === 0 || !hasOutside) return;
+    // Never prune while a chapter is being fetched (avoids racing loadMoreChapters);
+    // the next activeChapterIndex change will prune.
+    if (isFetchingRef.current) return;
+
+    // Removal ABOVE the viewport shrinks the DOM above scrollTop, so capture the
+    // current scroll state and let the useLayoutEffect re-anchor after the shrink.
+    if (chaptersRef.current.some(c => c.index < minKeep) && containerRef.current) {
+      const activeEl = chapterRefs.current.get(activeChapterIndexRef.current);
+      prevScrollStateRef.current = {
+        height: containerRef.current.scrollHeight,
+        top: containerRef.current.scrollTop,
+        activeIdx: activeChapterIndexRef.current,
+        activeOffsetTop: activeEl ? activeEl.offsetTop : undefined
+      };
+      pendingScrollAnchorRef.current = 'slice-top';
+    }
+    // Removal BELOW the viewport needs no anchoring (doesn't move scrollTop).
+
+    setChapters(prev => prev.filter(c => c.index >= minKeep && c.index <= maxKeep));
+  }, [activeChapterIndex]);
 
   // Handle scroll anchoring and initial scroll
   const hasAppliedInitialScroll = useRef(false);
