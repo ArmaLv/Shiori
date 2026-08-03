@@ -78,6 +78,15 @@ pub fn parse(path: &Path) -> Result<OebBook, ConversionError> {
             }
             saw_heading = true;
 
+            // Content between the title h1 and the first chapter heading
+            // (intro text, images) must not be dropped — carry it into the
+            // first chapter.
+            let preamble = if current_title.is_none() {
+                std::mem::take(&mut current_html)
+            } else {
+                String::new()
+            };
+
             if let Some(t) = current_title.take() {
                 if !current_html.trim().is_empty() {
                     chapters.push((t, std::mem::take(&mut current_html)));
@@ -88,7 +97,11 @@ pub fn parse(path: &Path) -> Result<OebBook, ConversionError> {
             } else {
                 raw_title
             });
-            current_html = heading_html;
+            current_html = if preamble.trim().is_empty() {
+                heading_html
+            } else {
+                format!("{}{}", preamble, heading_html)
+            };
         } else {
             let mut html = String::new();
             common::serialize_node(child, &mut html);

@@ -9,6 +9,9 @@ pub struct PdfAdapter {
     metadata: Option<BookMetadata>,
     page_count: usize,
     page_ids: Vec<lopdf::ObjectId>,
+    /// Per-page extracted text (pdf-extract); fallback: single whole-doc page.
+    /// Empty when the PDF has no text layer (scanned pages).
+    page_texts: Vec<String>,
 }
 
 unsafe impl Send for PdfAdapter {}
@@ -22,6 +25,7 @@ impl PdfAdapter {
             metadata: None,
             page_count: 0,
             page_ids: Vec::new(),
+            page_texts: Vec::new(),
         }
     }
 
@@ -134,6 +138,28 @@ impl BookReaderAdapter for PdfAdapter {
         self.doc = Some(doc);
         self.path = path.to_string();
 
+        // Search/annotation text via pdf-extract (robust) with a whole-doc
+        // fallback — the hand-rolled lopdf Tj/TJ walker misses many encodings.
+        let bytes = std::fs::read(&path).unwrap_or_default();
+        let mut page_texts: Vec<String> = Vec::new();
+        if !bytes.is_empty() {
+            match pdf_extract::extract_text_from_mem_by_pages(&bytes) {
+                Ok(pages) if pages.iter().any(|p| !p.trim().is_empty()) => {
+                    page_texts = pages;
+                }
+                _ => {
+                    // by_pages empty (common for many real-world PDFs) — fall
+                    // back to the whole-document extractor as a single "page".
+                    if let Ok(all) = pdf_extract::extract_text_from_mem(&bytes) {
+                        if !all.trim().is_empty() {
+                            page_texts.push(all);
+                        }
+                    }
+                }
+            }
+        }
+        self.page_texts = page_texts;
+
         Ok(())
     }
 
@@ -179,8 +205,17 @@ impl BookReaderAdapter for PdfAdapter {
     fn search(&self, query: &str) -> Result<Vec<SearchResult>> {
         let query_lower = query.to_lowercase();
         let mut results = Vec::new();
-        for page_num in 0..self.page_count {
-            if let Ok(content) = self.extract_text_from_page(page_num) {
+        let text_pages: Vec<String> = if self.page_texts.len() == self.page_count {
+            self.page_texts.clone()
+        } else if !self.page_texts.is_empty() {
+            self.page_texts.clone()
+        } else {
+            (0..self.page_count)
+                .filter_map(|n| self.extract_text_from_page(n).ok())
+                .collect()
+        };
+        for (page_num, content) in text_pages.iter().enumerate() {
+            {
                 let content_lower = content.to_lowercase();
                 let matches: Vec<_> = content_lower.match_indices(&query_lower).collect();
                 if !matches.is_empty() {
