@@ -1,3 +1,17 @@
+# Release Notes (v2.2.2)
+
+##  New Features & Improvements
+- **Android: keep screen on while reading** — the screen no longer dims mid-chapter (reader setting, default on).
+- **Batch convert to EPUB** — multi-select books in the library → "Convert to EPUB" converts all, imports each and moves the originals to the recycle bin (per-book status in the dialog).
+- **Bulk "Add to Shelf"** — assign multiple books to a shelf from the multi-select toolbar.
+- **Download queue panel** — a Downloads slide-over shows every active book download with live progress (percent + MB); LibGen/Gutenberg register their titles.
+- **Statistics: weekly trend chart** — pages-read and reading-time bars from real daily stats; reading-goal reached toast + badge.
+- **MangaFire memory bound** — chapter/page caches capped at 50 series.
+
+##  Bug Fixes
+- `empty_trash` now also removes orphaned converted-EPUB files (only files no book references).
+- Fixed a broken reference in OnlineMangaView (download-all button) and a missing reader-settings setter type (tsc clean).
+
 # Release Notes (v2.2.0)
 
 ##  New Features & Improvements
