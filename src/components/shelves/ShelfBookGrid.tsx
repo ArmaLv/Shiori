@@ -1,14 +1,17 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Book, Shelf } from '../../lib/tauri';
-import { Star, X, BookOpen, ArrowLeft } from 'lucide-react';
+import { Star, X, BookOpen, ArrowLeft, Plus } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCoverImage } from '../common/hooks/useCoverImage';
+import { AddBooksToShelfDialog } from './AddBooksToShelfDialog';
 
 interface ShelfBookGridProps {
   shelf: Shelf;
   books: Book[];
   onBack: () => void;
+  onRefreshBooks?: () => void;
 }
 
 function ShelfBookCard({ book, isSelected, onClick, shelfColor }: { book: Book, isSelected: boolean, onClick: () => void, shelfColor: string }) {
@@ -96,8 +99,9 @@ function ShelfBookCard({ book, isSelected, onClick, shelfColor }: { book: Book, 
   );
 }
 
-export function ShelfBookGrid({ shelf, books, onBack }: ShelfBookGridProps) {
+export function ShelfBookGrid({ shelf, books, onBack, onRefreshBooks }: ShelfBookGridProps) {
   const [selectedBookId, setSelectedBookId] = useState<number | null>(null);
+  const [addBooksDialogOpen, setAddBooksDialogOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [columns, setColumns] = useState(5);
 
@@ -129,17 +133,26 @@ export function ShelfBookGrid({ shelf, books, onBack }: ShelfBookGridProps) {
     <div className="p-4 sm:p-8 h-full overflow-y-auto" ref={containerRef}>
       <div className="max-w-[1400px] mx-auto">
         <div className="mb-8 relative sticky top-0 z-40 bg-background/90 backdrop-blur-md pt-2 pb-4 -mx-4 px-4 sm:-mx-8 sm:px-8 border-b border-border/50">
-          <button 
-            onClick={onBack}
-            className="mb-6 flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors group"
-          >
-            <div className="w-8 h-8 rounded-full bg-foreground/5 flex items-center justify-center group-hover:bg-foreground/10 transition-colors">
-              <ArrowLeft size={16} />
-            </div>
-            <span className="text-sm font-medium">Back to Shelves</span>
-          </button>
+          <div className="flex items-center justify-between gap-4 mb-4">
+            <button 
+              onClick={onBack}
+              className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors group"
+            >
+              <div className="w-8 h-8 rounded-full bg-foreground/5 flex items-center justify-center group-hover:bg-foreground/10 transition-colors">
+                <ArrowLeft size={16} />
+              </div>
+              <span className="text-sm font-medium">Back to Shelves</span>
+            </button>
 
-          <div className="text-[11px] font-bold tracking-[0.2em] text-muted-foreground uppercase mb-3 mt-2">
+            <Button
+              onClick={() => setAddBooksDialogOpen(true)}
+              className="gap-2 rounded-xl h-10 px-4 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20"
+            >
+              <Plus className="w-4 h-4" /> Add Books
+            </Button>
+          </div>
+
+          <div className="text-[11px] font-bold tracking-[0.2em] text-muted-foreground uppercase mb-1">
             MY SHELF · {books.length} BOOKS
           </div>
           <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-foreground mb-2" style={{ fontFamily: 'var(--font-serif)', letterSpacing: '-0.02em' }}>
@@ -309,12 +322,25 @@ export function ShelfBookGrid({ shelf, books, onBack }: ShelfBookGridProps) {
         {books.length === 0 && (
           <div className="flex flex-col items-center justify-center py-20 text-center relative z-10">
             <h2 className="text-xl font-semibold mb-2 text-foreground">Shelf is empty</h2>
-            <p className="text-muted-foreground mb-8 max-w-sm">
+            <p className="text-muted-foreground mb-6 max-w-sm">
               You haven't added any books to this shelf yet.
             </p>
+            <Button
+              onClick={() => setAddBooksDialogOpen(true)}
+              className="gap-2 rounded-xl h-11 px-6 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20"
+            >
+              <Plus className="w-4 h-4" /> Add Books to Shelf
+            </Button>
           </div>
         )}
       </div>
+
+      <AddBooksToShelfDialog
+        open={addBooksDialogOpen}
+        onOpenChange={setAddBooksDialogOpen}
+        shelf={shelf}
+        onBooksUpdated={() => onRefreshBooks?.()}
+      />
     </div>
   );
 }

@@ -3,7 +3,13 @@ import { useAnnotationsData } from './useAnnotationsData';
 import { AnnotationCard } from './AnnotationCard';
 import { AnnotationExportDialog } from '../reader/AnnotationExportDialog';
 import { QuoteCardDialog } from './QuoteCardDialog';
-import { X, LayoutGrid, List, Library, Share2, BookOpen, Bookmark } from 'lucide-react';
+import { X, LayoutGrid, List, Library, Share2, BookOpen, Bookmark, ChevronDown, Check } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 interface AnnotationsViewDesktopProps {
   onClose: () => void;
@@ -126,13 +132,39 @@ export function AnnotationsViewDesktop({ onClose, onOpenBook, data }: Annotation
                 ))}
               </div>
               <div className="flex items-center gap-2 shrink-0 pb-2">
-                <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value === 'all' ? 'all' : Number(e.target.value))} className="bg-muted/30 border border-border/50 rounded-lg px-2.5 py-1 text-xs font-medium text-foreground focus:outline-none dark:[color-scheme:dark]">
-                  <option value="all">All Categories</option>
-                  {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-                <div className="hidden md:flex items-center bg-muted/50 rounded-lg p-0.5 border border-border/50">
-                   <button onClick={() => setViewMode('grid')} className={`p-1 rounded-md transition-all ${viewMode==='grid'?'bg-background text-foreground shadow-sm':'text-muted-foreground hover:text-foreground'}`}><LayoutGrid size={14}/></button>
-                   <button onClick={() => setViewMode('list')} className={`p-1 rounded-md transition-all ${viewMode==='list'?'bg-background text-foreground shadow-sm':'text-muted-foreground hover:text-foreground'}`}><List size={14}/></button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-card/80 hover:bg-card border border-border/60 hover:border-primary/40 text-xs font-bold text-foreground transition-all shadow-xs outline-none cursor-pointer">
+                    <span>{categoryFilter === 'all' ? 'All Categories' : categories.find(c => c.id === categoryFilter)?.name || 'All Categories'}</span>
+                    <ChevronDown size={14} className="text-muted-foreground" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48 bg-popover/95 backdrop-blur-xl border border-border/80 shadow-xl rounded-xl p-1 z-50">
+                    <DropdownMenuItem
+                      onClick={() => setCategoryFilter('all')}
+                      className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+                        categoryFilter === 'all' ? 'bg-primary/15 text-primary font-bold' : 'text-popover-foreground hover:bg-accent'
+                      }`}
+                    >
+                      <span>All Categories</span>
+                      {categoryFilter === 'all' && <Check size={14} className="text-primary" />}
+                    </DropdownMenuItem>
+                    {categories.map((c) => (
+                      <DropdownMenuItem
+                        key={c.id ?? c.name}
+                        onClick={() => c.id !== undefined && setCategoryFilter(c.id)}
+                        className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+                          categoryFilter === c.id ? 'bg-primary/15 text-primary font-bold' : 'text-popover-foreground hover:bg-accent'
+                        }`}
+                      >
+                        <span>{c.name}</span>
+                        {categoryFilter === c.id && <Check size={14} className="text-primary" />}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                <div className="hidden md:flex items-center bg-card/60 rounded-xl p-0.5 border border-border/50">
+                   <button onClick={() => setViewMode('grid')} className={`p-1.5 rounded-lg transition-all ${viewMode==='grid'?'bg-primary text-primary-foreground shadow-xs':'text-muted-foreground hover:text-foreground'}`}><LayoutGrid size={14}/></button>
+                   <button onClick={() => setViewMode('list')} className={`p-1.5 rounded-lg transition-all ${viewMode==='list'?'bg-primary text-primary-foreground shadow-xs':'text-muted-foreground hover:text-foreground'}`}><List size={14}/></button>
                 </div>
               </div>
             </div>

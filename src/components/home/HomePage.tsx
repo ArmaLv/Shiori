@@ -369,29 +369,44 @@ export function HomePage({ onOpenBook, onViewRSS, searchQuery = "", onSearchChan
       
       {/* ── COMPACT COLLECTIONS BAR ── */}
       <div className="flex gap-3 mb-6 overflow-x-auto pb-2 scrollbar-none hidden md:flex">
+        {/* Favorites */}
         <div 
           onClick={handleViewLibrary}
-          className="flex items-center gap-2 px-4 py-2 rounded-full bg-card/50 text-muted-foreground hover:text-foreground hover:bg-card hover:border-primary/30 cursor-pointer transition-all duration-200 border border-border/50 shadow-sm"
+          className="group flex items-center gap-2.5 px-4 py-2 rounded-2xl bg-card/70 hover:bg-card border border-border/50 hover:border-primary/40 text-muted-foreground hover:text-foreground shadow-sm transition-all duration-200 hover:scale-105 active:scale-95 select-none cursor-pointer"
         >
-          <Heart size={16} className="opacity-70" />
-          <span className="font-bold text-sm tabular-nums text-foreground">{favoriteBooks.length}</span>
-          <span className="text-sm font-medium">Favorites</span>
+          <Heart size={16} className="text-primary opacity-80 group-hover:opacity-100 group-hover:scale-110 transition-all" />
+          <span className="font-extrabold text-xs px-2 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/20 tabular-nums">{favoriteBooks.length}</span>
+          <span className="text-xs font-bold tracking-wide text-foreground">Favorites</span>
         </div>
+
+        {/* Reading */}
         <div 
           onClick={handleViewLibrary}
-          className="flex items-center gap-2 px-4 py-2 rounded-full bg-card/50 text-muted-foreground hover:text-foreground hover:bg-card hover:border-primary/30 cursor-pointer transition-all duration-200 border border-border/50 shadow-sm"
+          className="group flex items-center gap-2.5 px-4 py-2 rounded-2xl bg-card/70 hover:bg-card border border-border/50 hover:border-primary/40 text-muted-foreground hover:text-foreground shadow-sm transition-all duration-200 hover:scale-105 active:scale-95 select-none cursor-pointer"
         >
-          <CheckCircle2 size={16} className="opacity-70" />
-          <span className="font-bold text-sm tabular-nums text-foreground">{completedBooks.length}</span>
-          <span className="text-sm font-medium">Completed</span>
+          <BookOpen size={16} className="text-primary opacity-80 group-hover:opacity-100 group-hover:scale-110 transition-all" />
+          <span className="font-extrabold text-xs px-2 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/20 tabular-nums">{continueReading.length}</span>
+          <span className="text-xs font-bold tracking-wide text-foreground">Reading</span>
         </div>
+
+        {/* Completed */}
         <div 
           onClick={handleViewLibrary}
-          className="flex items-center gap-2 px-4 py-2 rounded-full bg-card/50 text-muted-foreground hover:text-foreground hover:bg-card hover:border-primary/30 cursor-pointer transition-all duration-200 border border-border/50 shadow-sm"
+          className="group flex items-center gap-2.5 px-4 py-2 rounded-2xl bg-card/70 hover:bg-card border border-border/50 hover:border-primary/40 text-muted-foreground hover:text-foreground shadow-sm transition-all duration-200 hover:scale-105 active:scale-95 select-none cursor-pointer"
         >
-          <PauseCircle size={16} className="opacity-70" />
-          <span className="font-bold text-sm tabular-nums text-foreground">{onHoldBooks.length}</span>
-          <span className="text-sm font-medium">On Hold</span>
+          <CheckCircle2 size={16} className="text-primary opacity-80 group-hover:opacity-100 group-hover:scale-110 transition-all" />
+          <span className="font-extrabold text-xs px-2 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/20 tabular-nums">{completedBooks.length}</span>
+          <span className="text-xs font-bold tracking-wide text-foreground">Completed</span>
+        </div>
+
+        {/* On Hold */}
+        <div 
+          onClick={handleViewLibrary}
+          className="group flex items-center gap-2.5 px-4 py-2 rounded-2xl bg-card/70 hover:bg-card border border-border/50 hover:border-primary/40 text-muted-foreground hover:text-foreground shadow-sm transition-all duration-200 hover:scale-105 active:scale-95 select-none cursor-pointer"
+        >
+          <PauseCircle size={16} className="text-primary opacity-80 group-hover:opacity-100 group-hover:scale-110 transition-all" />
+          <span className="font-extrabold text-xs px-2 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/20 tabular-nums">{onHoldBooks.length}</span>
+          <span className="text-xs font-bold tracking-wide text-foreground">On Hold</span>
         </div>
       </div>
 
@@ -469,7 +484,7 @@ export function HomePage({ onOpenBook, onViewRSS, searchQuery = "", onSearchChan
                 </div>
                 <div className="bento-list-info">
                   <span className="bento-list-title">{book.title}</span>
-                  <span className="bento-list-meta">{progressMap[book.id!]?.progressPercent ?? 0}% completed</span>
+                  <span className="bento-list-meta">{Math.round(progressMap[book.id!]?.progressPercent ?? 0)}% completed</span>
                   <div className="bento-progress-track">
                     <div className="bento-progress-bar" style={{ width: `${progressMap[book.id!]?.progressPercent ?? 0}%` }} />
                   </div>

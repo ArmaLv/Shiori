@@ -59,27 +59,27 @@ export function ShelfView() {
     loadShelfs();
   }, [setShelfs]);
 
-  useEffect(() => {
-    async function loadBooks() {
-      if (!selectedShelf || selectedShelf.id === undefined) {
-        setBooks([]);
-        return;
-      }
-      
-      setLoadingBooks(true);
-      try {
-        const shelfBooks = await api.getShelfBooks(selectedShelf.id);
-        setBooks(shelfBooks || []);
-      } catch (error) {
-        logger.error('Failed to load shelf books:', error);
-        setBooks([]);
-      } finally {
-        setLoadingBooks(false);
-      }
+  const loadBooks = React.useCallback(async () => {
+    if (!selectedShelf || selectedShelf.id === undefined) {
+      setBooks([]);
+      return;
     }
     
-    loadBooks();
+    setLoadingBooks(true);
+    try {
+      const shelfBooks = await api.getShelfBooks(selectedShelf.id);
+      setBooks(shelfBooks || []);
+    } catch (error) {
+      logger.error('Failed to load shelf books:', error);
+      setBooks([]);
+    } finally {
+      setLoadingBooks(false);
+    }
   }, [selectedShelf]);
+
+  useEffect(() => {
+    loadBooks();
+  }, [loadBooks]);
 
   const handleCreateShelf = (parentShelfId?: number) => {
     setEditShelf(null);
@@ -131,7 +131,12 @@ export function ShelfView() {
             <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
           </div>
         ) : (
-          <ShelfBookGrid shelf={selectedShelf} books={books} onBack={() => selectShelf(null)} />
+          <ShelfBookGrid
+            shelf={selectedShelf}
+            books={books}
+            onBack={() => selectShelf(null)}
+            onRefreshBooks={loadBooks}
+          />
         )}
       </div>
 

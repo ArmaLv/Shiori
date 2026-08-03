@@ -45,7 +45,7 @@ export function isExternalHref(href: string): boolean {
 export function openExternal(url: string): void | Promise<void> {
   if (isTauri && isAndroid) {
     // Android: ACTION_VIEW intent via the backend command.
-    return invoke('open_url', { url }).catch(() => {});
+    return invoke('open_url', { url }).then(() => {}).catch(() => {});
   }
   if (isTauri) {
     // Desktop Tauri: system browser via the shell plugin — never navigate the app.

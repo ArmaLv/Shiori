@@ -7,15 +7,15 @@ import ReactMarkdown from 'react-markdown';
 export const getAnnotationIcon = (type: string) => {
   switch (type) {
     case 'highlight':
-      return <Highlighter className="w-5 h-5 text-yellow-500" />;
+      return <Highlighter className="w-4.5 h-4.5 text-primary" />;
     case 'note':
-      return <StickyNote className="w-5 h-5 text-blue-500" />;
+      return <StickyNote className="w-4.5 h-4.5 text-primary" />;
     case 'bookmark':
-      return <Bookmark className="w-5 h-5 text-blue-500" />;
+      return <Bookmark className="w-4.5 h-4.5 text-primary" />;
     case 'vocabulary':
-      return <BookmarkPlus className="w-5 h-5 text-purple-500" />;
+      return <BookmarkPlus className="w-4.5 h-4.5 text-primary" />;
     default:
-      return <Highlighter className="w-5 h-5 text-muted-foreground" />;
+      return <Highlighter className="w-4.5 h-4.5 text-primary" />;
   }
 };
 
@@ -40,32 +40,30 @@ export function AnnotationCard({ result, categories, onOpenBook, setQuoteCardDat
     }
   }
 
-  const tintColor = result.annotation.color || '#3b82f6';
-
   return (
     <div 
       className="break-inside-avoid mb-4 md:mb-6 relative z-0 isolation-isolate group transition-all duration-300 hover:-translate-y-0.5"
     >
-      {/* Simpler Minimalist Card Background */}
-      <div className="absolute inset-0 bg-card border border-border/50 hover:border-border rounded-[1rem] transition-all duration-300 z-0" />
+      {/* Theme Matched Card Background */}
+      <div className="absolute inset-0 bg-card/80 backdrop-blur-xl border border-border/50 hover:border-primary/40 rounded-[1.25rem] shadow-sm transition-all duration-300 z-0" />
       
       <div className="p-4 flex flex-col h-full relative z-10">
         {/* Header */}
-        <div className="flex items-start justify-between mb-4 md:mb-5">
-          <div className="flex items-center gap-3.5">
-            <div className="shrink-0 text-muted-foreground/40 group-hover:text-primary/80 transition-colors duration-500">
+        <div className="flex items-start justify-between mb-3.5">
+          <div className="flex items-center gap-3">
+            <div className="shrink-0 p-1.5 rounded-xl bg-primary/10 text-primary group-hover:bg-primary/20 transition-colors duration-300">
               {isVocabulary ? (
-                <BookmarkPlus className="w-5 h-5" />
+                <BookmarkPlus className="w-4.5 h-4.5 text-primary" />
               ) : (
                 getAnnotationIcon(result.annotation.annotationType)
               )}
             </div>
-            <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground/60">
-              <span className="font-bold tracking-[0.1em] uppercase text-[10px]">{formatDate(result.annotation.createdAt || '')}</span>
+            <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground/80">
+              <span className="font-extrabold tracking-[0.1em] uppercase text-[10px]">{formatDate(result.annotation.createdAt || '')}</span>
               {result.annotation.chapterTitle && (
                 <>
                   <span className="w-1 h-1 rounded-full bg-border" />
-                  <span className="truncate max-w-[120px] sm:max-w-[200px] font-medium font-serif italic text-[12px] md:text-[13px]" title={result.annotation.chapterTitle}>
+                  <span className="truncate max-w-[120px] sm:max-w-[200px] font-medium font-serif italic text-[12px] md:text-[13px] text-foreground/90" title={result.annotation.chapterTitle}>
                     {result.annotation.chapterTitle}
                   </span>
                 </>
@@ -74,11 +72,11 @@ export function AnnotationCard({ result, categories, onOpenBook, setQuoteCardDat
           </div>
           
           {/* Quick Actions (Hover) */}
-          <div className="opacity-0 group-hover:opacity-100 transition-all duration-500 flex items-center gap-1.5 -mt-1.5 -mr-1.5 translate-x-2 group-hover:translate-x-0">
+          <div className="opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center gap-1.5 -mt-1 -mr-1">
             {result.annotation.selectedText && (
               <button 
                 onClick={() => setQuoteCardData(result)}
-                className="p-2 hover:bg-primary/10 rounded-full text-muted-foreground hover:text-primary transition-all duration-300 hover:shadow-[0_0_15px_rgba(var(--primary),0.2)]"
+                className="p-2 hover:bg-primary/10 rounded-xl text-muted-foreground hover:text-primary transition-all duration-200"
                 title="Create Quote Card"
               >
                 <Share2 size={14} />
@@ -87,7 +85,7 @@ export function AnnotationCard({ result, categories, onOpenBook, setQuoteCardDat
             {onOpenBook && (
               <button 
                 onClick={() => onOpenBook(result.annotation.bookId, result.annotation.location)}
-                className="p-2 hover:bg-primary/10 rounded-full text-muted-foreground hover:text-primary transition-all duration-300 hover:shadow-[0_0_15px_rgba(var(--primary),0.2)]"
+                className="p-2 hover:bg-primary/10 rounded-xl text-muted-foreground hover:text-primary transition-all duration-200"
                 title="Jump to location"
               >
                 <ExternalLink size={14} />
@@ -96,25 +94,30 @@ export function AnnotationCard({ result, categories, onOpenBook, setQuoteCardDat
           </div>
         </div>
 
+        {/* Vocabulary Badge */}
+        {isVocabulary && (
+          <div className="mb-3">
+            <span className="text-[10px] uppercase tracking-[0.15em] px-2.5 py-1 rounded-lg font-extrabold bg-primary/15 text-primary border border-primary/25 shadow-2xs">
+              Vocabulary
+            </span>
+          </div>
+        )}
+
         {/* Category Tag */}
-        {result.annotation.categoryId && categories.find(c => c.id === result.annotation.categoryId) && (
-          <div className="mb-4">
-            <span className="text-[10px] uppercase tracking-[0.15em] px-2.5 py-1 rounded-md font-bold shadow-sm backdrop-blur-md border" style={{ 
-              backgroundColor: `${categories.find(c => c.id === result.annotation.categoryId)?.color}15`, 
-              color: categories.find(c => c.id === result.annotation.categoryId)?.color,
-              borderColor: `${categories.find(c => c.id === result.annotation.categoryId)?.color}30`
-            }}>
+        {!isVocabulary && result.annotation.categoryId && categories.find(c => c.id === result.annotation.categoryId) && (
+          <div className="mb-3">
+            <span className="text-[10px] uppercase tracking-[0.15em] px-2.5 py-1 rounded-lg font-extrabold bg-primary/15 text-primary border border-primary/25 shadow-2xs">
               {categories.find(c => c.id === result.annotation.categoryId)?.name}
             </span>
           </div>
         )}
 
         {/* Content */}
-        <div className="flex-1 space-y-4">
+        <div className="flex-1 space-y-3.5">
           {result.annotation.selectedText && (
-            <div className="relative pl-4 py-1 group/quote">
-              {/* Simple vertical accent line */}
-              <div className="absolute left-0 top-0 bottom-0 w-[2.5px] rounded-full transition-all duration-300" style={{ backgroundColor: tintColor }} />
+            <div className="relative pl-3.5 py-1 group/quote">
+              {/* Theme Primary vertical accent line */}
+              <div className="absolute left-0 top-0 bottom-0 w-1 rounded-full bg-primary/80 transition-all duration-300" />
               
               <span className="text-foreground/90 text-[14px] md:text-[15px] leading-relaxed font-serif font-medium tracking-tight relative z-10 block">
                 {result.annotation.selectedText}
@@ -123,39 +126,39 @@ export function AnnotationCard({ result, categories, onOpenBook, setQuoteCardDat
           )}
 
           {result.annotation.noteContent && !isVocabulary && (
-            <div className="pt-4 mt-2 border-t border-border/40 relative z-10">
-              <div className="text-[14px] prose prose-sm dark:prose-invert max-w-none text-muted-foreground/90 font-serif italic">
+            <div className="pt-3 mt-2 border-t border-border/40 relative z-10">
+              <div className="text-[14px] prose prose-sm dark:prose-invert max-w-none text-muted-foreground font-serif italic">
                 <ReactMarkdown>{result.annotation.noteContent}</ReactMarkdown>
               </div>
             </div>
           )}
           
           {isVocabulary && vocabData && (
-            <div className="mt-4 pl-1 relative z-10">
-              <div className="text-sm flex flex-col gap-5">
+            <div className="mt-3 pl-1 relative z-10">
+              <div className="text-sm flex flex-col gap-4">
                 {vocabData.type === 'define' && vocabData.data?.meanings?.length && (
-                  <div className="space-y-6">
+                  <div className="space-y-4">
                     {vocabData.data.phonetic && (
-                      <div className="flex items-center gap-2.5 text-muted-foreground/50 border-b border-border/30 pb-4">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary/50"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>
-                        <span className="text-[15px] font-medium tracking-widest font-serif italic">{vocabData.data.phonetic}</span>
+                      <div className="flex items-center gap-2.5 text-muted-foreground/70 border-b border-border/30 pb-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>
+                        <span className="text-[14px] font-medium tracking-widest font-serif italic">{vocabData.data.phonetic}</span>
                       </div>
                     )}
-                    <div className="space-y-5">
+                    <div className="space-y-4">
                       {vocabData.data.meanings.slice(0, 2).map((m: any, i: number) => (
-                        <div key={i} className="flex flex-col gap-2 relative pl-4">
-                          <div className="absolute left-0 top-1.5 w-1.5 h-1.5 rounded-full bg-primary/40" />
-                          <span className="font-bold text-[9px] text-primary/80 uppercase tracking-[0.25em]">{m.part_of_speech}</span>
-                          <div className="text-foreground/80 text-[15px] leading-relaxed font-medium">{m.definitions[0]?.definition}</div>
+                        <div key={i} className="flex flex-col gap-1.5 relative pl-4">
+                          <div className="absolute left-0 top-2 w-1.5 h-1.5 rounded-full bg-primary" />
+                          <span className="font-extrabold text-[10px] text-primary uppercase tracking-[0.2em]">{m.part_of_speech}</span>
+                          <div className="text-foreground/90 text-[14px] leading-relaxed font-medium">{m.definitions[0]?.definition}</div>
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
                 {vocabData.type === 'translate' && vocabData.data?.translated_text && (
-                  <div className="space-y-2 mt-3 pt-4 border-t border-border/20">
-                    <div className="text-foreground/95 text-[18px] font-serif font-semibold tracking-tight">{vocabData.data.translated_text}</div>
-                    <div className="text-[9px] text-muted-foreground/40 uppercase tracking-[0.2em] font-bold">Translated via {vocabData.data.provider}</div>
+                  <div className="space-y-2 mt-2 pt-3 border-t border-border/30">
+                    <div className="text-foreground text-[17px] font-serif font-semibold tracking-tight">{vocabData.data.translated_text}</div>
+                    <div className="text-[9px] text-muted-foreground/70 uppercase tracking-[0.2em] font-extrabold">Translated via {vocabData.data.provider}</div>
                   </div>
                 )}
               </div>

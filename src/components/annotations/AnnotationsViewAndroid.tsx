@@ -3,7 +3,13 @@ import { useAnnotationsData } from './useAnnotationsData';
 import { AnnotationCard } from './AnnotationCard';
 import { AnnotationExportDialog } from '../reader/AnnotationExportDialog';
 import { QuoteCardDialog } from './QuoteCardDialog';
-import { X, Search, Share2, Bookmark } from 'lucide-react';
+import { X, Search, Share2, Bookmark, ChevronDown, Check } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 interface AnnotationsViewAndroidProps {
   onClose: () => void;
@@ -108,14 +114,35 @@ export function AnnotationsViewAndroid({ onClose, onOpenBook, data }: Annotation
             ))}
           </div>
           <div className="shrink-0">
-            <select 
-              value={categoryFilter} 
-              onChange={(e) => setCategoryFilter(e.target.value === 'all' ? 'all' : Number(e.target.value))} 
-              className="bg-muted/40 border border-border/50 rounded-xl px-3 py-1.5 text-sm font-medium text-foreground focus:outline-none appearance-none"
-            >
-              <option value="all">All Categories</option>
-              {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            <DropdownMenu>
+              <DropdownMenuTrigger className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-card/80 hover:bg-card border border-border/60 hover:border-primary/40 text-xs font-bold text-foreground transition-all shadow-xs outline-none cursor-pointer">
+                <span>{categoryFilter === 'all' ? 'All Categories' : categories.find(c => c.id === categoryFilter)?.name || 'All Categories'}</span>
+                <ChevronDown size={14} className="text-muted-foreground" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48 bg-popover/95 backdrop-blur-xl border border-border/80 shadow-xl rounded-xl p-1 z-50">
+                <DropdownMenuItem
+                  onClick={() => setCategoryFilter('all')}
+                  className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+                    categoryFilter === 'all' ? 'bg-primary/15 text-primary font-bold' : 'text-popover-foreground hover:bg-accent'
+                  }`}
+                >
+                  <span>All Categories</span>
+                  {categoryFilter === 'all' && <Check size={14} className="text-primary" />}
+                </DropdownMenuItem>
+                {categories.map((c) => (
+                  <DropdownMenuItem
+                    key={c.id ?? c.name}
+                    onClick={() => c.id !== undefined && setCategoryFilter(c.id)}
+                    className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+                      categoryFilter === c.id ? 'bg-primary/15 text-primary font-bold' : 'text-popover-foreground hover:bg-accent'
+                    }`}
+                  >
+                    <span>{c.name}</span>
+                    {categoryFilter === c.id && <Check size={14} className="text-primary" />}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </div>

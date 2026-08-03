@@ -1,20 +1,15 @@
 /**
- * PremiumTopbar — Shiori v3.0
+ * PremiumTopbar — Shiori Redesign v3.3
  *
- * Layout zones (left → right):
- * [Logo] [Books|Manga tabs] [|] [Import ▼] [|] [RSS] [Convert] [EditMeta] [Delete]
- *                   [────────── Search (center) ──────────]
- *                                                  [Theme] [Settings]
+ * 3-Zone Architecture (Apple Books / Notion / Linear style):
+ * [Left: Sidebar Toggle + Book Shelves Dropdown + Domain Switcher] ───── [Center: Command Search Bar + Ctrl+K] ───── [Right: Primary CTA + Quick Tools + System Utilities]
  *
- * Import dropdown has 2 unified options:
- *   - "Import Books/Manga/Comics" (file picker)
- *   - "Import Folder" (folder picker)
+ * Replaced Shiori logo with a clean "Shelves" quick-access menu with shelf list & creation.
  */
 
 import { useState, useEffect, useRef } from 'react'
 import { cn } from '@/lib/utils'
 import {
-  ShioriWordmark,
   IconBooks,
   IconManga,
   IconImportBook,
@@ -26,8 +21,9 @@ import {
   IconX,
   IconSidebarToggle,
 } from '@/components/icons/ShioriIcons'
-import { Layers, Filter, HelpCircle, BarChart2, Rss, FolderPlus } from 'lucide-react'
+import { Layers, Filter, HelpCircle, BarChart2, Rss, FolderPlus, FolderOpen, ChevronDown } from 'lucide-react'
 import { usePreferencesStore } from '@/store/preferencesStore'
+import { useShelfStore } from '@/store/shelfStore'
 import type { CurrentView } from '@/store/uiStore'
 import {
   DropdownMenu,
@@ -37,10 +33,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { FeatureHint } from '@/components/ui/FeatureHint'
 import { WindowControls } from './WindowControls'
-
-
 
 export type DomainView = 'books' | 'manga_comics'
 
@@ -65,73 +60,7 @@ interface PremiumTopbarProps {
   searchPlaceholder?: string
 }
 
-// ─── Separator ────────────────────────────────
-const Sep = () => (
-  <div className="w-px h-5 bg-border self-center shrink-0 mx-0.5" aria-hidden />
-)
-
-// ─── Topbar Button ────────────────────────────
-interface TBtnProps {
-  onClick?: () => void
-  icon: React.ReactNode
-  label: string
-  disabled?: boolean
-  variant?: 'default' | 'ghost' | 'destructive'
-  active?: boolean
-  title?: string
-  showLabel?: boolean
-  type?: 'button' | 'submit' | 'reset'
-}
-
-const TBtn = ({
-  onClick,
-  icon,
-  label,
-  disabled = false,
-  variant = 'ghost',
-  active = false,
-  title,
-  showLabel = true,
-  type = 'button',
-}: TBtnProps) => (
-  <button
-    type={type}
-    onClick={onClick}
-    disabled={disabled}
-    title={title ?? label}
-    aria-label={label}
-    className={cn(
-      'group relative flex items-center gap-1.5 h-8 rounded-md px-2.5',
-      'text-xs font-medium select-none',
-      'transition-all duration-[120ms] ease-[cubic-bezier(0.4,0,0.2,1)]',
-      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-      // Disabled
-      disabled && 'opacity-38 cursor-not-allowed pointer-events-none',
-      // Variants
-      variant === 'ghost' && !active && [
-        'text-muted-foreground hover:text-foreground',
-        'hover:bg-accent',
-      ],
-      variant === 'ghost' && active && [
-        'text-foreground bg-accent',
-      ],
-      variant === 'default' && [
-        'bg-primary text-primary-foreground',
-        'hover:bg-primary/85',
-        'shadow-sm',
-      ],
-      variant === 'destructive' && [
-        'text-destructive hover:text-destructive-foreground',
-        'hover:bg-destructive',
-      ],
-    )}
-  >
-    <span className="shrink-0">{icon}</span>
-    {showLabel && <span className="truncate">{label}</span>}
-  </button>
-)
-
-// ─── Search Input ─────────────────────────────
+// ─── Command Search Input ─────────────────────────────
 interface SearchBarProps {
   onSearch?: (query: string) => void
   currentDomain: DomainView
@@ -144,18 +73,16 @@ const SearchBar = ({ onSearch, currentDomain, value: controlledValue, placeholde
   const [focused, setFocused] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Sync external changes if they differ
   useEffect(() => {
     if (controlledValue !== undefined && controlledValue !== internalValue) {
       setInternalValue(controlledValue)
     }
-  }, [controlledValue]) // Only re-sync when controlledValue changes from outside
+  }, [controlledValue])
 
   const setValue = (next: string) => {
     setInternalValue(next)
   }
 
-  // Debounce the callback to parent
   useEffect(() => {
     const timer = setTimeout(() => {
       if (onSearch && internalValue !== controlledValue) {
@@ -174,20 +101,17 @@ const SearchBar = ({ onSearch, currentDomain, value: controlledValue, placeholde
   return (
     <div
       className={cn(
-        'relative flex items-center h-9',
-        'rounded-full',
-        'transition-all duration-300 ease-out',
-        'max-w-full',
+        'relative flex items-center h-11 transition-all duration-300 ease-out rounded-2xl select-none',
         focused
-          ? 'bg-background w-full sm:w-80 shadow-[inset_0_1px_3px_rgba(0,0,0,0.1),0_0_0_2px_rgba(var(--primary),0.2)] dark:shadow-[inset_0_1px_3px_rgba(0,0,0,0.4),0_0_0_2px_rgba(var(--primary),0.3)] ring-1 ring-primary/20'
-          : 'bg-muted/50 hover:bg-muted/80 w-40 sm:w-64 ring-1 ring-border/50',
+          ? 'bg-background w-full shadow-[0_0_0_2px_rgba(var(--primary),0.3)] ring-1 ring-primary/40'
+          : 'bg-secondary/60 hover:bg-secondary/90 w-full border border-border/50 shadow-inner'
       )}
     >
       <IconSearch
-        size={14}
+        size={16}
         className={cn(
-          "absolute left-3 transition-colors duration-200",
-          focused ? "text-primary" : "text-muted-foreground"
+          'absolute left-3.5 transition-colors duration-200 shrink-0',
+          focused ? 'text-primary' : 'text-muted-foreground'
         )}
       />
       <input
@@ -197,31 +121,29 @@ const SearchBar = ({ onSearch, currentDomain, value: controlledValue, placeholde
         onChange={(e) => setValue(e.target.value)}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
-        placeholder={placeholder ?? `Search ${currentDomain === 'books' ? 'Books' : 'Manga'}…`}
-        className={cn(
-          'w-full h-full pl-9 pr-12 rounded-full',
-          'bg-transparent text-sm text-foreground placeholder:text-muted-foreground',
-          'focus:outline-none',
-          'caret-primary',
-          'transition-opacity duration-300',
-        )}
+        placeholder={placeholder ?? `Search ${currentDomain === 'books' ? 'Books' : 'Manga'}...`}
+        className="w-full h-full pl-10 pr-16 rounded-xl bg-transparent text-xs sm:text-sm text-foreground placeholder:text-muted-foreground/70 focus:outline-none caret-primary"
       />
-      {internalValue && (
+      {internalValue ? (
         <button
           type="button"
           onClick={clear}
-          className="absolute right-2.5 flex items-center justify-center w-5 h-5 rounded-full bg-muted-foreground/20 text-muted-foreground hover:bg-muted-foreground/30 hover:text-foreground transition-colors"
+          className="absolute right-3 flex items-center justify-center w-5 h-5 rounded-full bg-muted-foreground/20 text-muted-foreground hover:bg-muted-foreground/30 hover:text-foreground transition-colors"
           tabIndex={-1}
           aria-label="Clear search"
         >
-          <IconX size={10} />
+          <IconX size={12} />
         </button>
+      ) : (
+        <kbd className="absolute right-3 hidden sm:flex items-center gap-0.5 px-1.5 py-0.5 rounded border border-border/60 bg-muted/50 text-[10px] font-semibold text-muted-foreground pointer-events-none">
+          Ctrl K
+        </kbd>
       )}
     </div>
   )
 }
 
-// ─── Main Component ───────────────────────────
+// ─── Main Topbar ───────────────────────────
 export function PremiumTopbar({
   currentDomain,
   onDomainChange,
@@ -231,19 +153,18 @@ export function PremiumTopbar({
   onOpenSettings,
   onOpenAdvancedFilter,
   onToggleSidebar,
-  onGoHome,
   onAutoGroupManga,
   onOpenShortcuts,
   onCreateShelf,
   currentView,
   onNavigateToView,
   activeFilterCount = 0,
-  sidebarOpen = true,
   searchValue,
   searchPlaceholder,
 }: PremiumTopbarProps) {
   const preferences = usePreferencesStore((s) => s.preferences)
   const updateTheme = usePreferencesStore((s) => s.updateTheme)
+  const shelves = useShelfStore((s) => s.shelves)
 
   const isDark = preferences?.theme === 'dark'
 
@@ -253,164 +174,67 @@ export function PremiumTopbar({
     }
   }
 
-  const handleOnlineToggle = () => {
-    if (onNavigateToView) {
-      if (currentView?.startsWith('online')) {
-        onNavigateToView('library')
-      } else {
-        onNavigateToView(currentDomain === 'books' ? 'online-books' : 'online-manga')
-      }
-    }
-  }
-
   return (
-    <header
-      data-tauri-drag-region
-      className={cn(
-        'flex items-center justify-between h-[var(--topbar-height,60px)] px-4 gap-3',
-        'bg-background/60 backdrop-blur-3xl border-b border-border/40 shadow-sm',
-        'shrink-0 z-[var(--z-topbar,200)]',
-        'select-none max-md:hidden',
-      )}
-    >
-      <div className="flex flex-1 items-center gap-2 min-w-0">
-      {/* ── Left side ── */}
-      <div className="flex items-center gap-2 min-w-0" data-tauri-drag-region>
-        <div className="max-md:hidden">
-          <TBtn
-            icon={<IconSidebarToggle size={16} />}
-            label="Toggle Sidebar"
-            showLabel={false}
-            onClick={onToggleSidebar}
-            active={sidebarOpen}
-          />
-        </div>
-        
-        <div className="flex items-center mx-1 gap-2 cursor-pointer hover:opacity-80 transition-opacity max-md:hidden" onClick={onGoHome} title="Go to Home">
-          <ShioriWordmark size={24} className="text-foreground" />
-        </div>
-
-        <div className="w-px h-6 bg-border/50 mx-1 max-md:hidden" />
-
-        {/* ── Domain Tabs (Segmented Control) ── */}
-        {preferences?.preferredContentType === 'both' && (
-          <div className="relative flex items-center p-1 bg-muted/50 border border-border/50 rounded-full h-9 shadow-inner mr-1 max-md:hidden">
-            {/* Animated Background Pill */}
-            <div 
-              className="absolute top-1 bottom-1 rounded-full bg-gradient-to-b from-primary to-primary/90 shadow-[0_2px_10px_rgba(var(--primary),0.3)] border-t border-white/20 ring-1 ring-primary/20 transition-all duration-300 ease-out z-0"
-              style={{ 
-                left: currentDomain === 'books' ? '4px' : 'calc(50% + 2px)', 
-                width: 'calc(50% - 6px)' 
-              }} 
-            />
-            
-            <button
-              type="button"
-              onClick={() => onDomainChange('books')}
-              className={cn(
-                'relative z-10 flex items-center justify-center gap-1.5 flex-1 px-4 text-xs font-bold rounded-full transition-colors duration-200',
-                currentDomain === 'books' ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
-              )}
-            >
-              <IconBooks size={16} />
-              <span className="text-sm">Books</span>
-            </button>
-            
-            <button
-              type="button"
-              onClick={() => onDomainChange('manga_comics')}
-              className={cn(
-                'relative z-10 flex items-center justify-center gap-1.5 flex-1 px-4 text-xs font-bold rounded-full transition-colors duration-200',
-                currentDomain === 'manga_comics' ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
-              )}
-            >
-              <IconManga size={16} />
-              <span className="text-sm">Manga</span>
-            </button>
-          </div>
+    <TooltipProvider delayDuration={120}>
+      <header
+        data-tauri-drag-region
+        className={cn(
+          'flex items-center justify-between h-[64px] px-4 gap-4',
+          'bg-card/70 backdrop-blur-2xl border-b border-border/40 shadow-sm',
+          'shrink-0 z-30 select-none max-md:hidden'
         )}
+      >
+        {/* ── ZONE 1: Left Actions & Domain Segmented Control ── */}
+        <div className="flex items-center gap-3 shrink-0" data-tauri-drag-region>
+          <button
+            type="button"
+            onClick={onToggleSidebar}
+            title="Toggle Sidebar"
+            className="flex items-center justify-center w-9 h-9 rounded-xl text-muted-foreground hover:text-foreground hover:bg-accent/60 transition-colors"
+          >
+            <IconSidebarToggle size={18} />
+          </button>
 
-        {/* ── Create Shelf ── */}
-        <div className="max-md:hidden mr-1">
-          <TBtn
-            icon={<FolderPlus size={16} />}
-            label="Create Shelf"
-            showLabel={false}
-            onClick={onCreateShelf}
-          />
+          {/* Domain Segmented Control */}
+          {preferences?.preferredContentType === 'both' && (
+            <div className="relative flex items-center p-1 bg-secondary/80 border border-border/50 rounded-2xl h-11 shadow-inner">
+              <div
+                className="absolute top-1 bottom-1 rounded-xl bg-primary shadow-md shadow-primary/25 transition-all duration-300 ease-out z-0"
+                style={{
+                  left: currentDomain === 'books' ? '4px' : 'calc(50% + 2px)',
+                  width: 'calc(50% - 6px)',
+                }}
+              />
+
+              <button
+                type="button"
+                onClick={() => onDomainChange('books')}
+                className={cn(
+                  'relative z-10 flex items-center justify-center gap-2.5 px-6 h-full text-xs sm:text-sm font-bold rounded-xl transition-colors duration-200',
+                  currentDomain === 'books' ? 'text-primary-foreground font-extrabold' : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                <IconBooks size={18} />
+                <span>Books</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onDomainChange('manga_comics')}
+                className={cn(
+                  'relative z-10 flex items-center justify-center gap-2.5 px-6 h-full text-xs sm:text-sm font-bold rounded-xl transition-colors duration-200',
+                  currentDomain === 'manga_comics' ? 'text-primary-foreground font-extrabold' : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                <IconManga size={18} />
+                <span>Manga</span>
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* ── Import zone ── */}
-        <div className="max-md:hidden">
-          <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className={cn(
-                'flex items-center justify-center gap-2 w-9 h-9 rounded-md shrink-0',
-                'text-sm font-medium',
-                'transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]',
-                'bg-background hover:bg-accent hover:text-accent-foreground text-foreground border border-border shadow-sm'
-              )}
-              title="Import"
-            >
-              <IconImportBook size={16} />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-64 rounded-xl border-border shadow-xl bg-background/95 backdrop-blur-xl p-2">
-            <DropdownMenuItem onClick={onImportFiles} className="gap-3 p-2 cursor-pointer rounded-lg flex items-start">
-              <div className="p-2 bg-primary/10 rounded-md shrink-0 mt-0.5">
-                <IconImportBook size={16} className="text-primary" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <span className="text-sm font-medium leading-none">Import Files</span>
-                <span className="text-xs text-muted-foreground leading-snug">Select individual books or manga</span>
-              </div>
-            </DropdownMenuItem>
-            
-            <DropdownMenuSeparator className="my-1 bg-border/50" />
-            
-            <DropdownMenuItem onClick={onImportFolder} className="gap-3 p-2 cursor-pointer rounded-lg flex items-start">
-              <div className="p-2 bg-primary/10 rounded-md shrink-0 mt-0.5">
-                <IconImportManga size={16} className="text-primary" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <span className="text-sm font-medium leading-none">Import Folder</span>
-                <span className="text-xs text-muted-foreground leading-snug">Scan directory recursively</span>
-              </div>
-            </DropdownMenuItem>
-
-            {currentDomain === 'manga_comics' && (
-              <>
-                <DropdownMenuSeparator className="my-1 bg-border/50" />
-                <DropdownMenuLabel className="text-xs text-muted-foreground font-semibold px-3 py-1">Organization</DropdownMenuLabel>
-                <FeatureHint
-                  featureId="auto-group-manga"
-                  title="Auto-group Manga Volumes"
-                  description="Automatically detect and group manga volumes by series name from filenames. Perfect for organizing your manga shelf!"
-                  position="left"
-                >
-                  <DropdownMenuItem onClick={onAutoGroupManga} className="gap-3 p-2 cursor-pointer rounded-lg flex items-start">
-                    <div className="p-2 bg-purple-500/10 rounded-md shrink-0 mt-0.5">
-                      <Layers size={16} className="text-purple-500" />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <span className="text-sm font-medium leading-none">Group Volumes</span>
-                      <span className="text-xs text-muted-foreground leading-snug">Auto-detect series</span>
-                    </div>
-                  </DropdownMenuItem>
-                </FeatureHint>
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-        </div>
-      </div>
-      </div>
-
-      {/* ── Center (Search) ── */}
-      <div className="flex flex-1 justify-center items-center">
-        <div className="w-full max-w-md">
+        {/* ── ZONE 2: Center Search Bar ── */}
+        <div className="flex-1 max-w-2xl px-3">
           <SearchBar
             onSearch={onSearch}
             currentDomain={currentDomain}
@@ -418,96 +242,173 @@ export function PremiumTopbar({
             placeholder={searchPlaceholder}
           />
         </div>
-      </div>
 
-      {/* ── Right side ── */}
-      <div className="flex flex-1 items-center justify-end gap-1.5 min-w-0 max-md:hidden" data-tauri-drag-region>
-        {/* ── RSS ── */}
-        <button
-          type="button"
-          onClick={() => {
-            if (onNavigateToView) onNavigateToView('rss-articles')
-          }}
-          title="RSS Reader"
-          className={cn(
-            'flex items-center justify-center w-9 h-9 rounded-full transition-all duration-200 hover:scale-105 active:scale-95',
-            currentView === 'rss-articles' || currentView === 'rss-feeds'
-              ? 'text-primary bg-primary/10'
-              : 'text-muted-foreground hover:text-foreground hover:bg-muted',
-          )}
-        >
-          <Rss size={16} />
-        </button>
-        {/* ── Statistics ── */}
-        <button
-          type="button"
-          onClick={() => {
-            if (onNavigateToView) onNavigateToView('statistics')
-          }}
-          title="View Reading Statistics"
-          className={cn(
-            'flex items-center justify-center w-9 h-9 rounded-full transition-all duration-200 hover:scale-105 active:scale-95',
-            currentView === 'statistics'
-              ? 'text-primary bg-primary/10'
-              : 'text-muted-foreground hover:text-foreground hover:bg-muted',
-          )}
-        >
-          <BarChart2 size={16} />
-        </button>
-        {/* ── Advanced Filter ── */}
-        <button
-          type="button"
-          onClick={onOpenAdvancedFilter}
-          title="Advanced Filters (Ctrl+Shift+F)"
-          className={cn(
-            'relative flex items-center justify-center w-9 h-9 rounded-full transition-all duration-200 hover:scale-105 active:scale-95',
-            activeFilterCount > 0
-              ? 'text-primary bg-primary/10 hover:bg-primary/20'
-              : 'text-muted-foreground hover:text-foreground hover:bg-muted',
-          )}
-        >
-          <Filter size={16} />
-          {activeFilterCount > 0 && (
-            <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-black shadow-sm ring-2 ring-background">
-              {activeFilterCount}
-            </span>
-          )}
-        </button>
+        {/* ── ZONE 3: Right Actions & Tools ── */}
+        <div className="flex items-center gap-2.5 shrink-0" data-tauri-drag-region>
+          {/* Primary Import CTA */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="flex items-center gap-2.5 h-11 px-5 rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs sm:text-sm font-extrabold shadow-lg shadow-primary/25 transition-all hover:scale-[1.02] active:scale-[0.98]"
+              >
+                <IconImportBook size={18} />
+                <span>Import</span>
+                <ChevronDown size={15} className="opacity-80" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" sideOffset={10} className="w-72 rounded-2xl border border-border/50 shadow-2xl bg-card/95 backdrop-blur-3xl p-2.5 z-50">
+              <DropdownMenuItem onClick={onImportFiles} className="gap-3.5 p-3 cursor-pointer rounded-xl flex items-center group hover:bg-accent/80 focus:bg-accent/80 transition-colors">
+                <div className="p-2.5 bg-primary/10 group-hover:bg-primary/20 rounded-xl shrink-0 transition-colors">
+                  <IconImportBook size={20} className="text-primary" />
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs sm:text-sm font-bold text-foreground group-hover:text-primary transition-colors">Import Files</span>
+                  <span className="text-[11px] text-muted-foreground/80 font-medium leading-snug">Select individual books or manga</span>
+                </div>
+              </DropdownMenuItem>
 
+              <DropdownMenuSeparator className="my-1.5 bg-border/40" />
 
+              <DropdownMenuItem onClick={onImportFolder} className="gap-3.5 p-3 cursor-pointer rounded-xl flex items-center group hover:bg-accent/80 focus:bg-accent/80 transition-colors">
+                <div className="p-2.5 bg-primary/10 group-hover:bg-primary/20 rounded-xl shrink-0 transition-colors">
+                  <IconImportManga size={20} className="text-primary" />
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs sm:text-sm font-bold text-foreground group-hover:text-primary transition-colors">Import Folder</span>
+                  <span className="text-[11px] text-muted-foreground/80 font-medium leading-snug">Scan directory recursively</span>
+                </div>
+              </DropdownMenuItem>
 
+              {currentDomain === 'manga_comics' && (
+                <>
+                  <DropdownMenuSeparator className="my-1.5 bg-border/40" />
+                  <DropdownMenuLabel className="text-[10px] text-muted-foreground/80 font-extrabold uppercase tracking-wider px-2 py-1">Organization</DropdownMenuLabel>
+                  <FeatureHint
+                    featureId="auto-group-manga"
+                    title="Auto-group Manga Volumes"
+                    description="Automatically detect and group manga volumes by series name from filenames."
+                    position="left"
+                  >
+                    <DropdownMenuItem onClick={onAutoGroupManga} className="gap-3.5 p-3 cursor-pointer rounded-xl flex items-center group hover:bg-accent/80 focus:bg-accent/80 transition-colors">
+                      <div className="p-2.5 bg-purple-500/10 group-hover:bg-purple-500/20 rounded-xl shrink-0 transition-colors">
+                        <Layers size={20} className="text-purple-500" />
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-xs sm:text-sm font-bold text-foreground group-hover:text-purple-400 transition-colors">Group Volumes</span>
+                        <span className="text-[11px] text-muted-foreground/80 font-medium leading-snug">Auto-detect series</span>
+                      </div>
+                    </DropdownMenuItem>
+                  </FeatureHint>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-        {/* ── Utility Pill ── */}
-        <div className="flex items-center gap-0.5 bg-muted/50 border border-border/50 rounded-full p-0.5 shadow-inner">
-          <button
-            type="button"
-            onClick={toggleTheme}
-            title={isDark ? 'Switch to Sepia Paper' : 'Switch to OLED Midnight'}
-            className="flex items-center justify-center w-8 h-8 rounded-full text-muted-foreground hover:text-foreground hover:bg-background hover:scale-105 active:scale-95 shadow-sm transition-all duration-200"
-          >
-            {isDark ? <IconSun size={15} /> : <IconMoon size={15} />}
-          </button>
-          <button
-            type="button"
-            onClick={onOpenShortcuts}
-            title="Keyboard shortcuts"
-            className="flex items-center justify-center w-8 h-8 rounded-full text-muted-foreground hover:text-foreground hover:bg-background hover:scale-105 active:scale-95 shadow-sm transition-all duration-200"
-          >
-            <HelpCircle size={15} />
-          </button>
-          <button
-            type="button"
-            onClick={onOpenSettings}
-            title="Settings"
-            className="flex items-center justify-center w-8 h-8 rounded-full text-muted-foreground hover:text-foreground hover:bg-background hover:scale-105 active:scale-95 shadow-sm transition-all duration-200"
-          >
-            <IconSettings size={15} />
-          </button>
+          {/* Quick Tool Icons Cluster */}
+          <div className="flex items-center gap-1 bg-secondary/50 border border-border/40 rounded-xl p-1">
+            {/* RSS Reader */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => onNavigateToView?.('rss-articles')}
+                  className={cn(
+                    'flex items-center justify-center w-8 h-8 rounded-lg transition-colors',
+                    currentView === 'rss-articles' || currentView === 'rss-feeds'
+                      ? 'text-primary bg-primary/10 font-bold'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                  )}
+                >
+                  <Rss size={17} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-xs font-medium">RSS Feeds</TooltipContent>
+            </Tooltip>
+
+            {/* Reading Statistics */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => onNavigateToView?.('statistics')}
+                  className={cn(
+                    'flex items-center justify-center w-8 h-8 rounded-lg transition-colors',
+                    currentView === 'statistics'
+                      ? 'text-primary bg-primary/10 font-bold'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                  )}
+                >
+                  <BarChart2 size={17} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-xs font-medium">Reading Statistics</TooltipContent>
+            </Tooltip>
+
+            {/* Advanced Filters */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={onOpenAdvancedFilter}
+                  className={cn(
+                    'relative flex items-center justify-center w-8 h-8 rounded-lg transition-colors',
+                    activeFilterCount > 0
+                      ? 'text-primary bg-primary/10 font-bold'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                  )}
+                >
+                  <Filter size={17} />
+                  {activeFilterCount > 0 && (
+                    <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-extrabold shadow-sm">
+                      {activeFilterCount}
+                    </span>
+                  )}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-xs font-medium">Advanced Filters</TooltipContent>
+            </Tooltip>
+          </div>
+
+          <div className="w-px h-5 bg-border/40 mx-0.5" />
+
+          {/* System Utility Cluster */}
+          <div className="flex items-center gap-1 bg-secondary/50 border border-border/40 rounded-xl p-1">
+            {/* Theme Switcher */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={toggleTheme}
+                  className="flex items-center justify-center w-8 h-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                >
+                  {isDark ? <IconSun size={17} /> : <IconMoon size={17} />}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-xs font-medium">
+                {isDark ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
+              </TooltipContent>
+            </Tooltip>
+
+            {/* Keyboard Shortcuts */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={onOpenShortcuts}
+                  className="flex items-center justify-center w-8 h-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                >
+                  <HelpCircle size={17} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-xs font-medium">Keyboard Shortcuts</TooltipContent>
+            </Tooltip>
+          </div>
+
+          {/* Window Controls */}
+          <WindowControls />
         </div>
-
-        {/* ── Window Controls ── */}
-        <WindowControls />
-      </div>
-    </header>
+      </header>
+    </TooltipProvider>
   )
 }

@@ -474,6 +474,7 @@ export function Layout({
             currentView={currentView}
             onNavigateToView={onNavigateToView}
             onCreateShelf={() => setCreateShelfOpen(true)}
+            onOpenSettings={onOpenSettings}
           />
         </div>
 

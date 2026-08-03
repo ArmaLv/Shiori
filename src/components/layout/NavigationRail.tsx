@@ -6,6 +6,7 @@ interface NavigationRailProps {
   currentView: CurrentView
   onNavigateToView?: (view: CurrentView) => void
   onCreateShelf?: () => void
+  onOpenSettings?: () => void
 }
 
 export function NavigationRail(props: NavigationRailProps) {
