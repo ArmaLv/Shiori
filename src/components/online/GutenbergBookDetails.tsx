@@ -33,6 +33,8 @@ export function GutenbergBookDetails({ book, open, onOpenChange }: Props) {
     if (!epubFormatUrl) return;
     setIsDownloading(true);
     try {
+      // Register the title up-front — backend progress payloads only carry target_id.
+      useOnlineDownloadStore.getState().registerDownload(epubFormatUrl, book.title);
       const result = await downloadAndImportGutenberg(epubFormatUrl, book.title);
       if (result.success.length > 0 || result.duplicates.length > 0) {
         showSuccessToast('Added to Library', `${book.title} was added to your library.`);
@@ -52,6 +54,7 @@ export function GutenbergBookDetails({ book, open, onOpenChange }: Props) {
     setIsReading(true);
     try {
       // 1. Download and import directly
+      useOnlineDownloadStore.getState().registerDownload(epubFormatUrl, book.title);
       const result = await downloadAndImportGutenberg(epubFormatUrl, book.title);
       const path = result.success[0] || result.duplicates[0];
       

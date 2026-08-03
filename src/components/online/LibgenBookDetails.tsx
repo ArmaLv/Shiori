@@ -131,6 +131,8 @@ export function LibgenBookDetails({ book, open, onOpenChange }: Props) {
 
       const directUrls = await resolveDirectUrls();
       setActiveDownloadUrl(epubUrl);
+      // Register the title up-front — backend progress payloads only carry target_id.
+      useOnlineDownloadStore.getState().registerDownload(epubUrl, book.title);
       const result = await downloadAndImportLibgen(
         epubUrl,
         book.title,
@@ -160,6 +162,7 @@ export function LibgenBookDetails({ book, open, onOpenChange }: Props) {
 
       // 1. Download and import directly (all direct links as fallback mirrors)
       const directUrls = await resolveDirectUrls();
+      useOnlineDownloadStore.getState().registerDownload(epubUrl, book.title);
       const result = await downloadAndImportLibgen(
         epubUrl,
         book.title,

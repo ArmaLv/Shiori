@@ -14,6 +14,8 @@ import { downloadAndImportGutenberg } from '@/online-books/gutenberg/importer';
 import { downloadAndImportLibgen } from '@/online-books/libgen/importer';
 import { useLibraryStore } from '@/store/libraryStore';
 import { useToast } from '@/store/toastStore';
+import { useOnlineDownloadStore } from '@/store/onlineDownloadStore';
+import { DownloadsButton } from './DownloadQueuePanel';
 import { useBookOpen } from '@/hooks/useBookOpen';
 import { invoke } from '@tauri-apps/api/core';
 import { api } from '@/lib/tauri';
@@ -96,6 +98,9 @@ export function OnlineBooksView() {
   const handleDownload = async (book: PreviewBook) => {
     try {
       showSuccessToast('Download Started', `Downloading ${book.title}`);
+      // Register the title up-front so the queue panel can show it (the
+      // backend progress payload only carries target_id).
+      useOnlineDownloadStore.getState().registerDownload(book.downloadUrl, book.title);
       let result;
       if (book.source === 'gutenberg') {
         result = await downloadAndImportGutenberg(book.downloadUrl, book.title);
@@ -118,6 +123,7 @@ export function OnlineBooksView() {
   const handleReadNow = async (book: PreviewBook) => {
     try {
       showSuccessToast('Buffering...', `Preparing ${book.title} for reading`);
+      useOnlineDownloadStore.getState().registerDownload(book.downloadUrl, book.title);
       let bookId: number;
       if (book.source === 'gutenberg') {
         const result = await downloadAndImportGutenberg(book.downloadUrl, book.title);
@@ -173,16 +179,27 @@ export function OnlineBooksView() {
 
   return (
     <div className="flex flex-col h-full bg-background relative z-10">
-      <OnlineSearchHeader 
-        kind="books"
-        title="Online Library"
-        subtitle="Search Libgen & Gutenberg"
-        searchValue={searchQuery}
-        loading={loading}
-        disabled={false}
-        onSearchValueChange={(val) => useOnlineSearchStore.getState().setQuery('online-books', val)}
-        onSubmit={() => doSearch(1)}
-      />
+      <div className="relative">
+        <OnlineSearchHeader 
+          kind="books"
+          title="Online Library"
+          subtitle="Search Libgen & Gutenberg"
+          searchValue={searchQuery}
+          loading={loading}
+          disabled={false}
+          onSearchValueChange={(val) => useOnlineSearchStore.getState().setQuery('online-books', val)}
+          onSubmit={() => doSearch(1)}
+        />
+        {/* Downloads launcher — desktop: floats in the header's top-right; mobile: FAB above the bottom nav. */}
+        <div className="hidden md:block absolute top-2 right-6 z-30">
+          <DownloadsButton />
+        </div>
+      </div>
+
+      {/* Mobile FAB (MangaDownloadDock pattern — root ends just above the bottom nav) */}
+      <div className="md:hidden absolute bottom-0 right-4 z-30">
+        <DownloadsButton />
+      </div>
 
       {!hasSearched ? (
         <OnlineBooksDashboard />

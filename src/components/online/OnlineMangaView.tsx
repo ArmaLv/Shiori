@@ -44,11 +44,10 @@ import { open as shellOpen } from "@tauri-apps/plugin-shell";
 import { MobileFilterSheet } from "./MobileFilterSheet";
 import { isAndroid, isTauri } from "@/lib/tauri";
 import { MangaDownloadDock } from "./MangaDownloadDock";
-import { MangaDownloadConfirmDialog } from "./MangaDownloadConfirmDialog";
+import { MangaDownloadOptionsDialog } from "./MangaDownloadOptionsDialog";
 import {
   buildChapterDownloadTitle,
   countChapterStatuses,
-  sortChaptersAscending,
   type ChapterDownloadStatus,
   type ChapterDownloadStatusMap,
 } from "./mangaDownloadUtils";
@@ -288,7 +287,7 @@ export function OnlineMangaView() {
   } | null>(null);
   const [chapterDownloadStatus, setChapterDownloadStatus] =
     useState<ChapterDownloadStatusMap>({});
-  const [downloadAllConfirmOpen, setDownloadAllConfirmOpen] =
+  const [downloadOptionsOpen, setDownloadOptionsOpen] =
     useState(false);
 
   useEffect(() => {
@@ -1315,7 +1314,9 @@ export function OnlineMangaView() {
           onSaveToLibrary={handleSaveToLibrary}
           isInLibrary={!!libraryBook}
           lastReadChapterId={lastReadChapterId}
-          onDownloadChapters={handleDownloadChapters}
+          chapterDownloadStatus={chapterDownloadStatus}
+          onDownloadChapter={(ch) => void handleDownloadChapters([ch])}
+          onDownloadAll={() => setDownloadOptionsOpen(true)}
         />
 
         {/* Uniform download options for every manga source: per-chapter
@@ -1325,17 +1326,15 @@ export function OnlineMangaView() {
             chapters={unifiedChapters}
             status={chapterDownloadStatus}
             onDownloadChapter={(ch) => void handleDownloadChapters([ch])}
-            onDownloadAll={() => setDownloadAllConfirmOpen(true)}
+            onDownloadAll={() => setDownloadOptionsOpen(true)}
           />
         )}
-        <MangaDownloadConfirmDialog
-          open={downloadAllConfirmOpen}
-          onOpenChange={setDownloadAllConfirmOpen}
+        <MangaDownloadOptionsDialog
+          open={downloadOptionsOpen}
+          onOpenChange={setDownloadOptionsOpen}
           title={title}
-          chapterCount={unifiedChapters.length}
-          onConfirm={() => {
-            void handleDownloadChapters(sortChaptersAscending(unifiedChapters));
-          }}
+          chapters={unifiedChapters}
+          onDownload={(chapters) => void handleDownloadChapters(chapters)}
         />
       </div>
     );

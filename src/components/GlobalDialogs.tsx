@@ -15,6 +15,7 @@ const SeriesView = lazy(() => import("./library/SeriesView").then(m => ({ defaul
 const AdvancedFilterDialog = lazy(() => import("./library/AdvancedFilterDialog").then(m => ({ default: m.AdvancedFilterDialog })))
 const ShortcutsDialog = lazy(() => import("./dialogs/ShortcutsDialog").then(m => ({ default: m.ShortcutsDialog })))
 const CommandPalette = lazy(() => import("./CommandPalette").then(m => ({ default: m.CommandPalette })))
+const DownloadQueuePanel = lazy(() => import("./online/DownloadQueuePanel").then(m => ({ default: m.DownloadQueuePanel })))
 const ResumeReadingDialog = lazy(() => import("./reader/ResumeReadingDialog").then(m => ({ default: m.ResumeReadingDialog })))
 const ConvertOrOpenDialog = lazy(() => import("./conversion/ConvertOrOpenDialog").then(m => ({ default: m.ConvertOrOpenDialog })))
 const ShelfSelectDialog = lazy(() => import("./library/ShelfSelectDialog").then(m => ({ default: m.ShelfSelectDialog })))
@@ -63,6 +64,7 @@ export function GlobalDialogs({
     <>
       <Suspense fallback={null}><ConversionJobTracker /></Suspense>
       <Suspense fallback={null}><UpdateDialog /></Suspense>
+      <Suspense fallback={null}><DownloadQueuePanel /></Suspense>
 
       {dialogs.dialogBookId !== null && (
         <Suspense fallback={null}>

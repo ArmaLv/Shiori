@@ -18,6 +18,9 @@ import type { Book } from "@/lib/tauri";
 import { api } from "@/lib/tauri";
 import { PremiumBookCard } from "./ModernBookCard";
 import { SeriesCard } from "./SeriesCard";
+import { BulkActionBar } from "./BulkActionBar";
+import { BulkShelfDialog } from "./BulkShelfDialog";
+import { BatchConvertDialog } from "../conversion/BatchConvertDialog";
 import { useLibraryStore } from "@/store/libraryStore";
 import type { DomainView } from "@/store/uiStore";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -169,6 +172,10 @@ export function LibraryGrid({
   const toggleBookSelection = useLibraryStore(
     (state) => state.toggleBookSelection,
   );
+  const selectedBookIds = useLibraryStore((state) => state.selectedBookIds);
+  const storeBooks = useLibraryStore((state) => state.books);
+  const [bulkConvertOpen, setBulkConvertOpen] = useState(false);
+  const [bulkShelfOpen, setBulkShelfOpen] = useState(false);
   const storeHasMore = useLibraryStore((state) => state.hasMore);
   const storeIsLoading = useLibraryStore((state) => state.isLoading);
   const storeLoadMoreBooks = useLibraryStore((state) => state.loadMoreBooks);
@@ -276,6 +283,21 @@ export function LibraryGrid({
 
   const isEmpty = visibleLibrary.length === 0;
 
+  // Books behind the current bulk selection (from the full loaded library,
+  // not just the filtered/visible page) — snapshot for the dialogs.
+  const selectedBooks = useMemo(
+    () => storeBooks.filter((book) => book.id != null && selectedBookIds.has(book.id)),
+    [storeBooks, selectedBookIds],
+  );
+  const selectedBookIdsList = useMemo(
+    () => selectedBooks.map((book) => book.id as number),
+    [selectedBooks],
+  );
+  const visibleBookIds = useMemo(
+    () => visibleLibrary.flatMap((book) => (book.id != null ? [book.id] : [])),
+    [visibleLibrary],
+  );
+
   const handleEditBook = useCallback((id: number) => onEditBook?.(id), [onEditBook]);
   const handleDeleteBook = useCallback((id: number) => onDeleteBook?.(id), [onDeleteBook]);
 
@@ -363,6 +385,24 @@ export function LibraryGrid({
         searchQuery={searchQuery} 
         onSearchChange={onSearchChange} 
         onOpenAdvancedFilter={onOpenAdvancedFilter}
+      />
+
+      <BulkActionBar
+        visibleBookIds={visibleBookIds}
+        onConvert={() => setBulkConvertOpen(true)}
+        onAddToShelf={() => setBulkShelfOpen(true)}
+      />
+
+      <BatchConvertDialog
+        open={bulkConvertOpen}
+        onOpenChange={setBulkConvertOpen}
+        books={selectedBooks}
+      />
+
+      <BulkShelfDialog
+        open={bulkShelfOpen}
+        onOpenChange={setBulkShelfOpen}
+        bookIds={selectedBookIdsList}
       />
 
       {isEmpty ? (

@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { api, isTauri } from '@/lib/tauri';
 import type { DailyReadingStats, ReadingStreak, ReadingGoal, Book } from '@/lib/tauri';
 import { X, RotateCw, 
   Library, Clock, BookCheck,
   BookDashed, PlayCircle, HardDrive,
   Layers, BookText, Image as ImageIcon,
-  Activity, Star, Link2, Flame, Trophy 
+  Activity, Star, Link2, Flame, Trophy, CheckCircle2 
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ActivityHeatmap } from './ActivityHeatmap';
@@ -16,6 +16,7 @@ import { motion } from 'framer-motion';
 import { useLibraryStore } from '@/store/libraryStore';
 import { Input } from '../ui/input';
 import { toast } from 'sonner';
+import { useToast } from '@/store/toastStore';
 
 interface StatisticsViewProps {
   onClose: () => void;
@@ -37,6 +38,111 @@ const StatItem = ({ label, value, icon: Icon, iconColor }: { label: string, valu
     <Icon size={16} className={iconColor} />
   </div>
 );
+
+// ──────────────────────────────────────────────────────────────────────────
+// Weekly trend — pure data → bars helper (B4)
+// ──────────────────────────────────────────────────────────────────────────
+
+export interface WeekBarDatum {
+  /** ISO-ish local date string (yyyy-mm-dd) of the day */
+  date: string;
+  /** Short weekday label (e.g. "Mon") */
+  label: string;
+  /** Total reading seconds that day */
+  seconds: number;
+  /** Total pages read that day (book + manga) */
+  pages: number;
+  /** 0-100, normalized against the week's max (0 when the week is empty) */
+  secondsPct: number;
+  /** 0-100, normalized against the week's max (0 when the week is empty) */
+  pagesPct: number;
+}
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+const toDateStr = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+
+/**
+ * Build the last 7 days (today + 6 prior) as bar chart data, zero-filled for
+ * days with no stats. Percentages normalize each series against its own max;
+ * a fully-empty week yields all-zero percentages (caller shows an empty state).
+ */
+// eslint-disable-next-line react-refresh/only-export-components -- pure helper, unit-tested directly
+export function buildWeeklyBars(stats: DailyReadingStats[], now: Date = new Date()): WeekBarDatum[] {
+  const byDate = new Map(stats.map(s => [s.date, s]));
+  const days: Omit<WeekBarDatum, 'secondsPct' | 'pagesPct'>[] = [];
+
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(now.getDate() - i);
+    const key = toDateStr(d);
+    const stat = byDate.get(key);
+    days.push({
+      date: key,
+      label: d.toLocaleDateString(undefined, { weekday: 'short' }),
+      seconds: stat?.total_seconds ?? 0,
+      pages: (stat?.book_pages_read ?? 0) + (stat?.manga_pages_read ?? 0),
+    });
+  }
+
+  const maxSeconds = Math.max(0, ...days.map(d => d.seconds));
+  const maxPages = Math.max(0, ...days.map(d => d.pages));
+
+  return days.map(d => ({
+    ...d,
+    secondsPct: maxSeconds > 0 ? Math.round((d.seconds / maxSeconds) * 100) : 0,
+    pagesPct: maxPages > 0 ? Math.round((d.pages / maxPages) * 100) : 0,
+  }));
+}
+
+const formatMinutes = (seconds: number) => {
+  const mins = Math.round(seconds / 60);
+  if (mins < 60) return `${mins}m`;
+  return `${Math.floor(mins / 60)}h ${mins % 60}m`;
+};
+
+/** Pure CSS bar chart — no dependencies. Two series per day: pages & reading time. */
+export function WeeklyTrendChart({ data }: { data: DailyReadingStats[] }) {
+  const bars = useMemo(() => buildWeeklyBars(data), [data]);
+  const hasAny = bars.some(b => b.seconds > 0 || b.pages > 0);
+
+  if (!hasAny) {
+    return (
+      <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+        <Activity className="w-8 h-8 mb-2 opacity-30" />
+        <p className="text-sm font-medium">No reading recorded this week</p>
+        <p className="text-xs opacity-70 mt-1">Your daily pages and reading time will appear here.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-end justify-between gap-2 h-32">
+        {bars.map(b => (
+          <div key={b.date} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end min-w-0">
+            <div className="flex items-end justify-center gap-1 w-full flex-1">
+              <div
+                className="w-2.5 md:w-3 rounded-full bg-primary/70 transition-all duration-500"
+                style={{ height: `${b.pages > 0 ? Math.max(6, b.pagesPct) : 0}%` }}
+                title={`${b.date} · ${b.pages} pages`}
+              />
+              <div
+                className="w-2.5 md:w-3 rounded-full bg-primary/25 transition-all duration-500"
+                style={{ height: `${b.seconds > 0 ? Math.max(6, b.secondsPct) : 0}%` }}
+                title={`${b.date} · ${formatMinutes(b.seconds)} reading`}
+              />
+            </div>
+            <span className="text-[10px] text-muted-foreground font-medium truncate">{b.label}</span>
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center justify-center gap-4 text-[11px] text-muted-foreground">
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-primary/70" />Pages read</span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-primary/25" />Reading time</span>
+      </div>
+    </div>
+  );
+}
 
 export function StatisticsView({ onClose }: StatisticsViewProps) {
   const [loading, setLoading] = useState(true);
@@ -147,6 +253,27 @@ export function StatisticsView({ onClose }: StatisticsViewProps) {
     : "0";
   const usedTrackers = books.some(b => b.anilist_id) ? 1 : 0;
 
+  // ── Daily goal celebration (A5) ──
+  const { success: showGoalToast } = useToast();
+  const todayStr = toDateStr(new Date());
+  const todaySeconds = allStats.find(s => s.date === todayStr)?.total_seconds ?? 0;
+  const goalMinutes = goal?.daily_minutes_target ?? 0;
+  const goalActive = goal?.is_active !== false;
+  const goalReached = goalActive && goalMinutes > 0 && todaySeconds >= goalMinutes * 60;
+
+  // Toast ONCE per day (localStorage date key survives remounts/session restarts).
+  useEffect(() => {
+    if (!goalReached) return;
+    const storageKey = `shiori:daily-goal-reached:${todayStr}`;
+    try {
+      if (localStorage.getItem(storageKey) === '1') return;
+      localStorage.setItem(storageKey, '1');
+    } catch {
+      // Storage unavailable — still toast for this session.
+    }
+    showGoalToast('Daily goal reached! 🎉', `You read ${Math.round(todaySeconds / 60)} minutes today — goal: ${goalMinutes} min.`);
+  }, [goalReached, todayStr, goalMinutes, todaySeconds, showGoalToast]);
+
   return (
     <div className="flex flex-col h-full bg-background text-foreground overflow-hidden">
       <div className="flex-none sticky top-0 z-10 bg-background/80 backdrop-blur-xl border-b border-border/40">
@@ -192,6 +319,16 @@ export function StatisticsView({ onClose }: StatisticsViewProps) {
                 <Flame size={14} className={streak && streak.current_streak > 0 ? "text-orange-500" : "text-muted-foreground"} />
                 <span>{streak?.current_streak || 0}</span>
               </div>
+
+              {goalReached && (
+                <div 
+                  className="flex items-center gap-1.5 px-3 py-1 bg-green-500/10 border border-green-500/30 rounded-full text-xs font-medium text-green-600 dark:text-green-400 animate-in zoom-in"
+                  title={`Daily goal reached — ${goalMinutes} min read today`}
+                >
+                  <CheckCircle2 size={14} />
+                  <span>Goal reached</span>
+                </div>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -341,6 +478,14 @@ export function StatisticsView({ onClose }: StatisticsViewProps) {
               </div>
 
 
+
+              {/* Weekly Trend (B4) — real get_daily_reading_stats data, empty state when idle */}
+              <div className="flex flex-col gap-2">
+                <h3 className="text-sm font-semibold text-muted-foreground tracking-wide ml-1">Weekly Trend</h3>
+                <div className="bg-card/40 backdrop-blur-md border border-border/40 rounded-xl p-4">
+                  <WeeklyTrendChart data={allStats} />
+                </div>
+              </div>
 
               {/* Activity & Calendar Section */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

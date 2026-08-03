@@ -6,11 +6,15 @@ export interface DownloadProgress {
   status: 'downloading' | 'completed' | 'error';
   downloaded_bytes: number;
   total_bytes: number | null;
+  /** Optional human-readable title, registered by the frontend when a download starts. */
+  title?: string;
 }
 
 interface OnlineDownloadStore {
   downloads: Record<string, DownloadProgress>;
   setDownload: (id: string, progress: DownloadProgress) => void;
+  /** Remember the book title for a target id (merged, never clobbers progress). */
+  registerDownload: (id: string, title: string) => void;
   clearDownload: (id: string) => void;
   initializeListeners: () => void;
 }
@@ -26,6 +30,27 @@ export const useOnlineDownloadStore = create<OnlineDownloadStore>((set) => ({
         [id]: progress,
       },
     })),
+  registerDownload: (id, title) =>
+    set((state) => {
+      const existing = state.downloads[id];
+      // The backend payload has no title — merge it into whatever progress
+      // state already exists (or seed a minimal entry if the first progress
+      // event hasn't arrived yet).
+      return {
+        downloads: {
+          ...state.downloads,
+          [id]: existing
+            ? { ...existing, title }
+            : {
+                target_id: id,
+                status: 'downloading',
+                downloaded_bytes: 0,
+                total_bytes: null,
+                title,
+              },
+        },
+      };
+    }),
   clearDownload: (id) =>
     set((state) => {
       const newDownloads = { ...state.downloads };
@@ -41,7 +66,11 @@ export const useOnlineDownloadStore = create<OnlineDownloadStore>((set) => ({
       set((state) => ({
         downloads: {
           ...state.downloads,
-          [payload.target_id]: payload,
+          // Preserve the frontend-registered title across progress events.
+          [payload.target_id]: {
+            ...payload,
+            title: state.downloads[payload.target_id]?.title,
+          },
         },
       }));
       
