@@ -74,24 +74,24 @@ export function MangaDownloadDock({
           variant="outline"
           size="sm"
           onClick={() => setOpen((o) => !o)}
-          className="gap-1.5 h-9 px-3 rounded-full bg-background/90 backdrop-blur-md border-border/50 shadow-lg text-xs"
+          className="gap-1.5 h-9 px-3.5 rounded-full bg-background/90 backdrop-blur-md border-border/50 shadow-lg text-xs font-medium"
           aria-expanded={open}
         >
-          <Download className="w-3.5 h-3.5" />
+          <Download className="w-4 h-4 text-muted-foreground" />
           Chapters
           {open ? (
-            <ChevronDown className="w-3 h-3" />
+            <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
           ) : (
-            <ChevronUp className="w-3 h-3" />
+            <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" />
           )}
         </Button>
         <Button
           size="sm"
           onClick={onDownloadAll}
-          className="gap-1.5 h-9 px-3 rounded-full shadow-lg text-xs font-semibold"
+          className="gap-1.5 h-9 px-3.5 rounded-full shadow-lg text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground"
         >
-          <BookDown className="w-3.5 h-3.5" />
-          Download Manga
+          <BookDown className="w-4 h-4" />
+          Download All
         </Button>
       </div>
 

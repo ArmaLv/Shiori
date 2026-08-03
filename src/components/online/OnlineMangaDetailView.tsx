@@ -245,7 +245,7 @@ export function OnlineMangaDetailView({
       <div className="absolute top-0 left-0 right-0 h-[65vh] bg-gradient-to-b from-background/20 via-background/60 to-background pointer-events-none" />
 
       {/* Main Content Area */}
-      <div className="relative z-10 p-6 md:p-10 max-w-[1400px] mx-auto w-full pt-[calc(env(safe-area-inset-top,0px)+1.5rem)] md:pt-10">
+      <div className="relative z-10 p-6 md:p-10 max-w-[1400px] mx-auto w-full pt-[calc(env(safe-area-inset-top,0px)+1.5rem)] md:pt-10 pb-32 md:pb-16">
         {/* Top Action Bar */}
         <div className="flex items-center justify-between mb-6">
           {/* Back Button */}
@@ -302,10 +302,9 @@ export function OnlineMangaDetailView({
               {alternateTitles}
             </p>
 
-
             {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 sm:gap-3 mb-6">
-              <div className="flex gap-2 w-full sm:w-auto">
+            <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2.5 sm:gap-3 mb-6">
+              <div className="w-full sm:w-auto">
                 <Button onClick={() => {
                   if (resumeChapter) {
                     onReadChapter(resumeChapter);
@@ -313,30 +312,30 @@ export function OnlineMangaDetailView({
                     onReadChapter(filteredAndSortedChapters[filteredAndSortedChapters.length - 1]);
                   }
                 }}
-                        className="flex-1 sm:flex-none gap-2 px-6 sm:px-8 h-10 sm:h-12 rounded-full text-xs sm:text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5">
-                  {resumeChapter ? 'RESUME' : 'READ'} <Play className="w-3 h-3 sm:w-4 sm:h-4 ml-1 fill-current" />
+                        className="w-full sm:w-auto gap-2.5 px-6 sm:px-8 h-12 rounded-xl sm:rounded-full text-sm font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5">
+                  {resumeChapter ? 'RESUME' : 'READ'} <Play className="w-4.5 h-4.5 sm:w-4 sm:h-4 fill-current ml-0.5" />
                 </Button>
               </div>
-              <div className="flex gap-2 w-full sm:w-auto">
+              <div className="grid grid-cols-2 sm:flex gap-2.5 w-full sm:w-auto">
                 {onSaveToLibrary && (
                   <Button
                     onClick={onSaveToLibrary}
                     variant="outline"
                     disabled={isInLibrary}
-                    className="flex-1 sm:flex-none gap-2 px-4 sm:px-6 h-10 sm:h-12 rounded-full text-xs sm:text-sm font-medium border-border/50 bg-secondary hover:bg-secondary/50 backdrop-blur-sm transition-all"
+                    className="gap-2 px-4 sm:px-6 h-12 rounded-xl sm:rounded-full text-xs sm:text-sm font-semibold border-border/50 bg-secondary hover:bg-secondary/60 backdrop-blur-sm transition-all"
                   >
                     {isInLibrary
-                      ? <><BookmarkCheck className="w-4 h-4 text-green-400" /> SAVED</>
-                      : <><Bookmark className="w-4 h-4" /> SAVE</>}
+                      ? <><BookmarkCheck className="w-4.5 h-4.5 sm:w-4 sm:h-4 text-green-400 shrink-0" /> SAVED</>
+                      : <><Bookmark className="w-4.5 h-4.5 sm:w-4 sm:h-4 text-foreground/80 shrink-0" /> SAVE</>}
                   </Button>
                 )}
                 {onDownloadAll && unifiedChapters.length > 0 && (
                   <Button
                     onClick={onDownloadAll}
                     variant="outline"
-                    className="flex-1 sm:flex-none gap-2 px-3 sm:px-6 h-10 sm:h-12 rounded-full text-xs sm:text-sm font-medium border-border/50 bg-secondary hover:bg-secondary/50 backdrop-blur-sm transition-all whitespace-nowrap"
+                    className="gap-2 px-4 sm:px-6 h-12 rounded-xl sm:rounded-full text-xs sm:text-sm font-semibold border-border/50 bg-secondary hover:bg-secondary/60 backdrop-blur-sm transition-all"
                   >
-                    <BookDown className="w-4 h-4" /> Download Manga
+                    <BookDown className="w-4.5 h-4.5 sm:w-4 sm:h-4 text-primary shrink-0" /> <span className="sm:hidden">DOWNLOAD</span><span className="hidden sm:inline">Download Manga</span>
                   </Button>
                 )}
               </div>
