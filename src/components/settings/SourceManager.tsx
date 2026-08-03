@@ -3,8 +3,7 @@ import { ExternalLink, Database, Globe, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
 import { motion, Variants } from 'framer-motion';
-import { open as shellOpen } from '@tauri-apps/plugin-shell';
-import { isTauri } from '@/lib/tauri';
+import { openExternal } from '@/lib/externalLinks';
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
@@ -90,17 +89,9 @@ export function SourceManager() {
         {source.website && (
           <a
             href={source.website}
-            onClick={async (e) => {
+            onClick={(e) => {
               e.preventDefault();
-              try {
-                if (isTauri) {
-                  await shellOpen(source.website!);
-                } else {
-                  window.open(source.website, '_blank', 'noopener,noreferrer');
-                }
-              } catch {
-                // silently fail
-              }
+              openExternal(source.website!);
             }}
             rel="noopener noreferrer"
             className={cn(

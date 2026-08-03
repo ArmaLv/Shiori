@@ -10,9 +10,14 @@
  * app WebView away (window.open() returns null) — see OnlineMangaView's
  * openInBrowser for the same precedent. shellOpen() hands the URL to the
  * system browser instead.
+ *
+ * On Android the shell plugin's open() is a no-op (it spawns xdg-open/gio
+ * binaries that don't exist there), so we route through the backend's
+ * `open_url` command instead, which fires an ACTION_VIEW intent.
  */
+import { invoke } from '@tauri-apps/api/core';
 import { open as shellOpen } from '@tauri-apps/plugin-shell';
-import { isTauri } from '@/lib/tauri';
+import { isAndroid, isTauri } from '@/lib/tauri';
 
 /** Matches absolute external URLs (http/https) and mailto: — case-insensitive. */
 const EXTERNAL_HREF_RE = /^(https?:|mailto:)/i;
@@ -29,14 +34,21 @@ export function isExternalHref(href: string): boolean {
 /**
  * Shared opener for external URLs (browser links, update pages, etc.).
  *
- * On Tauri (Android + desktop) hands the URL to the system browser via the
- * shell plugin — never navigates the app WebView (window.open() returns null
- * on Android). In a plain browser falls back to a new tab with
- * noopener,noreferrer. Failures are swallowed: callers fire-and-forget.
+ * On Android Tauri, fires an ACTION_VIEW intent via the backend `open_url`
+ * command (the shell plugin's open() spawns xdg-open/gio binaries that don't
+ * exist on Android, so it's a no-op there). On desktop Tauri, hands the URL
+ * to the system browser via the shell plugin. Either way the app WebView is
+ * never navigated (window.open() returns null on Android). In a plain
+ * browser falls back to a new tab with noopener,noreferrer. Failures are
+ * swallowed: callers fire-and-forget.
  */
 export function openExternal(url: string): void | Promise<void> {
+  if (isTauri && isAndroid) {
+    // Android: ACTION_VIEW intent via the backend command.
+    return invoke('open_url', { url }).catch(() => {});
+  }
   if (isTauri) {
-    // System browser on Android AND desktop Tauri — never navigate the app.
+    // Desktop Tauri: system browser via the shell plugin — never navigate the app.
     return shellOpen(url).catch(() => {});
   }
   window.open(url, '_blank', 'noopener,noreferrer');

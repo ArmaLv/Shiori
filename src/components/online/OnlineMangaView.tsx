@@ -40,8 +40,8 @@ import { useToast } from "@/store/toastStore";
 import { getErrorMessage } from "@/lib/errors";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { open as shellOpen } from "@tauri-apps/plugin-shell";
 import { MobileFilterSheet } from "./MobileFilterSheet";
+import { openExternal } from "@/lib/externalLinks";
 import { isAndroid, isTauri } from "@/lib/tauri";
 import { MangaDownloadDock } from "./MangaDownloadDock";
 import { MangaDownloadOptionsDialog } from "./MangaDownloadOptionsDialog";
@@ -746,15 +746,17 @@ export function OnlineMangaView() {
     try {
       // On Android/Tauri, window.open() returns null and location.assign()
       // would hijack the entire app webview — use the system browser instead.
+      // openExternal handles Android (ACTION_VIEW intent via `open_url`)
+      // and desktop Tauri (shell plugin) internally.
       if (isTauri && isAndroid) {
-        await shellOpen(url);
+        await openExternal(url);
         return;
       }
       const openedWindow = window.open(url, "_blank", "noopener,noreferrer");
       if (!openedWindow) {
         // Desktop Tauri: shell open as fallback (never navigate the app)
         if (isTauri) {
-          await shellOpen(url);
+          await openExternal(url);
         }
         // Web browser fallback only — safe because desktop browsers support multi-window
       }

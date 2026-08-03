@@ -3,8 +3,7 @@ import { useIsMobile } from '@/hooks/useIsMobile'
 import { motion, AnimatePresence } from 'framer-motion'
 import DOMPurify from 'dompurify'
 import { invoke, convertFileSrc } from '@tauri-apps/api/core'
-import { open as shellOpen } from '@tauri-apps/plugin-shell'
-import { isAndroid, isTauri } from '@/lib/tauri'
+import { openExternal } from '@/lib/externalLinks'
 import * as Tabs from '@radix-ui/react-tabs'
 import {
   AlertCircle,
@@ -1001,16 +1000,11 @@ export default function TorboxControlCenter({ initialTab = 'discover' }: { initi
                                   <Button
                                     variant="secondary"
                                     className="bg-white text-black hover:bg-white/90 h-9 px-4 rounded-md text-sm font-medium shadow-sm"
-                                    onClick={async () => {
+                                    onClick={() => {
                                       try {
                                         const url = new URL(source.magnetLink);
                                         if (url.protocol === 'http:' || url.protocol === 'https:' || url.protocol === 'magnet:') {
-                                          if (isTauri) {
-                                            await shellOpen(source.magnetLink);
-                                          } else {
-                                            const openedWindow = window.open(source.magnetLink, '_blank', 'noopener,noreferrer');
-                                            if (!openedWindow && !isAndroid) window.location.assign(source.magnetLink);
-                                          }
+                                          openExternal(source.magnetLink);
                                         } else {
                                           console.error('Blocked unsafe link protocol:', url.protocol);
                                         }
