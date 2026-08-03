@@ -539,11 +539,71 @@ pub fn permanent_delete_book(db: &Database, id: i64) -> Result<()> {
     Ok(())
 }
 
-pub fn empty_trash(db: &Database) -> Result<()> {
+/// Empty the trash and sweep orphaned `converted/conv_*` output dirs.
+///
+/// `converted_root` is the app-data `converted` folder (parent of the covers
+/// dir) that `convert_book` writes `conv_<uuid>/` subdirs into. Only dirs that
+/// NO book row references are removed — a converted EPUB is auto-imported, so
+/// its book row's `file_path` lives inside the dir; anything referenced (even
+/// by a non-trashed book) is always kept. Cleanup failures are logged, never
+/// fatal — emptying the trash itself must not fail because of a filesystem hiccup.
+pub fn empty_trash(db: &Database, converted_root: &std::path::Path) -> Result<()> {
     log::info!("[empty_trash] Attempting to empty trash");
     let conn = db.get_connection()?;
     let rows_affected = conn.execute("DELETE FROM books WHERE in_trash = 1", [])?;
     log::info!("[empty_trash] Rows affected: {}", rows_affected);
+
+    let mut removed_dirs = 0usize;
+    if let Ok(entries) = std::fs::read_dir(converted_root) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let is_conv_dir = path.is_dir()
+                && path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .is_some_and(|n| n.starts_with("conv_"));
+            if !is_conv_dir {
+                continue;
+            }
+
+            let path_str = path.to_string_lossy().to_string();
+            // SAFETY: never delete anything a book row still points at — check
+            // with a prefix LIKE (file_path is either the dir or a file inside).
+            let referenced: bool = conn
+                .query_row(
+                    "SELECT EXISTS(SELECT 1 FROM books WHERE file_path LIKE ?1)",
+                    params![format!("{}%", path_str)],
+                    |row| row.get(0),
+                )
+                .unwrap_or(false);
+            if referenced {
+                log::debug!(
+                    "[empty_trash] Keeping referenced converted dir {}",
+                    path_str
+                );
+                continue;
+            }
+
+            match std::fs::remove_dir_all(&path) {
+                Ok(_) => {
+                    removed_dirs += 1;
+                    log::info!(
+                        "[empty_trash] Removed unreferenced converted dir {}",
+                        path_str
+                    );
+                }
+                Err(e) => log::warn!(
+                    "[empty_trash] Failed to remove converted dir {:?}: {}",
+                    path,
+                    e
+                ),
+            }
+        }
+    }
+    log::info!(
+        "[empty_trash] Removed {} unreferenced converted dirs",
+        removed_dirs
+    );
     Ok(())
 }
 

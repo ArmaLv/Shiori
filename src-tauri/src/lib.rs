@@ -57,13 +57,17 @@ pub struct ActiveDownloadGuard {
 
 impl Drop for ActiveDownloadGuard {
     fn drop(&mut self) {
-        self.count.count.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+        self.count
+            .count
+            .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
     }
 }
 
 impl ActiveDownloads {
     pub fn increment<'a>(state: tauri::State<'a, ActiveDownloads>) -> ActiveDownloadGuard {
-        state.count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        state
+            .count
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         ActiveDownloadGuard {
             // Unsafely extend the lifetime of the state for the guard.
             // This is safe because the state is managed by Tauri and lives for the 'static app duration.
@@ -115,7 +119,6 @@ pub fn run() {
             .plugin(tauri_plugin_process::init())
             .plugin(tauri_plugin_updater::Builder::new().build());
     }
-
 
     builder = builder
         .plugin(tauri_plugin_dialog::init())
@@ -262,7 +265,9 @@ pub fn run() {
             let mut is_transparent = false;
             let mut is_first_time = true;
             if let Ok(conn) = database.get_connection() {
-                if let Ok(mut stmt) = conn.prepare("SELECT value FROM user_preferences WHERE key = 'linuxTransparentWindow'") {
+                if let Ok(mut stmt) = conn.prepare(
+                    "SELECT value FROM user_preferences WHERE key = 'linuxTransparentWindow'",
+                ) {
                     if let Ok(mut rows) = stmt.query([]) {
                         if let Ok(Some(row)) = rows.next() {
                             let value: String = row.get(0).unwrap_or_default();
@@ -271,7 +276,9 @@ pub fn run() {
                     }
                 }
 
-                if let Ok(mut stmt) = conn.prepare("SELECT value FROM user_preferences WHERE key = '_cachedOnboardingCompleted'") {
+                if let Ok(mut stmt) = conn.prepare(
+                    "SELECT value FROM user_preferences WHERE key = '_cachedOnboardingCompleted'",
+                ) {
                     if let Ok(mut rows) = stmt.query([]) {
                         if let Ok(Some(row)) = rows.next() {
                             let value: String = row.get(0).unwrap_or_default();
@@ -285,7 +292,7 @@ pub fn run() {
             let mut builder = tauri::WebviewWindowBuilder::new(
                 app,
                 "main",
-                tauri::WebviewUrl::App("index.html".into())
+                tauri::WebviewUrl::App("index.html".into()),
             )
             .title("Shiori")
             .inner_size(1200.0, 800.0)
@@ -329,8 +336,8 @@ pub fn run() {
             registry.register(Arc::new(sources::toonily::ToonilySource::new()?));
             // ToonTop
             registry.register(Arc::new(sources::toontop::ToonTopSource::new()?));
-        let manhwaread_source = Arc::new(sources::manhwaread::ManhwaReadSource::new()?);
-        registry.register(manhwaread_source.clone() as Arc<dyn sources::Source>);
+            let manhwaread_source = Arc::new(sources::manhwaread::ManhwaReadSource::new()?);
+            registry.register(manhwaread_source.clone() as Arc<dyn sources::Source>);
             // Anna's Archive for book search and download
             registry.register(Arc::new(sources::annas_archive::AnnasArchiveSource::new()?));
             // LibGen for book search and download
@@ -378,7 +385,7 @@ pub fn run() {
             #[cfg(not(any(target_os = "android", target_os = "ios")))]
             {
                 use tauri::menu::{Menu, MenuItem};
-                use tauri::tray::{TrayIconBuilder, MouseButton, MouseButtonState, TrayIconEvent};
+                use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 
                 let show_i = MenuItem::with_id(app, "show", "Show Shiori", true, None::<&str>)?;
                 let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
@@ -401,7 +408,12 @@ pub fn run() {
                         _ => {}
                     })
                     .on_tray_icon_event(|tray, event| {
-                        if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
+                        if let TrayIconEvent::Click {
+                            button: MouseButton::Left,
+                            button_state: MouseButtonState::Up,
+                            ..
+                        } = event
+                        {
                             let app = tray.app_handle();
                             if let Some(window) = app.get_webview_window("main") {
                                 window.show().unwrap();
@@ -427,9 +439,7 @@ pub fn run() {
             let toongod_for_cf = toongod_source.clone();
             let app_handle_for_toongod = app.handle().clone();
             tauri::async_runtime::spawn(async move {
-                toongod_for_cf
-                    .set_app_handle(app_handle_for_toongod)
-                    .await;
+                toongod_for_cf.set_app_handle(app_handle_for_toongod).await;
                 log::info!("ToonGod: app_handle attached for JS evaluation");
             });
 
@@ -456,9 +466,7 @@ pub fn run() {
                             .set_cf_client(std::sync::Arc::new(cf_client), app_handle_for_mangafire)
                             .await;
 
-                        log::info!(
-                            "MangaFire: CfClient attached successfully"
-                        );
+                        log::info!("MangaFire: CfClient attached successfully");
                     }
                     Err(e) => log::warn!("MangaFire: Failed to build CfClient: {}", e),
                 }
@@ -466,11 +474,10 @@ pub fn run() {
 
             // Initialize discovery service
             let discovery_service = Arc::new(
-                services::discovery_service::DiscoveryService::new()
-                    .unwrap_or_else(|e| {
-                        log::warn!("Failed to initialize DiscoveryService: {}", e);
-                        services::discovery_service::DiscoveryService::dummy()
-                    })
+                services::discovery_service::DiscoveryService::new().unwrap_or_else(|e| {
+                    log::warn!("Failed to initialize DiscoveryService: {}", e);
+                    services::discovery_service::DiscoveryService::dummy()
+                }),
             );
 
             app.manage(ActiveDownloads {
@@ -600,7 +607,9 @@ pub fn run() {
 
             #[cfg(not(any(target_os = "android", target_os = "ios")))]
             {
-                let piper_service = Arc::new(tokio::sync::Mutex::new(services::piper_service::PiperService::new(app.handle().clone())));
+                let piper_service = Arc::new(tokio::sync::Mutex::new(
+                    services::piper_service::PiperService::new(app.handle().clone()),
+                ));
                 app.manage(piper_service);
             }
 
@@ -621,7 +630,10 @@ pub fn run() {
                         // Prevent the window from closing and hide it instead
                         api.prevent_close();
                         let _ = window.hide();
-                        log::info!("Window closed, but {} downloads are active. Hiding to tray.", active);
+                        log::info!(
+                            "Window closed, but {} downloads are active. Hiding to tray.",
+                            active
+                        );
                     }
                 }
             }
@@ -650,17 +662,17 @@ pub fn is_safe_url(image_url: &str) -> bool {
     };
 
     // Block explicit loopback / link-local / private IPv4 literals
-    let blocked_literals = [
-        "localhost", "127.0.0.1", "[::1]", "0.0.0.0",
-    ];
+    let blocked_literals = ["localhost", "127.0.0.1", "[::1]", "0.0.0.0"];
     if blocked_literals.contains(&host.as_str()) {
         return false;
     }
 
     // Block private IPv4 ranges expressed as literals (simple prefix check)
-    let private_prefixes = ["10.", "192.168.", "172.16.", "172.17.", "172.18.", "172.19.",
-        "172.20.", "172.21.", "172.22.", "172.23.", "172.24.", "172.25.", "172.26.", "172.27.",
-        "172.28.", "172.29.", "172.30.", "172.31."];
+    let private_prefixes = [
+        "10.", "192.168.", "172.16.", "172.17.", "172.18.", "172.19.", "172.20.", "172.21.",
+        "172.22.", "172.23.", "172.24.", "172.25.", "172.26.", "172.27.", "172.28.", "172.29.",
+        "172.30.", "172.31.",
+    ];
     for prefix in &private_prefixes {
         if host.starts_with(prefix) {
             return false;

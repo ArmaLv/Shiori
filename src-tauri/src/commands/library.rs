@@ -235,7 +235,14 @@ pub fn permanent_delete_book(state: State<AppState>, id: i64) -> Result<()> {
 pub fn empty_trash(state: State<AppState>) -> Result<()> {
     log::info!("[command::empty_trash] Received request to empty trash");
     let db = &state.db;
-    let result = library_service::empty_trash(db);
+    // convert_book writes to {app_data_dir}/converted; covers_dir is
+    // {app_data_dir}/covers, so the converted root is its sibling.
+    let converted_root = state
+        .covers_dir
+        .parent()
+        .unwrap_or(&state.covers_dir)
+        .join("converted");
+    let result = library_service::empty_trash(db, &converted_root);
     match &result {
         Ok(_) => log::info!("[command::empty_trash] Successfully emptied trash"),
         Err(e) => log::error!("[command::empty_trash] Failed to empty trash: {:?}", e),
@@ -857,25 +864,20 @@ pub async fn download_libgen_epub(
                                     )
                                     .await
                                     {
-                                        Ok(()) => {
-                                            match verify_downloaded_file(&file_path, &ext) {
-                                                Ok(()) => {
-                                                    emit_download_completed(
-                                                        &app_handle,
-                                                        &target_id,
-                                                        &file_path,
-                                                    );
-                                                    return Ok(file_path
-                                                        .to_string_lossy()
-                                                        .to_string());
-                                                }
-                                                Err(reason) => {
-                                                    bad_download_reason = Some(reason);
-                                                    let _ =
-                                                        std::fs::remove_file(&file_path);
-                                                }
+                                        Ok(()) => match verify_downloaded_file(&file_path, &ext) {
+                                            Ok(()) => {
+                                                emit_download_completed(
+                                                    &app_handle,
+                                                    &target_id,
+                                                    &file_path,
+                                                );
+                                                return Ok(file_path.to_string_lossy().to_string());
                                             }
-                                        }
+                                            Err(reason) => {
+                                                bad_download_reason = Some(reason);
+                                                let _ = std::fs::remove_file(&file_path);
+                                            }
+                                        },
                                         Err(e) => {
                                             bad_download_reason = Some(e.to_string());
                                             let _ = std::fs::remove_file(&file_path);
@@ -1034,7 +1036,11 @@ fn detect_book_format(data: &[u8]) -> Option<&'static str> {
         return Some("mobi");
     }
     // XML-ish content: FB2 / XHTML. Skip a UTF-8 BOM if present.
-    let head = if data.starts_with(b"\xEF\xBB\xBF") { &data[3..] } else { data };
+    let head = if data.starts_with(b"\xEF\xBB\xBF") {
+        &data[3..]
+    } else {
+        data
+    };
     let head = &head[..head.len().min(512)];
     let lower = String::from_utf8_lossy(head).to_ascii_lowercase();
     if lower.contains("<fictionbook") {
@@ -1312,7 +1318,10 @@ mod download_format_tests {
 
     #[test]
     fn detect_epub() {
-        assert_eq!(detect(b"PK\x03\x04mimetypeapplication/epub+zip"), Some("epub"));
+        assert_eq!(
+            detect(b"PK\x03\x04mimetypeapplication/epub+zip"),
+            Some("epub")
+        );
     }
 
     #[test]
@@ -1343,7 +1352,10 @@ mod download_format_tests {
 
     #[test]
     fn detect_html_and_txt() {
-        assert_eq!(detect(b"<!DOCTYPE html><html><body>error</body></html>"), Some("html"));
+        assert_eq!(
+            detect(b"<!DOCTYPE html><html><body>error</body></html>"),
+            Some("html")
+        );
         assert_eq!(detect(b"<html><body>error</body></html>"), Some("html"));
         assert_eq!(detect(b"Once upon a time...\nThe end."), Some("txt"));
     }

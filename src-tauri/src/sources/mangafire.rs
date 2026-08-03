@@ -19,6 +19,10 @@ const BASE_URL: &str = "https://mangafire.to";
 const CHAPTER_CACHE_TTL: Duration = Duration::from_secs(10 * 60);
 /// How long chapter page lists are served from the in-memory cache before a refresh.
 const PAGES_CACHE_TTL: Duration = Duration::from_secs(30 * 60);
+/// Max entries per cache (chapters and pages each). Beyond this, the entry
+/// with the oldest `cached_at` is evicted on insert — keeps memory bounded
+/// when users browse many series without hitting the TTLs.
+const CACHE_MAX_ENTRIES: usize = 50;
 /// Max number of chapter-list pages fetched concurrently. Every page is a
 /// Cloudflare-browser RPC round-trip, so a small cap keeps the webview sane
 /// while still cutting wall-clock time by ~4x on multi-page series.
@@ -423,6 +427,25 @@ struct MfPageItem {
     url: String,
 }
 
+/// Evict the single entry with the oldest `cached_at` when `cache` holds more
+/// than [`CACHE_MAX_ENTRIES`]. Returns how many entries were evicted (0 or 1).
+/// Tiny maps, so a linear scan is plenty fast — and it keeps the policy
+/// trivially unit-testable.
+fn evict_oldest_if_over_cap<T>(cache: &mut HashMap<String, (Instant, T)>) -> usize {
+    if cache.len() <= CACHE_MAX_ENTRIES {
+        return 0;
+    }
+    if let Some(oldest_key) = cache
+        .iter()
+        .min_by_key(|(_, (cached_at, _))| *cached_at)
+        .map(|(k, _)| k.clone())
+    {
+        cache.remove(&oldest_key);
+        return 1;
+    }
+    0
+}
+
 /// Returns a cached value while it is fresh (within `ttl`); otherwise runs
 /// `fetch`, stores the result keyed by `key`, and returns it. Errors from
 /// `fetch` are propagated untouched and never cached.
@@ -445,10 +468,15 @@ where
         }
     }
     let value = fetch.await?;
-    cache
-        .lock()
-        .unwrap_or_else(|p| p.into_inner())
-        .insert(key.to_string(), (Instant::now(), value.clone()));
+    let mut guard = cache.lock().unwrap_or_else(|p| p.into_inner());
+    guard.insert(key.to_string(), (Instant::now(), value.clone()));
+    let evicted = evict_oldest_if_over_cap(&mut guard);
+    if evicted > 0 {
+        log::debug!(
+            "[mangafire] cache over cap, evicted {} oldest entr(ies)",
+            evicted
+        );
+    }
     Ok(value)
 }
 
@@ -942,5 +970,82 @@ mod tests {
             cache.lock().unwrap().is_empty(),
             "failed fetches must not be cached"
         );
+    }
+
+    #[test]
+    fn evict_oldest_removes_only_the_oldest_entry_when_over_cap() {
+        // Seed exactly at the cap, with distinct ages (older = smaller i).
+        let mut cache: HashMap<String, (Instant, Vec<Chapter>)> = HashMap::new();
+        for i in 0..CACHE_MAX_ENTRIES {
+            cache.insert(
+                format!("k{}", i),
+                (
+                    Instant::now() - Duration::from_secs((CACHE_MAX_ENTRIES - i) as u64),
+                    vec![],
+                ),
+            );
+        }
+        assert_eq!(
+            evict_oldest_if_over_cap(&mut cache),
+            0,
+            "at cap: nothing evicted"
+        );
+
+        // One more insert pushes it over — the OLDEST (k0) must go.
+        cache.insert("newest".to_string(), (Instant::now(), vec![]));
+        assert_eq!(evict_oldest_if_over_cap(&mut cache), 1);
+        assert_eq!(cache.len(), CACHE_MAX_ENTRIES);
+        assert!(!cache.contains_key("k0"), "oldest entry must be evicted");
+        assert!(cache.contains_key("k1"), "second-oldest survives");
+        assert!(cache.contains_key("newest"), "newest entry survives");
+    }
+
+    #[test]
+    fn evict_oldest_leaves_entries_within_cap_untouched() {
+        let mut cache: HashMap<String, (Instant, Vec<Chapter>)> = HashMap::new();
+        for i in 0..CACHE_MAX_ENTRIES - 1 {
+            cache.insert(
+                format!("k{}", i),
+                (Instant::now() - Duration::from_secs(i as u64), vec![]),
+            );
+        }
+        let snapshot: Vec<String> = cache.keys().cloned().collect();
+
+        assert_eq!(evict_oldest_if_over_cap(&mut cache), 0);
+        assert_eq!(cache.len(), CACHE_MAX_ENTRIES - 1);
+        for k in &snapshot {
+            assert!(cache.contains_key(k), "entry {} must be untouched", k);
+        }
+    }
+
+    #[tokio::test]
+    async fn cache_over_cap_evicts_oldest_and_keeps_newest() {
+        let cache: Mutex<HashMap<String, (Instant, Vec<Chapter>)>> = Mutex::new(HashMap::new());
+        {
+            let mut guard = cache.lock().unwrap();
+            // Pre-seed at the cap with distinct ages (k0 oldest … k49 newest).
+            for i in 0..CACHE_MAX_ENTRIES {
+                guard.insert(
+                    format!("k{}", i),
+                    (
+                        Instant::now() - Duration::from_secs((CACHE_MAX_ENTRIES - i) as u64),
+                        vec![chapter(&i.to_string(), "Seed")],
+                    ),
+                );
+            }
+        }
+
+        let v = cache_get_or_fetch(&cache, "fresh", CHAPTER_CACHE_TTL, async {
+            Ok(vec![chapter("99", "Fresh")])
+        })
+        .await
+        .unwrap();
+        assert_eq!(v[0].title, "Fresh");
+
+        let guard = cache.lock().unwrap();
+        assert_eq!(guard.len(), CACHE_MAX_ENTRIES, "cache must stay at the cap");
+        assert!(!guard.contains_key("k0"), "oldest seeded entry evicted");
+        assert!(guard.contains_key("k49"), "newest seeded entry retained");
+        assert!(guard.contains_key("fresh"), "newly inserted entry retained");
     }
 }

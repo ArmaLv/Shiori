@@ -101,6 +101,9 @@ interface ReadingSettings {
   isPaginated: boolean;
   continuousFlow: boolean;
 
+  // Device
+  keepScreenOn: boolean; // Android: FLAG_KEEP_SCREEN_ON while reading
+
   // Page Transition Animation (Chapter-level or page-level)
   pageFlipEnabled: boolean;
   pageFlipSpeed: number; // ms (100-800)
@@ -131,6 +134,7 @@ interface ReadingSettings {
   toggleTwoPageView: () => void;
   setIsPaginated: (paginated: boolean) => void;
   setContinuousFlow: (flow: boolean) => void;
+  setKeepScreenOn: (enabled: boolean) => void;
   setBrightness: (brightness: number) => void;
   setPageFlipEnabled: (enabled: boolean) => void;
   setPageFlipSpeed: (speed: number) => void;
@@ -157,6 +161,7 @@ const defaultSettings = {
   twoPageView: false,
   isPaginated: false,
   continuousFlow: false,
+  keepScreenOn: true,
   brightness: 1.0,
   pageFlipEnabled: true,
   pageFlipSpeed: 300,
@@ -205,6 +210,7 @@ const normalizeReadingSettingsState = (raw: unknown): Omit<ReadingSettings, keyo
   setAnimationStyle: 0;
   setPaperTextureIntensity: 0;
   setUiScale: 0;
+  setKeepScreenOn: 0;
   resetToDefaults: 0;
 }> => {
   const source = (raw && typeof raw === 'object') ? (raw as Partial<typeof defaultSettings>) : {};
@@ -226,6 +232,7 @@ const normalizeReadingSettingsState = (raw: unknown): Omit<ReadingSettings, keyo
     twoPageView: typeof source.twoPageView === 'boolean' ? source.twoPageView : defaultSettings.twoPageView,
     isPaginated: typeof source.isPaginated === 'boolean' ? source.isPaginated : defaultSettings.isPaginated,
     continuousFlow: typeof source.continuousFlow === 'boolean' ? source.continuousFlow : defaultSettings.continuousFlow,
+    keepScreenOn: typeof source.keepScreenOn === 'boolean' ? source.keepScreenOn : defaultSettings.keepScreenOn,
     brightness: clampNumber(source.brightness, defaultSettings.brightness, 0.5, 1.5),
     pageFlipEnabled: typeof source.pageFlipEnabled === 'boolean' ? source.pageFlipEnabled : defaultSettings.pageFlipEnabled,
     pageFlipSpeed: clampNumber(source.pageFlipSpeed, defaultSettings.pageFlipSpeed, 100, 800),
@@ -361,6 +368,8 @@ export const useReadingSettings = create<ReadingSettings>()(
           set({ continuousFlow: false });
         }
       },
+
+      setKeepScreenOn: (enabled) => set({ keepScreenOn: enabled }),
 
       setBrightness: (brightness) => {
         const clamped = Math.max(0.5, Math.min(1.5, brightness));

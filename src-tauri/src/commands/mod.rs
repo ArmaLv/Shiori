@@ -115,6 +115,7 @@ macro_rules! generate_shiori_handlers {
             commands::reader::get_reading_goal,
             commands::reader::update_reading_goal,
             commands::reader::get_today_reading_time,
+            commands::reader::set_keep_screen_on,
             commands::rendering::open_book_renderer,
             commands::rendering::close_book_renderer,
             commands::rendering::get_book_toc,

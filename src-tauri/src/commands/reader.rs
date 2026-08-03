@@ -432,6 +432,61 @@ pub struct ErrorDetails {
     pub technical_details: String,
 }
 
+// ==================== Keep Screen On (Android) ====================
+
+/// Keep the device screen awake while reading (Android only).
+/// Uses the JNI API (via ndk-context + jni, matching the versions tauri
+/// already links on Android) to call
+/// `Activity.getWindow().addFlags(FLAG_KEEP_SCREEN_ON)` / `clearFlags(...)`.
+/// On non-Android platforms this is a no-op.
+#[cfg(target_os = "android")]
+#[tauri::command]
+pub fn set_keep_screen_on(enabled: bool) -> Result<()> {
+    use jni::objects::{JObject, JValue};
+    use jni::JavaVM;
+
+    // WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON = 0x00000080
+    const FLAG_KEEP_SCREEN_ON: jni::sys::jint = 0x0000_0080;
+
+    let android_ctx = ndk_context::android_context();
+    let vm = unsafe { JavaVM::from_raw(android_ctx.vm().cast()) }.map_err(|e| {
+        crate::error::ShioriError::Other(format!("keep_screen_on: JavaVM::from_raw failed: {e}"))
+    })?;
+    let mut env = vm.attach_current_thread().map_err(|e| {
+        crate::error::ShioriError::Other(format!(
+            "keep_screen_on: attach_current_thread failed: {e}"
+        ))
+    })?;
+
+    // ndk-context is initialized by tao's android_setup with the Activity.
+    let activity = unsafe { JObject::from_raw(android_ctx.context() as jni::sys::jobject) };
+    let window: JObject = env
+        .call_method(activity, "getWindow", "()Landroid/view/Window;", &[])
+        .map_err(|e| {
+            crate::error::ShioriError::Other(format!("keep_screen_on: getWindow failed: {e}"))
+        })?
+        .l()
+        .map_err(|e| {
+            crate::error::ShioriError::Other(format!(
+                "keep_screen_on: getWindow result failed: {e}"
+            ))
+        })?;
+
+    let method = if enabled { "addFlags" } else { "clearFlags" };
+    env.call_method(window, method, "(I)V", &[JValue::Int(FLAG_KEEP_SCREEN_ON)])
+        .map_err(|e| {
+            crate::error::ShioriError::Other(format!("keep_screen_on: {method} failed: {e}"))
+        })?;
+
+    Ok(())
+}
+
+#[cfg(not(target_os = "android"))]
+#[tauri::command]
+pub fn set_keep_screen_on(_enabled: bool) -> Result<()> {
+    Ok(())
+}
+
 #[tauri::command]
 pub fn get_error_details(error_message: String) -> ErrorDetails {
     // This is a helper for frontend to get structured error info

@@ -9,6 +9,7 @@ import { GenericHtmlReader } from './GenericHtmlReader';
 import { MangaReader } from '@/components/manga/MangaReader';
 import { ReaderErrorBoundary, parseReaderError } from './ReaderErrorBoundary';
 import { getReaderKind } from './readerRouting';
+import { useKeepScreenOn } from '@/hooks/useKeepScreenOn';
 import { useToastStore } from '@/store/toastStore';
 import type { ReaderFormat } from './ReaderSettings';
 import type { ReaderContent } from './readerContent';
@@ -171,6 +172,9 @@ export function ReaderLayout({ bookId, onClose }: ReaderLayoutProps) {
       setIsConverting(false);
     }
   }, [bookId, isConverting, openBook]);
+
+  // A1: keep the Android screen awake while reading (setting-driven).
+  useKeepScreenOn();
 
   const handleNextChapter = useCallback(async () => {
     try {
