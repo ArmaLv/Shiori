@@ -66,8 +66,6 @@ impl ManhwaReadSource {
         self.config.read().await.clone()
     }
 
-
-
     fn detect_cloudflare_block(status: reqwest::StatusCode, html: &str) -> bool {
         if status == reqwest::StatusCode::FORBIDDEN
             || status == reqwest::StatusCode::SERVICE_UNAVAILABLE
@@ -152,11 +150,9 @@ impl ManhwaReadSource {
             .to_string()
     }
 
-
-
     async fn evaluate_js(&self, url: &str, js_script: &str) -> Result<String> {
         let _lock = self.eval_lock.lock().await;
-        
+
         let guard = self.app_handle.read().await;
         let app = guard.as_ref().ok_or_else(|| {
             ShioriError::Other("ManhwaRead source app_handle not initialized".into())
@@ -212,57 +208,68 @@ impl ManhwaReadSource {
 
             use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 
-            let _window = WebviewWindowBuilder::new(app, &window_label, WebviewUrl::External(url.parse().unwrap()))
-                .visible(false)
-                .initialization_script(&js)
-                .on_document_title_changed(move |window, title| {
-                    if title.starts_with("SHIORI_CHUNK|") {
-                        if let Ok(mut buf) = html_buffer_clone.lock() {
-                            let raw = title.trim_start_matches("SHIORI_CHUNK|");
-                            let decoded = urlencoding::decode(raw).unwrap_or(std::borrow::Cow::Borrowed(raw));
-                            buf.push_str(&decoded);
-                        }
-                        let _ = window.eval("window.__CHUNK_ACK = true;");
-                    } else if title.starts_with("SHIORI_DONE|") {
-                        if let Ok(mut lock) = tx_clone.lock() {
-                            if let Some(sender) = lock.take() {
-                                let buf = html_buffer_clone.lock().unwrap().clone();
-                                let _ = sender.send(format!("SHIORI_RESULT|{}", buf));
-                            }
-                        }
-                        let w_label = window_label_clone.clone();
-                        let a = app_clone.clone();
-                        tauri::async_runtime::spawn(async move {
-                            if let Some(w) = a.get_webview_window(&w_label) {
-                                let _ = w.close();
-                            }
-                        });
-                    } else if title.starts_with("SHIORI_ERROR|") {
-                        if let Ok(mut lock) = tx_clone.lock() {
-                            if let Some(sender) = lock.take() {
-                                let _ = sender.send(title.clone());
-                            }
-                        }
-                        let w_label = window_label_clone.clone();
-                        let a = app_clone.clone();
-                        tauri::async_runtime::spawn(async move {
-                            if let Some(w) = a.get_webview_window(&w_label) {
-                                let _ = w.close();
-                            }
-                        });
+            let _window = WebviewWindowBuilder::new(
+                app,
+                &window_label,
+                WebviewUrl::External(url.parse().unwrap()),
+            )
+            .visible(false)
+            .initialization_script(&js)
+            .on_document_title_changed(move |window, title| {
+                if title.starts_with("SHIORI_CHUNK|") {
+                    if let Ok(mut buf) = html_buffer_clone.lock() {
+                        let raw = title.trim_start_matches("SHIORI_CHUNK|");
+                        let decoded =
+                            urlencoding::decode(raw).unwrap_or(std::borrow::Cow::Borrowed(raw));
+                        buf.push_str(&decoded);
                     }
-                })
-                .build()
-                .map_err(|e| ShioriError::Other(format!("Failed to build eval webview: {}", e)))?;
+                    let _ = window.eval("window.__CHUNK_ACK = true;");
+                } else if title.starts_with("SHIORI_DONE|") {
+                    if let Ok(mut lock) = tx_clone.lock() {
+                        if let Some(sender) = lock.take() {
+                            let buf = html_buffer_clone.lock().unwrap().clone();
+                            let _ = sender.send(format!("SHIORI_RESULT|{}", buf));
+                        }
+                    }
+                    let w_label = window_label_clone.clone();
+                    let a = app_clone.clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Some(w) = a.get_webview_window(&w_label) {
+                            let _ = w.close();
+                        }
+                    });
+                } else if title.starts_with("SHIORI_ERROR|") {
+                    if let Ok(mut lock) = tx_clone.lock() {
+                        if let Some(sender) = lock.take() {
+                            let _ = sender.send(title.clone());
+                        }
+                    }
+                    let w_label = window_label_clone.clone();
+                    let a = app_clone.clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Some(w) = a.get_webview_window(&w_label) {
+                            let _ = w.close();
+                        }
+                    });
+                }
+            })
+            .build()
+            .map_err(|e| ShioriError::Other(format!("Failed to build eval webview: {}", e)))?;
 
             let result = match tokio::time::timeout(std::time::Duration::from_secs(45), rx).await {
                 Ok(Ok(res)) => {
                     if res.starts_with("SHIORI_RESULT|") {
                         res.trim_start_matches("SHIORI_RESULT|").to_string()
                     } else if res.starts_with("SHIORI_ERROR|") {
-                        return Err(ShioriError::Other(format!("ManhwaRead JS Error: {}", res.trim_start_matches("SHIORI_ERROR|"))));
+                        return Err(ShioriError::Other(format!(
+                            "ManhwaRead JS Error: {}",
+                            res.trim_start_matches("SHIORI_ERROR|")
+                        )));
                     } else {
-                        return Err(ShioriError::Other(format!("ManhwaRead unexpected eval result: {}", res)));
+                        return Err(ShioriError::Other(format!(
+                            "ManhwaRead unexpected eval result: {}",
+                            res
+                        )));
                     }
                 }
                 _ => {
@@ -274,7 +281,9 @@ impl ManhwaReadSource {
                             let _ = w.close();
                         }
                     });
-                    return Err(ShioriError::Other("ManhwaRead evaluate_js timed out".into()));
+                    return Err(ShioriError::Other(
+                        "ManhwaRead evaluate_js timed out".into(),
+                    ));
                 }
             };
             Ok(result)
@@ -293,12 +302,19 @@ impl ManhwaReadSource {
                 }})()"#,
                 js_script
             );
-            
-            let result = app.android_saf().evaluate_javascript(url.to_string(), js, Some(USER_AGENTS[0].to_string()))
-                .map_err(|e| ShioriError::Other(format!("Android evaluateJavascript failed: {}", e)))?;
-                
+
+            let result = app
+                .android_saf()
+                .evaluate_javascript(url.to_string(), js, Some(USER_AGENTS[0].to_string()))
+                .map_err(|e| {
+                    ShioriError::Other(format!("Android evaluateJavascript failed: {}", e))
+                })?;
+
             if result.starts_with("{\"error\":") {
-                return Err(ShioriError::Other(format!("ManhwaRead JS Error: {}", result)));
+                return Err(ShioriError::Other(format!(
+                    "ManhwaRead JS Error: {}",
+                    result
+                )));
             }
             Ok(result)
         }
@@ -441,7 +457,7 @@ impl Source for ManhwaReadSource {
 
         let mut genre_query = String::new();
         let mut genre_idx = 0;
-        
+
         if let Some(genres) = genres {
             for genre in genres {
                 let slug = genre.to_lowercase().replace(" ", "-");
@@ -452,15 +468,15 @@ impl Source for ManhwaReadSource {
 
         let url = format!(
             "{}/home/{}?m_orderby={}{}",
-            BASE_URL,
-            page_path,
-            order,
-            genre_query
+            BASE_URL, page_path, order, genre_query
         );
 
         let (status, html) = self.fetch_with_referer(&url, Some(BASE_URL)).await?;
-        
-        let _ = std::fs::write("/tmp/manhwaread_debug.txt", format!("URL: {}\nSTATUS: {}\nHTML:\n{}", url, status, html));
+
+        let _ = std::fs::write(
+            "/tmp/manhwaread_debug.txt",
+            format!("URL: {}\nSTATUS: {}\nHTML:\n{}", url, status, html),
+        );
 
         if Self::detect_cloudflare_block(status, &html) {
             return Err(Self::cloudflare_error("browse"));

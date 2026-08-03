@@ -4,7 +4,9 @@ use serde_json::Value;
 use std::time::Duration;
 
 use crate::error::{Result, ShioriError};
-use crate::sources::{Chapter, ContentType, Page, SearchResponse, SearchResult, Source, SourceMeta};
+use crate::sources::{
+    Chapter, ContentType, Page, SearchResponse, SearchResult, Source, SourceMeta,
+};
 
 const BASE_URL: &str = "https://toontop.io";
 
@@ -13,7 +15,8 @@ fn extract_next_data(html: &str) -> Result<Value> {
     let selector = scraper::Selector::parse("script#__NEXT_DATA__").unwrap();
     if let Some(script) = doc.select(&selector).next() {
         let json_str = script.inner_html();
-        let val: Value = serde_json::from_str(&json_str).map_err(|e| ShioriError::Other(e.to_string()))?;
+        let val: Value =
+            serde_json::from_str(&json_str).map_err(|e| ShioriError::Other(e.to_string()))?;
         return Ok(val);
     }
     Err(ShioriError::Other("Could not find __NEXT_DATA__".into()))
@@ -34,8 +37,16 @@ impl ToonTopSource {
     }
 
     async fn fetch(&self, url: &str) -> Result<Value> {
-        let res = self.client.get(url).send().await.map_err(|e| ShioriError::Other(e.to_string()))?;
-        let text = res.text().await.map_err(|e| ShioriError::Other(e.to_string()))?;
+        let res = self
+            .client
+            .get(url)
+            .send()
+            .await
+            .map_err(|e| ShioriError::Other(e.to_string()))?;
+        let text = res
+            .text()
+            .await
+            .map_err(|e| ShioriError::Other(e.to_string()))?;
         extract_next_data(&text)
     }
 }
@@ -67,7 +78,8 @@ impl Source for ToonTopSource {
 
         if let Some(items) = data["props"]["pageProps"]["ssrItems"].as_array() {
             for item in items {
-                if let (Some(url_path), Some(name)) = (item["url"].as_str(), item["name"].as_str()) {
+                if let (Some(url_path), Some(name)) = (item["url"].as_str(), item["name"].as_str())
+                {
                     let cover = item["cover"].as_str().map(|s| s.to_string());
                     let mut id = url_path.to_string();
                     if id.starts_with('/') {
@@ -98,27 +110,39 @@ impl Source for ToonTopSource {
         })
     }
 
-    async fn browse(&self, mode: &str, page: u32, _limit: u32, _genres: Option<Vec<String>>, _types: Option<Vec<String>>) -> Result<Vec<SearchResult>> {
+    async fn browse(
+        &self,
+        mode: &str,
+        page: u32,
+        _limit: u32,
+        _genres: Option<Vec<String>>,
+        _types: Option<Vec<String>>,
+    ) -> Result<Vec<SearchResult>> {
         let path = match mode {
             "trending" | "popular" => "/ranking",
             "latest" => "/latest",
             _ => "/latest",
         };
-        let page_query = if page > 1 { format!("?page={}", page) } else { String::new() };
+        let page_query = if page > 1 {
+            format!("?page={}", page)
+        } else {
+            String::new()
+        };
         let url = format!("{}{}{}", BASE_URL, path, page_query);
         let data = self.fetch(&url).await?;
         let mut results = Vec::new();
-        
+
         let mut items_array = None;
         if let Some(items) = data["props"]["pageProps"]["items"].as_array() {
             items_array = Some(items);
         } else if let Some(items) = data["props"]["pageProps"]["initialItems"].as_array() {
             items_array = Some(items);
         }
-        
+
         if let Some(items) = items_array {
             for item in items {
-                if let (Some(url_path), Some(name)) = (item["url"].as_str(), item["name"].as_str()) {
+                if let (Some(url_path), Some(name)) = (item["url"].as_str(), item["name"].as_str())
+                {
                     let cover = item["cover"].as_str().map(|s| s.to_string());
                     let mut id = url_path.to_string();
                     if id.starts_with('/') {
@@ -142,10 +166,11 @@ impl Source for ToonTopSource {
         let url = format!("{}/{}", BASE_URL, content_id);
         let data = self.fetch(&url).await?;
         let mut chapters = Vec::new();
-        
+
         if let Some(items) = data["props"]["pageProps"]["initialManga"]["chapters"].as_array() {
             for item in items {
-                if let (Some(url_path), Some(name)) = (item["url"].as_str(), item["name"].as_str()) {
+                if let (Some(url_path), Some(name)) = (item["url"].as_str(), item["name"].as_str())
+                {
                     // e.g. /playing-on-hard-mode/chapter-20
                     let mut id = url_path.to_string();
                     if id.starts_with('/') {
@@ -164,8 +189,12 @@ impl Source for ToonTopSource {
                 }
             }
         }
-        
-        chapters.sort_by(|a, b| b.number.partial_cmp(&a.number).unwrap_or(std::cmp::Ordering::Equal)); // ensure descending order if needed
+
+        chapters.sort_by(|a, b| {
+            b.number
+                .partial_cmp(&a.number)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        }); // ensure descending order if needed
         Ok(chapters)
     }
 
@@ -173,7 +202,7 @@ impl Source for ToonTopSource {
         let url = format!("{}/{}", BASE_URL, chapter_id);
         let data = self.fetch(&url).await?;
         let mut pages = Vec::new();
-        
+
         if let Some(images) = data["props"]["pageProps"]["initialChapter"]["images"].as_array() {
             for (i, img) in images.iter().enumerate() {
                 if let Some(img_url) = img.as_str() {
@@ -184,7 +213,7 @@ impl Source for ToonTopSource {
                 }
             }
         }
-        
+
         if pages.is_empty() {
             return Err(ShioriError::Other("No pages found in chapter data".into()));
         }

@@ -493,9 +493,18 @@ mod tests {
 
     #[test]
     fn extract_md5_returns_none_without_md5() {
-        assert_eq!(extract_md5_from_url("https://randombook.org/book/12345"), None);
-        assert_eq!(extract_md5_from_url("https://libgen.li/ads.php?id=42"), None);
-        assert_eq!(extract_md5_from_url("https://libgen.li/main/89000/nothex/book.pdf"), None);
+        assert_eq!(
+            extract_md5_from_url("https://randombook.org/book/12345"),
+            None
+        );
+        assert_eq!(
+            extract_md5_from_url("https://libgen.li/ads.php?id=42"),
+            None
+        );
+        assert_eq!(
+            extract_md5_from_url("https://libgen.li/main/89000/nothex/book.pdf"),
+            None
+        );
         assert_eq!(extract_md5_from_url(""), None);
     }
 

@@ -366,7 +366,11 @@ impl NyaaSource {
             let mut tasks = Vec::new();
             for p in 0..pages_to_fetch {
                 let current_page = safe_page + p;
-                let p_param = if current_page > 1 { format!("&p={}", current_page) } else { String::new() };
+                let p_param = if current_page > 1 {
+                    format!("&p={}", current_page)
+                } else {
+                    String::new()
+                };
                 let url = format!(
                     "{}/?page=rss&q={}&c=3_1&f=0{}",
                     mirror,
@@ -401,7 +405,9 @@ impl NyaaSource {
                                 break;
                             }
 
-                            if !text.trim_start().starts_with("<?xml") && !text.trim_start().starts_with("<rss") {
+                            if !text.trim_start().starts_with("<?xml")
+                                && !text.trim_start().starts_with("<rss")
+                            {
                                 // Mirror returned HTML instead of RSS, meaning the RSS endpoint is likely broken
                                 // or ignoring query params (like nyaa.iss.one). Fallback to HTML endpoint.
                                 mirror_failed = true;
@@ -464,7 +470,11 @@ impl NyaaSource {
             }
 
             if successful_mirror.is_empty() {
-                let p_param = if safe_page > 1 { format!("&p={}", safe_page) } else { String::new() };
+                let p_param = if safe_page > 1 {
+                    format!("&p={}", safe_page)
+                } else {
+                    String::new()
+                };
                 let html_url = format!(
                     "{}/?q={}&c=3_1&f=0{}",
                     mirror,

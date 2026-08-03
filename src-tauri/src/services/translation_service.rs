@@ -6,8 +6,8 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
-use std::sync::{Mutex, OnceLock};
 use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
 
 use crate::error::{Result, ShioriError};
 
@@ -416,7 +416,10 @@ pub async fn translate_text(
         translate_text_single(text, source_lang, target_lang).await?
     };
 
-    get_translation_cache().lock().unwrap().insert(key, result.clone());
+    get_translation_cache()
+        .lock()
+        .unwrap()
+        .insert(key, result.clone());
     Ok(result)
 }
 
@@ -430,21 +433,25 @@ async fn translate_long_text(
 
     // Naive split by ". " to chunk long paragraphs
     let chunks: Vec<&str> = text.split(". ").collect();
-    
+
     for (i, chunk) in chunks.iter().enumerate() {
         if chunk.trim().is_empty() {
             continue;
         }
         // Avoid nested loops calling themselves infinitely; chunks should be < 400 chars now.
         // If still > 400, truncate to 400 to prevent failure.
-        let safe_chunk = if chunk.len() > 400 { &chunk[..400] } else { chunk };
-        
+        let safe_chunk = if chunk.len() > 400 {
+            &chunk[..400]
+        } else {
+            chunk
+        };
+
         let res = translate_text_single(safe_chunk, source_lang, target_lang).await?;
         translated_pieces.push(res.translated_text);
         if provider.is_empty() {
             provider = res.provider;
         }
-        
+
         // Respect API rate limits somewhat by delaying slightly between chunks
         if i < chunks.len() - 1 {
             tokio::time::sleep(Duration::from_millis(300)).await;

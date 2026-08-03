@@ -1,39 +1,13 @@
 import { useMemo, useState } from "react";
-import {
-  AlertCircle,
-  BookDown,
-  CheckCircle2,
-  ChevronDown,
-  ChevronUp,
-  Clock,
-  Download,
-  Loader2,
-} from "lucide-react";
+import { BookDown, ChevronDown, ChevronUp, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ChapterDownloadStatusIcon } from "./ChapterDownloadStatusIcon";
 import type { UnifiedChapter } from "./OnlineMangaDetailView";
 import {
   chapterDisplayLabel,
   countChapterStatuses,
-  type ChapterDownloadStatus,
   type ChapterDownloadStatusMap,
 } from "./mangaDownloadUtils";
-
-function ChapterStatusIcon({ status }: { status?: ChapterDownloadStatus }) {
-  switch (status) {
-    case "done":
-      return <CheckCircle2 className="w-3.5 h-3.5 text-green-400 shrink-0" />;
-    case "failed":
-      return <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />;
-    case "downloading":
-      return (
-        <Loader2 className="w-3.5 h-3.5 text-primary animate-spin shrink-0" />
-      );
-    case "queued":
-      return <Clock className="w-3.5 h-3.5 text-muted-foreground shrink-0" />;
-    default:
-      return <Download className="w-3.5 h-3.5 text-muted-foreground shrink-0" />;
-  }
-}
 
 interface MangaDownloadDockProps {
   chapters: UnifiedChapter[];
@@ -61,8 +35,10 @@ export function MangaDownloadDock({
 
   const finished = counts.done + counts.failed;
 
+  // Mobile uses inline per-chapter download buttons in the chapter list and
+  // the header "Download Manga" action, so the floating dock is desktop-only.
   return (
-    <div className="fixed z-40 max-md:bottom-24 max-md:right-4 md:bottom-6 md:right-6 flex flex-col items-end gap-2">
+    <div className="fixed z-40 hidden md:flex md:bottom-6 md:right-6 flex-col items-end gap-2">
       {/* Per-chapter download picker */}
       {open && (
         <div className="w-72 max-h-96 overflow-y-auto custom-scrollbar rounded-2xl border border-border/50 bg-background/95 backdrop-blur-2xl shadow-[0_0_50px_-10px_rgba(0,0,0,0.7)] p-2 flex flex-col gap-0.5 animate-in fade-in slide-in-from-bottom-4">
@@ -84,7 +60,7 @@ export function MangaDownloadDock({
                     className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-left text-xs font-medium text-foreground/90 hover:bg-secondary transition-colors disabled:opacity-60 disabled:pointer-events-none"
                   >
                     <span className="truncate">{chapterDisplayLabel(ch)}</span>
-                    <ChapterStatusIcon status={chStatus} />
+                    <ChapterDownloadStatusIcon status={chStatus} />
                   </button>
                 </li>
               );

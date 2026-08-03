@@ -9,14 +9,14 @@ pub mod annas_archive;
 pub mod libgen;
 pub mod mangadex;
 pub mod mangafire;
+pub mod manhwahub;
 pub mod nyaa;
 pub mod registry;
 pub mod toongod;
-pub mod torrent_csv;
-pub mod weebrook;
-pub mod manhwahub;
 pub mod toonily;
 pub mod toontop;
+pub mod torrent_csv;
+pub mod weebrook;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]

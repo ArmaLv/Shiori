@@ -67,8 +67,6 @@ impl ToonGodSource {
         self.config.read().await.clone()
     }
 
-
-
     fn detect_cloudflare_block(status: reqwest::StatusCode, html: &str) -> bool {
         if status == reqwest::StatusCode::FORBIDDEN
             || status == reqwest::StatusCode::SERVICE_UNAVAILABLE
@@ -157,11 +155,9 @@ impl ToonGodSource {
             .to_string()
     }
 
-
-
     async fn evaluate_js(&self, url: &str, js_script: &str) -> Result<String> {
         let _lock = self.eval_lock.lock().await;
-        
+
         let guard = self.app_handle.read().await;
         let app = guard.as_ref().ok_or_else(|| {
             ShioriError::Other("ToonGod source app_handle not initialized".into())
@@ -217,57 +213,68 @@ impl ToonGodSource {
 
             use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 
-            let _window = WebviewWindowBuilder::new(app, &window_label, WebviewUrl::External(url.parse().unwrap()))
-                .visible(false)
-                .initialization_script(&js)
-                .on_document_title_changed(move |window, title| {
-                    if title.starts_with("SHIORI_CHUNK|") {
-                        if let Ok(mut buf) = html_buffer_clone.lock() {
-                            let raw = title.trim_start_matches("SHIORI_CHUNK|");
-                            let decoded = urlencoding::decode(raw).unwrap_or(std::borrow::Cow::Borrowed(raw));
-                            buf.push_str(&decoded);
-                        }
-                        let _ = window.eval("window.__CHUNK_ACK = true;");
-                    } else if title.starts_with("SHIORI_DONE|") {
-                        if let Ok(mut lock) = tx_clone.lock() {
-                            if let Some(sender) = lock.take() {
-                                let buf = html_buffer_clone.lock().unwrap().clone();
-                                let _ = sender.send(format!("SHIORI_RESULT|{}", buf));
-                            }
-                        }
-                        let w_label = window_label_clone.clone();
-                        let a = app_clone.clone();
-                        tauri::async_runtime::spawn(async move {
-                            if let Some(w) = a.get_webview_window(&w_label) {
-                                let _ = w.close();
-                            }
-                        });
-                    } else if title.starts_with("SHIORI_ERROR|") {
-                        if let Ok(mut lock) = tx_clone.lock() {
-                            if let Some(sender) = lock.take() {
-                                let _ = sender.send(title.clone());
-                            }
-                        }
-                        let w_label = window_label_clone.clone();
-                        let a = app_clone.clone();
-                        tauri::async_runtime::spawn(async move {
-                            if let Some(w) = a.get_webview_window(&w_label) {
-                                let _ = w.close();
-                            }
-                        });
+            let _window = WebviewWindowBuilder::new(
+                app,
+                &window_label,
+                WebviewUrl::External(url.parse().unwrap()),
+            )
+            .visible(false)
+            .initialization_script(&js)
+            .on_document_title_changed(move |window, title| {
+                if title.starts_with("SHIORI_CHUNK|") {
+                    if let Ok(mut buf) = html_buffer_clone.lock() {
+                        let raw = title.trim_start_matches("SHIORI_CHUNK|");
+                        let decoded =
+                            urlencoding::decode(raw).unwrap_or(std::borrow::Cow::Borrowed(raw));
+                        buf.push_str(&decoded);
                     }
-                })
-                .build()
-                .map_err(|e| ShioriError::Other(format!("Failed to build eval webview: {}", e)))?;
+                    let _ = window.eval("window.__CHUNK_ACK = true;");
+                } else if title.starts_with("SHIORI_DONE|") {
+                    if let Ok(mut lock) = tx_clone.lock() {
+                        if let Some(sender) = lock.take() {
+                            let buf = html_buffer_clone.lock().unwrap().clone();
+                            let _ = sender.send(format!("SHIORI_RESULT|{}", buf));
+                        }
+                    }
+                    let w_label = window_label_clone.clone();
+                    let a = app_clone.clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Some(w) = a.get_webview_window(&w_label) {
+                            let _ = w.close();
+                        }
+                    });
+                } else if title.starts_with("SHIORI_ERROR|") {
+                    if let Ok(mut lock) = tx_clone.lock() {
+                        if let Some(sender) = lock.take() {
+                            let _ = sender.send(title.clone());
+                        }
+                    }
+                    let w_label = window_label_clone.clone();
+                    let a = app_clone.clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Some(w) = a.get_webview_window(&w_label) {
+                            let _ = w.close();
+                        }
+                    });
+                }
+            })
+            .build()
+            .map_err(|e| ShioriError::Other(format!("Failed to build eval webview: {}", e)))?;
 
             let result = match tokio::time::timeout(std::time::Duration::from_secs(45), rx).await {
                 Ok(Ok(res)) => {
                     if res.starts_with("SHIORI_RESULT|") {
                         res.trim_start_matches("SHIORI_RESULT|").to_string()
                     } else if res.starts_with("SHIORI_ERROR|") {
-                        return Err(ShioriError::Other(format!("ToonGod JS Error: {}", res.trim_start_matches("SHIORI_ERROR|"))));
+                        return Err(ShioriError::Other(format!(
+                            "ToonGod JS Error: {}",
+                            res.trim_start_matches("SHIORI_ERROR|")
+                        )));
                     } else {
-                        return Err(ShioriError::Other(format!("ToonGod unexpected eval result: {}", res)));
+                        return Err(ShioriError::Other(format!(
+                            "ToonGod unexpected eval result: {}",
+                            res
+                        )));
                     }
                 }
                 _ => {
@@ -298,10 +305,14 @@ impl ToonGodSource {
                 }})()"#,
                 js_script
             );
-            
-            let result = app.android_saf().evaluate_javascript(url.to_string(), js, Some(USER_AGENTS[0].to_string()))
-                .map_err(|e| ShioriError::Other(format!("Android evaluateJavascript failed: {}", e)))?;
-                
+
+            let result = app
+                .android_saf()
+                .evaluate_javascript(url.to_string(), js, Some(USER_AGENTS[0].to_string()))
+                .map_err(|e| {
+                    ShioriError::Other(format!("Android evaluateJavascript failed: {}", e))
+                })?;
+
             if result.starts_with("{\"error\":") {
                 return Err(ShioriError::Other(format!("ToonGod JS Error: {}", result)));
             }
@@ -322,7 +333,8 @@ impl ToonGodSource {
     async fn try_ajax_chapters(&self, manga_id: &str, manga_url: &str) -> Result<Option<String>> {
         // Try the new AJAX endpoint first
         let ajax_url = format!("{}/ajax/chapters/", manga_url.trim_end_matches('/'));
-        let js = format!(r#"
+        let js = format!(
+            r#"
             let res = await fetch('{}', {{
                 method: 'POST',
                 headers: {{
@@ -333,7 +345,9 @@ impl ToonGodSource {
                 body: 'manga={}'
             }});
             return await res.text();
-        "#, ajax_url, manga_id);
+        "#,
+            ajax_url, manga_id
+        );
 
         if let Ok(html) = self.evaluate_js(manga_url, &js).await {
             if !html.is_empty() && html.contains("wp-manga-chapter") {
@@ -343,7 +357,8 @@ impl ToonGodSource {
 
         // Try old admin-ajax endpoint
         let old_ajax_url = format!("{}/wp-admin/admin-ajax.php", BASE_URL);
-        let js_old = format!(r#"
+        let js_old = format!(
+            r#"
             let formData = new URLSearchParams();
             formData.append('action', 'manga_get_chapters');
             formData.append('manga', '{}');
@@ -356,8 +371,10 @@ impl ToonGodSource {
                 body: formData
             }});
             return await res.text();
-        "#, manga_id, old_ajax_url);
-        
+        "#,
+            manga_id, old_ajax_url
+        );
+
         if let Ok(html) = self.evaluate_js(manga_url, &js_old).await {
             if !html.is_empty() && html.contains("wp-manga-chapter") {
                 return Ok(Some(html));
@@ -489,7 +506,7 @@ impl Source for ToonGodSource {
 
         let mut genre_query = String::new();
         let mut genre_idx = 0;
-        
+
         if let Some(genres) = genres {
             for genre in genres {
                 let slug = genre.to_lowercase().replace(" ", "-");
@@ -500,15 +517,15 @@ impl Source for ToonGodSource {
 
         let url = format!(
             "{}/home/{}?m_orderby={}{}",
-            BASE_URL,
-            page_path,
-            order,
-            genre_query
+            BASE_URL, page_path, order, genre_query
         );
 
         let (status, html) = self.fetch_with_referer(&url, Some(BASE_URL)).await?;
-        
-        let _ = std::fs::write("/tmp/toongod_debug.txt", format!("URL: {}\nSTATUS: {}\nHTML:\n{}", url, status, html));
+
+        let _ = std::fs::write(
+            "/tmp/toongod_debug.txt",
+            format!("URL: {}\nSTATUS: {}\nHTML:\n{}", url, status, html),
+        );
 
         if Self::detect_cloudflare_block(status, &html) {
             return Err(Self::cloudflare_error("browse"));

@@ -601,7 +601,9 @@ impl Source for WeebrookManhwaSource {
         _genres: Option<Vec<String>>,
         _types: Option<Vec<String>>,
     ) -> Result<Vec<SearchResult>> {
-        self.engine.browse(mode, page, limit, _genres, _types, "weebrook").await
+        self.engine
+            .browse(mode, page, limit, _genres, _types, "weebrook")
+            .await
     }
 
     async fn get_chapters(&self, content_id: &str) -> Result<Vec<Chapter>> {

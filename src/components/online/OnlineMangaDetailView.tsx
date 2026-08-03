@@ -1,12 +1,16 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Play, Bookmark, BookmarkCheck, ArrowLeft, Search, Star, FileText, Globe, Download, X } from 'lucide-react';
+import { Play, Bookmark, BookmarkCheck, ArrowLeft, Search, Star, FileText, Globe, BookDown, X } from 'lucide-react';
 import DOMPurify from 'dompurify';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { fetchWithRetry, cn } from '@/lib/utils';
 import { getProxyUrl } from '@/lib/tauri';
-import { MangaDownloadDialog } from './MangaDownloadDialog';
+import { ChapterDownloadStatusIcon } from './ChapterDownloadStatusIcon';
+import {
+  chapterDisplayLabel,
+  type ChapterDownloadStatusMap,
+} from './mangaDownloadUtils';
 
 export interface UnifiedChapter {
   id: string;
@@ -46,7 +50,12 @@ interface OnlineMangaDetailViewProps {
   lastReadChapterId?: string;
 
   onMangaClick?: (mangaId: string) => void;
-  onDownloadChapters?: (chapters: UnifiedChapter[], seriesMetadata?: any) => void;
+  /** Per-chapter download lifecycle status, keyed by chapter id. */
+  chapterDownloadStatus?: ChapterDownloadStatusMap;
+  /** Download a single chapter from its row button. */
+  onDownloadChapter?: (chapter: UnifiedChapter) => void;
+  /** Download the whole manga (header "Download Manga" button). */
+  onDownloadAll?: () => void;
 }
 
 export function OnlineMangaDetailView({
@@ -71,7 +80,9 @@ export function OnlineMangaDetailView({
   isInLibrary,
   lastReadChapterId,
   onMangaClick,
-  onDownloadChapters,
+  chapterDownloadStatus,
+  onDownloadChapter,
+  onDownloadAll,
 }: OnlineMangaDetailViewProps) {
   const parentRef = useRef<HTMLDivElement>(null);
 
@@ -105,7 +116,6 @@ export function OnlineMangaDetailView({
   const [sortAscending, setSortAscending] = useState(false);
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   const [anilistData, setAnilistData] = useState<any>(null);
-  const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
 
   useEffect(() => {
     if (title) {
@@ -320,13 +330,13 @@ export function OnlineMangaDetailView({
                       : <><Bookmark className="w-4 h-4" /> SAVE</>}
                   </Button>
                 )}
-                {onDownloadChapters && unifiedChapters.length > 0 && (
+                {onDownloadAll && unifiedChapters.length > 0 && (
                   <Button
-                    onClick={() => setDownloadDialogOpen(true)}
+                    onClick={onDownloadAll}
                     variant="outline"
-                    className="flex-1 sm:flex-none gap-2 px-4 sm:px-6 h-10 sm:h-12 rounded-full text-xs sm:text-sm font-medium border-border/50 bg-secondary hover:bg-secondary/50 backdrop-blur-sm transition-all"
+                    className="flex-1 sm:flex-none gap-2 px-3 sm:px-6 h-10 sm:h-12 rounded-full text-xs sm:text-sm font-medium border-border/50 bg-secondary hover:bg-secondary/50 backdrop-blur-sm transition-all whitespace-nowrap"
                   >
-                    <Download className="w-4 h-4" /> DL
+                    <BookDown className="w-4 h-4" /> Download Manga
                   </Button>
                 )}
               </div>
@@ -453,6 +463,7 @@ export function OnlineMangaDetailView({
                       const fullTitle = ch.title ? (chapterNumStr ? `${chapterNumStr}: ${ch.title}` : ch.title) : chapterNumStr;
                       
                       const isHighlighted = lastReadChapterId ? ch.id === lastReadChapterId : idx === 0;
+                      const chStatus = chapterDownloadStatus?.[ch.id];
 
                       return (
                         <div 
@@ -474,16 +485,34 @@ export function OnlineMangaDetailView({
                               {fullTitle || 'Chapter'}
                             </span>
                           </div>
-                          <div className="flex flex-col items-end shrink-0 ml-4">
-                            {ch.scanlationGroup && (
-                              <span className="text-[11px] font-medium text-foreground/60 max-w-[100px] sm:max-w-[150px] truncate" title={ch.scanlationGroup}>
-                                {ch.scanlationGroup}
-                              </span>
-                            )}
-                            {ch.date && ch.date !== 'Unknown' && (
-                              <span className="text-[11px] text-muted-foreground/70">
-                                {ch.date}
-                              </span>
+                          <div className="flex items-center gap-2 shrink-0 ml-4">
+                            <div className="flex flex-col items-end">
+                              {ch.scanlationGroup && (
+                                <span className="text-[11px] font-medium text-foreground/60 max-w-[100px] sm:max-w-[150px] truncate" title={ch.scanlationGroup}>
+                                  {ch.scanlationGroup}
+                                </span>
+                              )}
+                              {ch.date && ch.date !== 'Unknown' && (
+                                <span className="text-[11px] text-muted-foreground/70">
+                                  {ch.date}
+                                </span>
+                              )}
+                            </div>
+                            {onDownloadChapter && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onDownloadChapter(ch);
+                                }}
+                                disabled={chStatus === 'downloading' || chStatus === 'queued'}
+                                aria-label={`Download ${chapterDisplayLabel(ch)}`}
+                                data-status={chStatus ?? 'idle'}
+                                title="Download this chapter"
+                                className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors hover:bg-primary/15 hover:text-primary disabled:opacity-60 disabled:pointer-events-none"
+                              >
+                                <ChapterDownloadStatusIcon status={chStatus} />
+                              </button>
                             )}
                           </div>
                         </div>
@@ -509,6 +538,7 @@ export function OnlineMangaDetailView({
                               const chapterNumStr = ch.chapter && ch.chapter !== '?' ? `Chapter ${ch.chapter}` : '';
                               const fullTitle = ch.title ? (chapterNumStr ? `${chapterNumStr}: ${ch.title}` : ch.title) : chapterNumStr || 'Oneshot';
                               const isHighlighted = lastReadChapterId ? ch.id === lastReadChapterId : false;
+                              const chStatus = chapterDownloadStatus?.[ch.id];
                               return (
                                 <div 
                                   key={ch.id} 
@@ -519,16 +549,34 @@ export function OnlineMangaDetailView({
                                     {isHighlighted && <Play className="w-3 h-3 text-primary fill-primary shrink-0" />}
                                     <span className={`truncate text-sm ${isHighlighted ? 'text-primary font-bold' : 'text-foreground/80 font-medium'}`}>{fullTitle}</span>
                                   </div>
-                                  <div className="flex flex-col items-end shrink-0 ml-4">
-                                    {ch.scanlationGroup && (
-                                      <span className="text-[11px] font-medium text-foreground/60 max-w-[100px] sm:max-w-[150px] truncate" title={ch.scanlationGroup}>
-                                        {ch.scanlationGroup}
-                                      </span>
-                                    )}
-                                    {ch.date && ch.date !== 'Unknown' && (
-                                      <span className="text-[11px] text-muted-foreground/70">
-                                        {ch.date}
-                                      </span>
+                                  <div className="flex items-center gap-2 shrink-0 ml-4">
+                                    <div className="flex flex-col items-end">
+                                      {ch.scanlationGroup && (
+                                        <span className="text-[11px] font-medium text-foreground/60 max-w-[100px] sm:max-w-[150px] truncate" title={ch.scanlationGroup}>
+                                          {ch.scanlationGroup}
+                                        </span>
+                                      )}
+                                      {ch.date && ch.date !== 'Unknown' && (
+                                        <span className="text-[11px] text-muted-foreground/70">
+                                          {ch.date}
+                                        </span>
+                                      )}
+                                    </div>
+                                    {onDownloadChapter && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          onDownloadChapter(ch);
+                                        }}
+                                        disabled={chStatus === 'downloading' || chStatus === 'queued'}
+                                        aria-label={`Download ${chapterDisplayLabel(ch)}`}
+                                        data-status={chStatus ?? 'idle'}
+                                        title="Download this chapter"
+                                        className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors hover:bg-primary/15 hover:text-primary disabled:opacity-60 disabled:pointer-events-none"
+                                      >
+                                        <ChapterDownloadStatusIcon status={chStatus} />
+                                      </button>
                                     )}
                                   </div>
                                 </div>
@@ -588,13 +636,6 @@ export function OnlineMangaDetailView({
             )}
           </div>
         </div>
-
-        <MangaDownloadDialog
-          open={downloadDialogOpen}
-          onOpenChange={setDownloadDialogOpen}
-          chapters={filteredAndSortedChapters}
-          onDownload={(chapters) => onDownloadChapters?.(chapters, anilistData)}
-        />
 
       </div>
     </div>

@@ -109,7 +109,9 @@ impl ManhwahubEngine {
             .headers(headers)
             .send()
             .await
-            .map_err(|e| ShioriError::Other(format!("Manhwahub fetch failed for {}: {}", url, e)))?;
+            .map_err(|e| {
+                ShioriError::Other(format!("Manhwahub fetch failed for {}: {}", url, e))
+            })?;
 
         if !resp.status().is_success() {
             return Err(ShioriError::Other(format!(
@@ -257,25 +259,30 @@ impl ManhwahubEngine {
                     return Ok(vec![]);
                 }
             };
-            
+
             let doc = Html::parse_document(&html);
             let title_sel = Selector::parse(".post-title h1, .post-title h3").unwrap();
             let img_sel = Selector::parse(".summary_image img").unwrap();
-            
-            let title = doc.select(&title_sel).next()
+
+            let title = doc
+                .select(&title_sel)
+                .next()
                 .map(|el| el.text().collect::<String>().trim().to_string())
                 .unwrap_or_else(|| "Unknown Title".to_string());
-                
-            let cover_url = doc.select(&img_sel).next()
+
+            let cover_url = doc
+                .select(&img_sel)
+                .next()
                 .and_then(|img| {
-                    img.value().attr("data-src")
+                    img.value()
+                        .attr("data-src")
                         .or_else(|| img.value().attr("src"))
                         .or_else(|| img.value().attr("data-lazy-src"))
                 })
                 .map(|s| Self::absolute_url(s));
-                
+
             let id = Self::slug_from_url(query);
-            
+
             return Ok(vec![SearchResult {
                 id,
                 title,
@@ -303,7 +310,10 @@ impl ManhwahubEngine {
             Ok(h) => h,
             Err(e) => {
                 // If search API is broken (500), fallback to guessing the webtoon URL
-                let slug = query.to_lowercase().replace(' ', "-").replace(|c: char| !c.is_ascii_alphanumeric() && c != '-', "");
+                let slug = query
+                    .to_lowercase()
+                    .replace(' ', "-")
+                    .replace(|c: char| !c.is_ascii_alphanumeric() && c != '-', "");
                 let fallback_url = format!("{}/webtoon/{}", BASE_URL, slug);
                 match self.fetch(&fallback_url).await {
                     Ok(fallback_html) => {
@@ -311,19 +321,24 @@ impl ManhwahubEngine {
                         let doc = Html::parse_document(&fallback_html);
                         let title_sel = Selector::parse(".post-title h1, .post-title h3").unwrap();
                         let img_sel = Selector::parse(".summary_image img").unwrap();
-                        
-                        let title = doc.select(&title_sel).next()
+
+                        let title = doc
+                            .select(&title_sel)
+                            .next()
                             .map(|el| el.text().collect::<String>().trim().to_string())
                             .unwrap_or_else(|| query.to_string());
-                            
-                        let cover_url = doc.select(&img_sel).next()
+
+                        let cover_url = doc
+                            .select(&img_sel)
+                            .next()
                             .and_then(|img| {
-                                img.value().attr("data-src")
+                                img.value()
+                                    .attr("data-src")
                                     .or_else(|| img.value().attr("src"))
                                     .or_else(|| img.value().attr("data-lazy-src"))
                             })
                             .map(|s| Self::absolute_url(s));
-                            
+
                         return Ok(vec![SearchResult {
                             id: slug,
                             title,
@@ -332,7 +347,7 @@ impl ManhwahubEngine {
                             source_id: source_id.to_string(),
                             extra: HashMap::from([("url".to_string(), fallback_url)]),
                         }]);
-                    },
+                    }
                     Err(_) => {
                         eprintln!("Manhwahub search error: {}", e);
                         return Ok(vec![]);
@@ -376,13 +391,10 @@ impl ManhwahubEngine {
             String::new()
         };
 
-        let mut url = format!(
-            "{}/{}?{}",
-            BASE_URL, page_segment, order_param
-        );
+        let mut url = format!("{}/{}?{}", BASE_URL, page_segment, order_param);
 
         let mut filter_index = 0;
-        
+
         // Add default category first
         if self.category == "manhwa" {
             // For Manhwahub, we don't always need to pass manhwa explicitly if we have other genres,
@@ -392,7 +404,11 @@ impl ManhwahubEngine {
         // Handle Types (map them to genre[] for Madara themes)
         if let Some(t_list) = types {
             for t in t_list {
-                url.push_str(&format!("&genre%5B{}%5D={}", filter_index, t.to_lowercase()));
+                url.push_str(&format!(
+                    "&genre%5B{}%5D={}",
+                    filter_index,
+                    t.to_lowercase()
+                ));
                 filter_index += 1;
             }
         } else {
@@ -417,7 +433,12 @@ impl ManhwahubEngine {
                 let fallback = format!("{}/{}?{}", BASE_URL, page_segment, order_param);
                 match self.fetch(&fallback).await {
                     Ok(fb) => fb,
-                    Err(fb_err) => return Err(ShioriError::Other(format!("Manhwahub browse failed. URL: {} (Err: {}). Fallback: {} (Err: {})", url, e, fallback, fb_err)))
+                    Err(fb_err) => {
+                        return Err(ShioriError::Other(format!(
+                            "Manhwahub browse failed. URL: {} (Err: {}). Fallback: {} (Err: {})",
+                            url, e, fallback, fb_err
+                        )))
+                    }
                 }
             }
         };
@@ -685,7 +706,9 @@ impl Source for ManhwahubSource {
         genres: Option<Vec<String>>,
         types: Option<Vec<String>>,
     ) -> Result<Vec<SearchResult>> {
-        self.engine.browse(mode, page, limit, genres, types, "manhwahub").await
+        self.engine
+            .browse(mode, page, limit, genres, types, "manhwahub")
+            .await
     }
 
     async fn get_chapters(&self, content_id: &str) -> Result<Vec<Chapter>> {
