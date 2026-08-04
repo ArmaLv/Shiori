@@ -276,7 +276,7 @@ export function StatisticsView({ onClose }: StatisticsViewProps) {
 
   return (
     <div className="flex flex-col h-full bg-background text-foreground overflow-hidden">
-      <div className="flex-none sticky top-0 z-10 bg-background/80 backdrop-blur-xl border-b border-border/40">
+      <div className="flex-none sticky top-0 z-10 pt-[env(safe-area-inset-top,0px)] bg-background/80 backdrop-blur-xl border-b border-border/40">
         <div className="max-w-6xl mx-auto flex items-center justify-between p-4 md:p-6">
           <div className="flex items-center gap-4">
             <div>
