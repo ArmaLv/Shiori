@@ -355,7 +355,7 @@ export function HomePage({ onOpenBook, onViewRSS, searchQuery = "", onSearchChan
 
   return (
     <motion.div
-      className="home-bento-layout p-6 max-w-[1400px] mx-auto"
+      className="home-bento-layout p-4 pt-0 md:p-6 max-w-[1400px] mx-auto"
       variants={containerVariants}
       initial="hidden"
       animate="show"

@@ -26,6 +26,7 @@ import { useOnlineSearchStore } from "./store/onlineSearchStore"
 import { AndroidSplashScreen } from "./components/ui/AndroidSplashScreen"
 import { SwipeGestureHandler } from "./components/layout/SwipeGestureHandler"
 import { useBackButton } from "./hooks/useBackButton"
+import { useAndroidViewBackButton } from "./hooks/useAndroidViewBackButton"
 import { useAutoUpdate } from "./hooks/useAutoUpdate"
 
 const ReaderLayout = lazy(() => import("./components/reader/ReaderLayout").then(m => ({ default: m.ReaderLayout })))
@@ -120,6 +121,10 @@ function App() {
 
   useBackButton(isReaderOpen, handleCloseReader)
   useBackButton(currentView === 'online-manga-reader', () => setCurrentView('home'))
+
+  // Global Android hardware-back: retrace view history from any sub-section back
+  // to Home, then exit. Defers to the reader/dialog back handlers above.
+  useAndroidViewBackButton()
 
   // ── Initialization ──
   useEffect(() => { void initializeOnboarding() }, [initializeOnboarding])

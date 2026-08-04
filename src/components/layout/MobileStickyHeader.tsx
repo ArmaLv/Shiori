@@ -58,10 +58,10 @@ export function MobileStickyHeader({ searchQuery, onSearchChange, onOpenAdvanced
   }
 
   return (
-    <div 
-      className="sticky top-0 z-40 px-3 bg-background pb-3 flex flex-col gap-3 md:hidden"
+    <div
+      className="sticky top-0 z-40 px-3 bg-background/80 backdrop-blur-xl border-b border-border/40 pb-3 flex flex-col gap-3 md:hidden"
       style={{
-        paddingTop: 'calc(env(safe-area-inset-top, 0px) + 8px)',
+        paddingTop: 'calc(env(safe-area-inset-top, 0px) + 6px)',
         paddingLeft: 'calc(env(safe-area-inset-left, 0px) + 12px)',
         paddingRight: 'calc(env(safe-area-inset-right, 0px) + 12px)'
       }}
