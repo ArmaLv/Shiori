@@ -284,13 +284,11 @@ export const SettingsDialog = ({ open, onOpenChange }: SettingsDialogProps) => {
           className={cn(
           "z-[101] flex flex-col overflow-hidden focus:outline-none",
           isMobile 
-            ? "fixed bottom-0 left-0 right-0 max-h-[96dvh] h-[96dvh] mt-24 rounded-t-[2rem]" 
+            ? "fixed inset-0 w-full h-full rounded-none" 
             : "dialog-content settings-dialog fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 border border-white/10 rounded-2xl shadow-[0_0_40px_rgba(0,0,0,0.2)] w-[95vw] max-w-5xl h-[90vh]",
           preferences?.transparentSettings ?? false ? "bg-background/80 backdrop-blur-2xl" : "bg-background"
         )}>
-          {isMobile && <div className="mx-auto mt-4 mb-2 h-1.5 w-12 flex-shrink-0 rounded-full bg-muted/60" />}
-
-          <div className="flex items-center justify-between p-4 pt-[calc(env(safe-area-inset-top,0px)+1rem)] md:p-6 border-b border-border gap-3">
+          <div className="flex items-center justify-between p-4 md:p-6 border-b border-border gap-3">
             {isMobile && mobileView === 'detail' ? (
               <div className="flex items-center gap-3">
                 <Button variant="ghost" size="icon" onClick={() => { triggerHaptic(50); setMobileView('root'); }} className="-ml-2">

@@ -90,7 +90,7 @@ export function AnnotationsViewDesktop({ onClose, onOpenBook, data }: Annotation
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         
         {/* Header & Tabs */}
-        <div className="flex-none pt-[calc(env(safe-area-inset-top,0px)+0.5rem)] md:pt-6 px-4 md:px-6 border-b border-border/40 bg-background/80 backdrop-blur-xl z-20 sticky top-0">
+        <div className="flex-none pt-4 md:pt-6 px-4 md:px-6 border-b border-border/40 bg-background/80 backdrop-blur-xl z-20 sticky top-0">
           <div className="flex flex-col gap-3 mb-3">
             {/* Top Row: Dropdown, Actions, Close */}
             <div className="flex items-center justify-between gap-2">

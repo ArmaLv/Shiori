@@ -111,7 +111,7 @@ export function ShelfView() {
   };
 
   return (
-    <div className="flex flex-col h-full w-full bg-background pt-[calc(env(safe-area-inset-top,0px)+0.5rem)] md:pt-0 overflow-hidden relative">
+    <div className="flex flex-col h-full w-full bg-background overflow-hidden relative">
       {/* Dynamic Content */}
       <div className="flex-1 overflow-hidden relative">
         {loadingShelves ? (

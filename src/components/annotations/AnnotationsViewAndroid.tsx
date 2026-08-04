@@ -34,8 +34,8 @@ export function AnnotationsViewAndroid({ onClose, onOpenBook, data }: Annotation
   return (
     <div className="flex flex-col h-full bg-background text-foreground overflow-hidden">
       {/* Mobile Sticky Header */}
-      {/* Inset tracks the real status bar via env(safe-area-inset-top); small gap below it. */}
-      <div className="flex-none pt-[calc(env(safe-area-inset-top,0px)+0.5rem)] pb-3 px-4 border-b border-border/40 bg-background/80 backdrop-blur-xl z-20 sticky top-0 shadow-sm">
+      {/* Top Header */}
+      <div className="flex-none pt-3 pb-3 px-4 border-b border-border/40 bg-background/80 backdrop-blur-xl z-20 sticky top-0 shadow-sm">
         
         {/* Top App Bar */}
         <div className="flex items-center justify-between mb-4">

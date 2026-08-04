@@ -248,8 +248,8 @@ select {
     border-radius: 0;
     border: none;
     border-bottom: 1px solid var(--ui-border);
-    height: calc(48px + env(safe-area-inset-top, 0px));
-    padding-top: env(safe-area-inset-top, 0px);
+    height: 48px;
+    padding-top: 0;
     padding-left: env(safe-area-inset-left, 0px);
     padding-right: env(safe-area-inset-right, 0px);
     box-shadow: 0 1px 0 var(--ui-border);
@@ -407,20 +407,20 @@ select {
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
   /* Desktop: 48px pill topbar + spacing */
-  padding-top: calc(48px + env(safe-area-inset-top, 0px) + var(--spacing-sm, 8px));
+  padding-top: calc(48px + var(--spacing-sm, 8px));
   padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
 }
 
 @media (max-width: 768px) {
-  /* Mobile: topbar is full-bleed (48px content + safe-area), flush to top */
+  /* Mobile: topbar is full-bleed (48px content), flush to top */
   .premium-reading-canvas {
-    padding-top: calc(48px + env(safe-area-inset-top, 0px));
+    padding-top: 48px;
   }
 }
 
 /* Focus mode adjustments */
 .premium-reading-canvas--focus-mode {
-  padding-top: calc(68px + env(safe-area-inset-top, 0px));
+  padding-top: 68px;
   padding-left: 10vw;
   padding-right: 10vw;
   transition: padding var(--transition-slower);
@@ -428,7 +428,7 @@ select {
 
 @media (max-width: 768px) {
   .premium-reading-canvas--focus-mode {
-    padding-top: calc(48px + env(safe-area-inset-top, 0px));
+    padding-top: 48px;
   }
 }
 
